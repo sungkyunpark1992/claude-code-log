@@ -1,0 +1,155 @@
+{
+  "version": "0.4.2",
+  "cache_created": "2025-07-18T11:49:42.477146",
+  "last_updated": "2025-09-18T23:27:38.678414",
+  "project_path": "test/test_data",
+  "cached_files": {
+    "system_model_change.jsonl": {
+      "file_path": "test/test_data/system_model_change.jsonl",
+      "source_mtime": 1753912492.7209404,
+      "cached_mtime": 1758234458.66824,
+      "message_count": 1,
+      "session_ids": [
+        "4ed13788-7e10-46ed-8c14-a6c2f2457225"
+      ]
+    },
+    "session_b.jsonl": {
+      "file_path": "test/test_data/session_b.jsonl",
+      "source_mtime": 1753912492.7204108,
+      "cached_mtime": 1758234458.6712978,
+      "message_count": 3,
+      "session_ids": [
+        "session_b"
+      ]
+    },
+    "representative_messages.jsonl": {
+      "file_path": "test/test_data/representative_messages.jsonl",
+      "source_mtime": 1753912492.7201397,
+      "cached_mtime": 1758234458.6729577,
+      "message_count": 12,
+      "session_ids": [
+        "test_session"
+      ]
+    },
+    "todowrite_examples.jsonl": {
+      "file_path": "test/test_data/todowrite_examples.jsonl",
+      "source_mtime": 1753912492.7211952,
+      "cached_mtime": 1758234458.6745002,
+      "message_count": 12,
+      "session_ids": [
+        "todowrite_session"
+      ]
+    },
+    "sidechain.jsonl": {
+      "file_path": "test/test_data/sidechain.jsonl",
+      "source_mtime": 1753912492.720711,
+      "cached_mtime": 1758234458.675699,
+      "message_count": 8,
+      "session_ids": [
+        "df749439-8556-41bf-9965-9f49cf38bf2a"
+      ]
+    },
+    "edge_cases.jsonl": {
+      "file_path": "test/test_data/edge_cases.jsonl",
+      "source_mtime": 1753912492.7198453,
+      "cached_mtime": 1758234458.6773577,
+      "message_count": 13,
+      "session_ids": [
+        "edge_cases",
+        "todowrite_session"
+      ]
+    }
+  },
+  "total_message_count": 49,
+  "total_input_tokens": 1254,
+  "total_output_tokens": 1845,
+  "total_cache_creation_tokens": 15953,
+  "total_cache_read_tokens": 85688,
+  "sessions": {
+    "todowrite_session": {
+      "session_id": "todowrite_session",
+      "summary": "Feature Implementation with Task Management",
+      "first_timestamp": "2025-06-14T10:02:00Z",
+      "last_timestamp": "2025-07-03T16:10:07.875368Z",
+      "message_count": 12,
+      "first_user_message": "Can you help me implement a new feature with proper task management?",
+      "cwd": "/tmp",
+      "total_input_tokens": 863,
+      "total_output_tokens": 303,
+      "total_cache_creation_tokens": 0,
+      "total_cache_read_tokens": 0
+    },
+    "edge_cases": {
+      "session_id": "edge_cases",
+      "summary": "Tested various edge cases including markdown formatting, long text, tool errors, system messages, command outputs, special characters and emojis. All message types render correctly in the transcript viewer.",
+      "first_timestamp": "2025-06-14T11:00:00Z",
+      "last_timestamp": "2025-06-14T11:03:30Z",
+      "message_count": 11,
+      "first_user_message": "Here's a message with some **markdown** formatting, `inline code`, and even a [link](https://example.com). Let's see how it renders!",
+      "cwd": "/tmp",
+      "total_input_tokens": 320,
+      "total_output_tokens": 350,
+      "total_cache_creation_tokens": 0,
+      "total_cache_read_tokens": 0
+    },
+    "4ed13788-7e10-46ed-8c14-a6c2f2457225": {
+      "session_id": "4ed13788-7e10-46ed-8c14-a6c2f2457225",
+      "summary": null,
+      "first_timestamp": "2025-07-03T15:50:07.874310Z",
+      "last_timestamp": "2025-07-03T15:50:07.874310Z",
+      "message_count": 1,
+      "first_user_message": "",
+      "cwd": "/Users/dain/workspace/document-processing",
+      "total_input_tokens": 0,
+      "total_output_tokens": 0,
+      "total_cache_creation_tokens": 0,
+      "total_cache_read_tokens": 0
+    },
+    "session_b": {
+      "session_id": "session_b",
+      "summary": null,
+      "first_timestamp": "2025-07-03T15:50:07.874717Z",
+      "last_timestamp": "2025-07-03T15:54:07.874717Z",
+      "message_count": 3,
+      "first_user_message": "This is from a different session file to test multi-session handling.",
+      "cwd": "/tmp",
+      "total_input_tokens": 20,
+      "total_output_tokens": 35,
+      "total_cache_creation_tokens": 0,
+      "total_cache_read_tokens": 0
+    },
+    "test_session": {
+      "session_id": "test_session",
+      "summary": "User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator.",
+      "first_timestamp": "2025-07-03T15:50:07.874907Z",
+      "last_timestamp": "2025-07-03T16:10:07.874907Z",
+      "message_count": 11,
+      "first_user_message": "Hello Claude! Can you help me understand how Python decorators work?",
+      "cwd": "/tmp",
+      "total_input_tokens": 25,
+      "total_output_tokens": 120,
+      "total_cache_creation_tokens": 0,
+      "total_cache_read_tokens": 0
+    },
+    "df749439-8556-41bf-9965-9f49cf38bf2a": {
+      "session_id": "df749439-8556-41bf-9965-9f49cf38bf2a",
+      "summary": null,
+      "first_timestamp": "2025-07-03T15:50:07.875917Z",
+      "last_timestamp": "2025-07-03T16:04:07.875917Z",
+      "message_count": 8,
+      "first_user_message": "I need to debug a failing test in the claude-code-log project. The test `test_multiple_collapsible_elements` in `test/test_toggle_functionality.py` is expecting 3 collapsible details but finding 4.\n\nThe test creates 3 tool_use contents with long input content (300 characters each) and expects them to be collapsible. However, it's finding 4 collapsible details instead of 3.\n\nPlease:\n1. Read the test file to understand what it's doing\n2. Look at the template rendering code to see how collapsible details are generated\n3. Check the timeline-related changes that might have introduced an extra collapsible element\n4. Run the test in debug mode to see the actual HTML being generated\n5. Identify what's causing the extra collapsible detail\n\nFocus on the template files and rendering logic, especially around tool_use content and any timeline-related changes.",
+      "cwd": "/Users/dain/workspace/claude-code-log",
+      "total_input_tokens": 26,
+      "total_output_tokens": 1037,
+      "total_cache_creation_tokens": 15953,
+      "total_cache_read_tokens": 85688
+    }
+  },
+  "working_directories": [
+    "/tmp",
+    "/Users/dain/workspace/claude-code-log",
+    "/Users/dain/workspace/document-processing"
+  ],
+  "earliest_timestamp": "2025-06-14T10:02:00Z",
+  "latest_timestamp": "2025-07-03T16:10:07.875368Z"
+}

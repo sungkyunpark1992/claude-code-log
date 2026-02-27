@@ -1,0 +1,90 @@
+{
+  "2025-07-03T15:50:07.874717Z": [
+    {
+      "parentUuid": null,
+      "isSidechain": false,
+      "userType": "human",
+      "cwd": "/tmp",
+      "sessionId": "session_b",
+      "version": "1.0.0",
+      "uuid": "session_b_001",
+      "timestamp": "2025-07-03T15:50:07.874717Z",
+      "isMeta": null,
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "citations": null,
+            "text": "This is from a different session file to test multi-session handling.",
+            "type": "text"
+          }
+        ]
+      },
+      "toolUseResult": null
+    }
+  ],
+  "2025-07-03T15:52:07.874717Z": [
+    {
+      "parentUuid": null,
+      "isSidechain": false,
+      "userType": "human",
+      "cwd": "/tmp",
+      "sessionId": "session_b",
+      "version": "1.0.0",
+      "uuid": "session_b_002",
+      "timestamp": "2025-07-03T15:52:07.874717Z",
+      "isMeta": null,
+      "type": "assistant",
+      "message": {
+        "id": "session_b_002",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-3-sonnet-20240229",
+        "content": [
+          {
+            "citations": null,
+            "text": "Indeed! This message is from a different JSONL file, which should help test the session divider logic. Only the first session should show a divider.",
+            "type": "text"
+          }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 35,
+          "service_tier": "standard",
+          "server_tool_use": null
+        }
+      },
+      "requestId": "req_b_001"
+    }
+  ],
+  "2025-07-03T15:54:07.874717Z": [
+    {
+      "parentUuid": null,
+      "isSidechain": false,
+      "userType": "human",
+      "cwd": "/tmp",
+      "sessionId": "session_b",
+      "version": "1.0.0",
+      "uuid": "session_b_003",
+      "timestamp": "2025-07-03T15:54:07.874717Z",
+      "isMeta": null,
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "citations": null,
+            "text": "Perfect! This should appear without any session divider above it.",
+            "type": "text"
+          }
+        ]
+      },
+      "toolUseResult": null
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "2025-07-03T15:50:07.874310Z": [
+    {
+      "parentUuid": "3125faee-5091-4018-b91b-22b0c167a13c",
+      "isSidechain": false,
+      "userType": "external",
+      "cwd": "/Users/dain/workspace/document-processing",
+      "sessionId": "4ed13788-7e10-46ed-8c14-a6c2f2457225",
+      "version": "1.0.33",
+      "uuid": "054deb24-c405-483e-a5b5-9e9127cc209d",
+      "timestamp": "2025-07-03T15:50:07.874310Z",
+      "isMeta": false,
+      "type": "system",
+      "content": "Claude Opus 4 limit reached, now using Sonnet 4",
+      "level": "warning"
+    }
+  ]
+}

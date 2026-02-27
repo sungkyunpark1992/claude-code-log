@@ -1,0 +1,11 @@
+{
+    "search.exclude": {
+        ".claude-trace/**": true,
+        "docs/cache/**": true,
+        "docs/claude-code-log-transcript.html": true,
+        "test/test_data/cache/**": true,
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "python-envs.pythonProjects": []
+}
