@@ -40,6 +40,24 @@
 .session-link-title {
     font-weight: 600;
     font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.session-delete-btn {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 0.9em;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.session-delete-btn:hover {
+    color: #e53935;
 }
 
 .session-link-meta {

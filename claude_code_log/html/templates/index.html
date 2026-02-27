@@ -94,10 +94,26 @@
     </div>
 
     <script>
+        function hideSession(event, btn) {
+            event.preventDefault();
+            event.stopPropagation();
+            btn.closest('.session-link').style.display = 'none';
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             {% include 'components/timezone_converter.js' %}
         });
     </script>
+
+    <footer style="text-align: center; margin-top: 40px; padding: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
+        <div>claude-code-log</div>
+        <div>깃헙 : <a href="https://github.com/daaain/claude-code-log" target="_blank">https://github.com/daaain/claude-code-log</a></div>
+        <div style="margin-top: 8px;">
+            <a href="https://www.reddit.com/r/ClaudeAI/comments/1j5nh09/is_there_any_way_to_get_a_history_of_my/?tl=ko" target="_blank">출처 1</a>
+            &nbsp;/&nbsp;
+            <a href="https://www.reddit.com/r/ClaudeAI/comments/1lcp8bt/i_created_a_python_cli_tool_to_parse_claude_codes/" target="_blank">출처 2</a>
+        </div>
+    </footer>
 </body>
 
 </html>

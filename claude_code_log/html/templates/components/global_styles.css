@@ -27,7 +27,8 @@
     --neutral-semi: #f8f9fa88;
 
     /* Slightly transparent variants (55 = ~33% opacity) */
-    --highlight-light: #e3f2fd55;
+    /* --highlight-light: #e3f2fd55; */
+    --highlight-light: #ffff;
 
     /* Solid colors for message types */
     --user-color: #ff9800;
@@ -91,7 +92,9 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     padding: 10px;
-    background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+    /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+    /* background: #ffff; */
+    background: #e3f2fd55;
     color: var(--text-primary);
 }
 
