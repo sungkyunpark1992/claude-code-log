@@ -31,6 +31,7 @@ from .factories import create_transcript_entry
 from .models import (
     TranscriptEntry,
     AssistantTranscriptEntry,
+    CustomTitleTranscriptEntry,
     SummaryTranscriptEntry,
     SystemTranscriptEntry,
     UserTranscriptEntry,
@@ -88,6 +89,10 @@ def filter_messages_by_date(
         # Handle SummaryTranscriptEntry which doesn't have timestamp
         if isinstance(message, SummaryTranscriptEntry):
             filtered_messages.append(message)
+            continue
+
+        # Handle CustomTitleTranscriptEntry which doesn't have timestamp
+        if isinstance(message, CustomTitleTranscriptEntry):
             continue
 
         timestamp_str = message.timestamp
@@ -204,6 +209,7 @@ def load_transcript(
                         "summary",
                         "system",
                         "queue-operation",
+                        "custom-title",
                     ]:
                         # Parse using Pydantic models
                         entry = create_transcript_entry(entry_dict)
@@ -1246,6 +1252,7 @@ def _update_cache_with_session_data(
 
     # Group messages by session and calculate session data
     sessions_cache_data: dict[str, SessionCacheData] = {}
+    custom_titles: dict[str, str] = {}
 
     # Track token usage and timestamps for project aggregates
     total_input_tokens = 0
@@ -1258,6 +1265,11 @@ def _update_cache_with_session_data(
     seen_request_ids: set[str] = set()
 
     for message in messages:
+        # Handle custom-title entries (Ctrl+R session renames)
+        if isinstance(message, CustomTitleTranscriptEntry):
+            custom_titles[message.sessionId] = message.customTitle
+            continue
+
         # Update project-level timestamp tracking
         if hasattr(message, "timestamp"):
             message_timestamp = getattr(message, "timestamp", "")
@@ -1350,6 +1362,11 @@ def _update_cache_with_session_data(
         and data.first_user_message  # Filter empty sessions (agent-only)
     }
 
+    # Apply custom titles (from Ctrl+R session renames)
+    for session_id, custom_title in custom_titles.items():
+        if session_id in sessions_cache_data:
+            sessions_cache_data[session_id].custom_title = custom_title
+
     # Update cache with filtered session data
     cache_manager.update_session_cache(sessions_cache_data)
 
@@ -1405,12 +1422,18 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
             ):
                 session_summaries[uuid_to_session_backup[leaf_uuid]] = message.summary
 
+    # Collect custom titles from custom-title entries (Ctrl+R session renames)
+    custom_titles: dict[str, str] = {}
+    for message in messages:
+        if isinstance(message, CustomTitleTranscriptEntry):
+            custom_titles[message.sessionId] = message.customTitle
+
     # Group messages by session (excluding warmup-only sessions)
     sessions: dict[str, dict[str, Any]] = {}
     for message in messages:
         if hasattr(message, "sessionId") and not isinstance(
             message, SummaryTranscriptEntry
-        ):
+        ) and not isinstance(message, CustomTitleTranscriptEntry):
             session_id = getattr(message, "sessionId", "")
             if not session_id or session_id in warmup_session_ids:
                 continue
@@ -1419,6 +1442,7 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
                 sessions[session_id] = {
                     "id": session_id,
                     "summary": session_summaries.get(session_id),
+                    "custom_title": custom_titles.get(session_id),
                     "first_timestamp": getattr(message, "timestamp", ""),
                     "last_timestamp": getattr(message, "timestamp", ""),
                     "message_count": 0,
@@ -1452,6 +1476,7 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
         session_dict: dict[str, Any] = {
             "id": session_data["id"],
             "summary": session_data["summary"],
+            "custom_title": session_data.get("custom_title"),
             "timestamp_range": timestamp_range,
             "message_count": session_data["message_count"],
             "first_user_message": session_data["first_user_message"]
@@ -1872,6 +1897,7 @@ def process_projects_hierarchy(
                                 {
                                     "id": session_data.session_id,
                                     "summary": session_data.summary,
+                                    "custom_title": session_data.custom_title,
                                     "timestamp_range": format_timestamp_range(
                                         session_data.first_timestamp,
                                         session_data.last_timestamp,
@@ -2033,6 +2059,7 @@ def process_projects_hierarchy(
                         {
                             "id": session_data.session_id,
                             "summary": session_data.summary,
+                            "custom_title": session_data.custom_title,
                             "timestamp_range": format_timestamp_range(
                                 session_data.first_timestamp,
                                 session_data.last_timestamp,

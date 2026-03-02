@@ -19,6 +19,7 @@ from .factories import create_transcript_entry
 from .migrations.runner import run_migrations
 from .models import (
     AssistantTranscriptEntry,
+    CustomTitleTranscriptEntry,
     QueueOperationTranscriptEntry,
     SummaryTranscriptEntry,
     SystemTranscriptEntry,
@@ -47,6 +48,7 @@ class SessionCacheData(BaseModel):
 
     session_id: str
     summary: Optional[str] = None
+    custom_title: Optional[str] = None
     first_timestamp: str
     last_timestamp: str
     message_count: int
@@ -594,13 +596,14 @@ class CacheManager:
                 conn.execute(
                     """
                     INSERT INTO sessions (
-                        project_id, session_id, summary, first_timestamp, last_timestamp,
+                        project_id, session_id, summary, custom_title, first_timestamp, last_timestamp,
                         message_count, first_user_message, cwd,
                         total_input_tokens, total_output_tokens,
                         total_cache_creation_tokens, total_cache_read_tokens
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(project_id, session_id) DO UPDATE SET
                         summary = excluded.summary,
+                        custom_title = excluded.custom_title,
                         first_timestamp = excluded.first_timestamp,
                         last_timestamp = excluded.last_timestamp,
                         message_count = excluded.message_count,
@@ -615,6 +618,7 @@ class CacheManager:
                         self._project_id,
                         session_id,
                         data.summary,
+                        data.custom_title,
                         data.first_timestamp,
                         data.last_timestamp,
                         data.message_count,
@@ -742,6 +746,7 @@ class CacheManager:
                 sessions[row["session_id"]] = SessionCacheData(
                     session_id=row["session_id"],
                     summary=row["summary"],
+                    custom_title=row["custom_title"] if "custom_title" in row.keys() else None,
                     first_timestamp=row["first_timestamp"],
                     last_timestamp=row["last_timestamp"],
                     message_count=row["message_count"],
@@ -1059,6 +1064,7 @@ class CacheManager:
                     archived_sessions[session_id] = SessionCacheData(
                         session_id=session_id,
                         summary=row["summary"],
+                        custom_title=row["custom_title"] if "custom_title" in row.keys() else None,
                         first_timestamp=row["first_timestamp"],
                         last_timestamp=row["last_timestamp"],
                         message_count=row["message_count"],

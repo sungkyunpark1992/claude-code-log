@@ -19,6 +19,7 @@ from .models import (
     MessageType,
     TranscriptEntry,
     AssistantTranscriptEntry,
+    CustomTitleTranscriptEntry,
     SystemTranscriptEntry,
     SummaryTranscriptEntry,
     QueueOperationTranscriptEntry,
@@ -1516,6 +1517,10 @@ def _filter_messages(messages: list[TranscriptEntry]) -> list[TranscriptEntry]:
         if isinstance(message, SummaryTranscriptEntry):
             continue
 
+        # Skip custom-title messages (session rename metadata, not renderable)
+        if isinstance(message, CustomTitleTranscriptEntry):
+            continue
+
         # Skip most queue operations - only process 'remove' for counts
         if isinstance(message, QueueOperationTranscriptEntry):
             if message.operation != "remove":
@@ -1722,6 +1727,10 @@ def _render_messages(
 
         # Skip summary messages (should be filtered in pass 1, but be defensive)
         if isinstance(message, SummaryTranscriptEntry):
+            continue
+
+        # Skip custom-title messages (defensive, should be filtered in pass 1)
+        if isinstance(message, CustomTitleTranscriptEntry):
             continue
 
         # Handle queue-operation 'remove' messages as user messages

@@ -186,6 +186,12 @@ class SummaryTranscriptEntry(BaseModel):
     sessionId: None = None  # Summaries don't have a sessionId
 
 
+class CustomTitleTranscriptEntry(BaseModel):
+    type: Literal["custom-title"]
+    customTitle: str
+    sessionId: str
+
+
 class SystemTranscriptEntry(BaseTranscriptEntry):
     """System messages like warnings, notifications, hook summaries, etc."""
 
@@ -226,6 +232,7 @@ TranscriptEntry = Union[
     SummaryTranscriptEntry,
     SystemTranscriptEntry,
     QueueOperationTranscriptEntry,
+    CustomTitleTranscriptEntry,
 ]
 
 
