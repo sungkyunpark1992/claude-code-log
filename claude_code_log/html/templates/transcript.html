@@ -96,6 +96,7 @@
     {{ render_session_nav(sessions, "toc") }}
     {% endif %}
 
+    {% set ns = namespace(last_css='') %}
     {% for message, message_title, html_content, formatted_timestamp in messages %}
     {% if is_session_header(message) %}
     <div class="session-divider"></div>
@@ -125,6 +126,7 @@
     </div>
     {% else %}
     {%- set msg_css_class = css_class_from_message(message) %}
+    {% set ns.last_css = msg_css_class %}
     {% set markdown = message.content.has_markdown if message.content else false %}
     <div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'>
         <div class='header'>
@@ -166,6 +168,14 @@
     </div>
     {% endif %}
     {% endfor %}
+    {% if ns.last_css == 'assistant' %}
+    <div class='message user empty-prompt'>
+        <div class='header'><span>🤷 User</span></div>
+        <div class='content'>
+            <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+        </div>
+    </div>
+    {% endif %}
 
     <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
     <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
@@ -823,6 +833,21 @@
 
             // Apply initial fold state
             setInitialFoldState();
+
+            // Empty user prompt: click to activate
+            const emptyPrompt = document.querySelector('.message.user.empty-prompt');
+            if (emptyPrompt) {
+                emptyPrompt.addEventListener('click', function () {
+                    this.classList.remove('empty-prompt');
+                    const textarea = this.querySelector('.user-input');
+                    textarea.addEventListener('input', function () {
+                        this.style.height = 'auto';
+                        this.style.height = this.scrollHeight + 'px';
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    });
+                    textarea.focus();
+                }, { once: true });
+            }
         });
     </script>
     <!-- Search functionality script -->

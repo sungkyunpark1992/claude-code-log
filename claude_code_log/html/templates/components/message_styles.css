@@ -300,6 +300,35 @@
     border-left-color: var(--user-color);
 }
 
+/* Empty user prompt bubble shown at end of conversation */
+.user.empty-prompt {
+    opacity: 0.4;
+    cursor: pointer;
+}
+.user.empty-prompt:hover {
+    opacity: 0.7;
+}
+.user.empty-prompt * {
+    pointer-events: none;
+}
+.user-input {
+    display: block;
+    width: 100%;
+    min-height: 3em;
+    border: 1px solid var(--user-color);
+    border-radius: 4px;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    caret-color: var(--user-color);
+    resize: none;
+    overflow: hidden;
+    padding: 6px 8px;
+    box-sizing: border-box;
+}
+
 .assistant {
     border-left-color: var(--assistant-color);
 }
