@@ -67,7 +67,9 @@ def create_app(projects_dir: Path) -> Flask:
     def index() -> Response:
         index_file = projects_dir / "index.html"
         if index_file.exists():
-            return send_file(index_file)  # type: ignore[return-value]
+            response = send_file(index_file)
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"  # type: ignore[union-attr]
+            return response  # type: ignore[return-value]
         abort(404)
 
     @app.route("/<path:filepath>")
@@ -104,7 +106,47 @@ def create_app(projects_dir: Path) -> Flask:
 
     @app.route("/api/sessions/<session_id>", methods=["DELETE"])
     def delete_session(session_id: str) -> Response:
-        return jsonify({"status": "not_implemented"}), 501  # type: ignore[return-value]
+        from .cache import CacheManager
+        from .converter import get_library_version, process_projects_hierarchy
+
+        # 1) 프로젝트 디렉토리 찾기 (JSONL 또는 세션 HTML로)
+        project_dir = None
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is not None:
+            project_dir = jsonl_file.parent
+        else:
+            matches = list(projects_dir.rglob(f"session-{session_id}.html"))
+            if matches:
+                project_dir = matches[0].parent
+
+        if project_dir is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        # 2) 소스 파일 삭제: JSONL + 세션 HTML
+        if jsonl_file is not None:
+            jsonl_file.unlink()
+        session_html = project_dir / f"session-{session_id}.html"
+        if session_html.exists():
+            session_html.unlink()
+
+        # 3) 프로젝트 캐시 전체 초기화 (SQLite) → 남은 JSONL로 처음부터 다시 빌드
+        try:
+            cm = CacheManager(project_dir, get_library_version())
+            cm.clear_cache()
+        except Exception:
+            pass
+
+        # 4) 생성된 HTML 파일 삭제 (combined + index)
+        for f in project_dir.glob("combined_transcripts*.html"):
+            f.unlink()
+        index_html = projects_dir / "index.html"
+        if index_html.exists():
+            index_html.unlink()
+
+        # 5) 모든 프로젝트 재생성 (캐시 사용 → 빠르게, 해당 프로젝트만 처음부터)
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+
+        return jsonify({"status": "ok"})  # type: ignore[return-value]
 
     return app
 

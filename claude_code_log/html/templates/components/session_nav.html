@@ -24,7 +24,7 @@
                 {{ session.id[:8] }}
                 </span>
                 <button class='session-edit-btn' title='제목 수정'>✏️</button>
-                <button class='session-delete-btn' onclick='hideSession(event, this)' title='숨기기'>✕</button>
+                <button class='session-delete-btn' title='삭제'>✕</button>
             </div>
             <div class='session-link-meta'>
                 <span class="timestamp"{% if session.first_timestamp %} data-timestamp="{{ session.first_timestamp }}"{% endif %}{% if session.last_timestamp and session.last_timestamp != session.first_timestamp %} data-timestamp-end="{{ session.last_timestamp }}"{% endif %}>{{ session.timestamp_range }}</span> • {{ session.message_count }} messages

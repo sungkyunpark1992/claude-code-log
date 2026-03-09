@@ -1909,9 +1909,10 @@ def process_projects_hierarchy(
                                     or "[No user message found in session.]",
                                 }
                                 for session_data in cached_project_data.sessions.values()
-                                # Filter out warmup-only and empty sessions (agent-only)
+                                # Filter out warmup-only, empty sessions, and archived (JSONL deleted)
                                 if session_data.first_user_message
                                 and session_data.first_user_message != "Warmup"
+                                and session_data.session_id in valid_session_ids
                             ],
                         }
                     )
@@ -2023,58 +2024,18 @@ def process_projects_hierarchy(
             continue
 
     # Process archived projects (projects in cache but without JSONL files)
+    # Archived projects have no JSONL files, so they have no displayable sessions.
+    # Just log them for awareness but don't add to index.
     archived_project_count = 0
     for archived_dir in sorted(archived_project_dirs):
         try:
-            # Initialize cache manager for archived project
             cache_manager = CacheManager(archived_dir, library_version)
             cached_project_data = cache_manager.get_cached_project_data()
-
             if cached_project_data is None:
                 continue
-
             archived_project_count += 1
             print(
                 f"  {archived_dir.name}: [ARCHIVED] ({len(cached_project_data.sessions)} sessions)"
-            )
-
-            # Add archived project to summaries
-            project_summaries.append(
-                {
-                    "name": archived_dir.name,
-                    "path": archived_dir,
-                    "html_file": f"{archived_dir.name}/combined_transcripts.html",
-                    "jsonl_count": 0,
-                    "message_count": cached_project_data.total_message_count,
-                    "last_modified": 0.0,
-                    "total_input_tokens": cached_project_data.total_input_tokens,
-                    "total_output_tokens": cached_project_data.total_output_tokens,
-                    "total_cache_creation_tokens": cached_project_data.total_cache_creation_tokens,
-                    "total_cache_read_tokens": cached_project_data.total_cache_read_tokens,
-                    "latest_timestamp": cached_project_data.latest_timestamp,
-                    "earliest_timestamp": cached_project_data.earliest_timestamp,
-                    "working_directories": cache_manager.get_working_directories(),
-                    "is_archived": True,
-                    "sessions": [
-                        {
-                            "id": session_data.session_id,
-                            "summary": session_data.summary,
-                            "custom_title": session_data.custom_title,
-                            "timestamp_range": format_timestamp_range(
-                                session_data.first_timestamp,
-                                session_data.last_timestamp,
-                            ),
-                            "first_timestamp": session_data.first_timestamp,
-                            "last_timestamp": session_data.last_timestamp,
-                            "message_count": session_data.message_count,
-                            "first_user_message": session_data.first_user_message
-                            or "[No user message found in session.]",
-                        }
-                        for session_data in cached_project_data.sessions.values()
-                        if session_data.first_user_message
-                        and session_data.first_user_message != "Warmup"
-                    ],
-                }
             )
         except Exception as e:
             print(f"Warning: Failed to process archived project {archived_dir}: {e}")

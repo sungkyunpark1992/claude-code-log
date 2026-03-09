@@ -1,3 +1,31 @@
+document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var sessionLink = this.closest('.session-link');
+        var sessionId = sessionLink.dataset.sessionId;
+
+        if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+            return;
+        }
+
+        fetch('/api/sessions/' + sessionId, {
+            method: 'DELETE',
+        })
+            .then(function (resp) {
+                if (resp.ok) {
+                    location.reload();
+                } else {
+                    alert('세션 삭제에 실패했습니다.');
+                }
+            })
+            .catch(function () {
+                alert('서버 연결 오류가 발생했습니다.');
+            });
+    });
+});
+
 document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
     btn.addEventListener('click', function (e) {
         e.preventDefault();
