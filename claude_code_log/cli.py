@@ -439,6 +439,11 @@ def _clear_output_files(input_path: Path, all_projects: bool, file_ext: str) -> 
     help="Open the generated HTML file in the default browser",
 )
 @click.option(
+    "--serve",
+    is_flag=True,
+    help="Start a local web server and open browser at http://localhost:5678",
+)
+@click.option(
     "--from-date",
     type=str,
     help='Filter messages from this date/time (e.g., "2 hours ago", "yesterday", "2025-06-08")',
@@ -516,6 +521,7 @@ def main(
     input_path: Optional[Path],
     output: Optional[Path],
     open_browser: bool,
+    serve: bool,
     from_date: Optional[str],
     to_date: Optional[str],
     all_projects: bool,
@@ -701,6 +707,9 @@ def main(
 
             if open_browser:
                 click.launch(str(output_path))
+            if serve:
+                from .server import run_server
+                run_server(input_path)
             return
 
         # Original single file/directory processing logic
@@ -755,6 +764,9 @@ def main(
 
         if open_browser:
             click.launch(str(output_path))
+        if serve:
+            from .server import run_server
+            run_server(output_path.parent)
 
     except FileNotFoundError as e:
         click.echo(f"Error: {e}", err=True)
