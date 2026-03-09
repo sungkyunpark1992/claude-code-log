@@ -195,3 +195,5 @@ docs/cache/
 test/test_data/real_projects/*/cache/
 test/test_data/real_projects/*/*.html
 test/test_data/real_projects/index.html
+
+test-file

@@ -1,11 +1,62 @@
 """Local web server for serving generated HTML files with API support."""
 from __future__ import annotations
 
+import json
 import threading
 import webbrowser
 from pathlib import Path
+from typing import Optional
 
-from flask import Flask, Response, abort, jsonify, send_file
+from flask import Flask, Response, abort, jsonify, request, send_file
+
+
+def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
+    """Find the JSONL file containing the given session ID.
+
+    Tries filename match first (e.g. {session_id}.jsonl), then falls back
+    to content search for sessions embedded in other JSONL files.
+    """
+    # 1차: 파일명으로 검색 (가장 빠르고 정확)
+    for jsonl_file in projects_dir.rglob(f"{session_id}.jsonl"):
+        return jsonl_file
+
+    # 2차: 파일 내용으로 검색 (sessionId 필드가 있는 경우)
+    for jsonl_file in projects_dir.rglob("*.jsonl"):
+        if session_id in jsonl_file.read_text(encoding="utf-8"):
+            return jsonl_file
+
+    return None
+
+
+def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> None:
+    """Add or update a custom-title entry in the JSONL file."""
+    lines = jsonl_file.read_text(encoding="utf-8").splitlines()
+    new_entry = json.dumps(
+        {"type": "custom-title", "customTitle": new_title, "sessionId": session_id},
+        ensure_ascii=False,
+    )
+
+    updated = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            new_lines.append(line)
+            continue
+        try:
+            data = json.loads(stripped)
+            if data.get("type") == "custom-title" and data.get("sessionId") == session_id:
+                new_lines.append(new_entry)
+                updated = True
+                continue
+        except json.JSONDecodeError:
+            pass
+        new_lines.append(line)
+
+    if not updated:
+        new_lines.append(new_entry)
+
+    jsonl_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 
 def create_app(projects_dir: Path) -> Flask:
@@ -33,7 +84,23 @@ def create_app(projects_dir: Path) -> Flask:
 
     @app.route("/api/sessions/<session_id>/title", methods=["PUT"])
     def update_title(session_id: str) -> Response:
-        return jsonify({"status": "not_implemented"}), 501  # type: ignore[return-value]
+        data = request.get_json()
+        if not data or "title" not in data:
+            return jsonify({"error": "title required"}), 400  # type: ignore[return-value]
+        new_title = str(data["title"]).strip()
+        if not new_title:
+            return jsonify({"error": "title cannot be empty"}), 400  # type: ignore[return-value]
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        _update_custom_title(jsonl_file, session_id, new_title)
+
+        from .converter import process_projects_hierarchy
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+
+        return jsonify({"status": "ok", "title": new_title})  # type: ignore[return-value]
 
     @app.route("/api/sessions/<session_id>", methods=["DELETE"])
     def delete_session(session_id: str) -> Response:

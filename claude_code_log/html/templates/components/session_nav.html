@@ -12,10 +12,10 @@
 
     <div class='session-nav'>
         {% for session in sessions %}
-        <a href='{{ link_prefix }}{% if mode == "expandable" %}session-{{ session.id }}.html{% else %}#msg-d-{{ session.message_index }}{% endif %}'
-            class='session-link'>
+        {% set session_href = link_prefix + ('session-' + session.id + '.html' if mode == "expandable" else '#msg-d-' + session.message_index|string) %}
+        <div class='session-link' data-session-id='{{ session.id }}'>
             <div class='session-link-title'>
-                <span>
+                <span class='session-title' data-title='{{ (session.custom_title or session.summary or "")|e }}'>
                 {% if session.custom_title %}
                 {{ session.custom_title }} •
                 {% elif session.summary %}
@@ -23,6 +23,7 @@
                 {% endif %}
                 {{ session.id[:8] }}
                 </span>
+                <button class='session-edit-btn' title='제목 수정'>✏️</button>
                 <button class='session-delete-btn' onclick='hideSession(event, this)' title='숨기기'>✕</button>
             </div>
             <div class='session-link-meta'>
@@ -32,15 +33,13 @@
                 {% endif %}
             </div>
             {% if session.custom_title %}
-            <pre class='session-preview'>{{- session.custom_title|e -}}</pre>
+            <a href='{{ session_href }}'><pre class='session-preview'>{{- session.custom_title|e -}}</pre></a>
             {% elif session.summary %}
-            <pre class='session-preview'>{{- session.summary|e -}}</pre>
+            <a href='{{ session_href }}'><pre class='session-preview'>{{- session.summary|e -}}</pre></a>
             {% elif session.first_user_message %}
-            <pre class='session-preview'>
-                {{- session.first_user_message|e -}}
-            </pre>
+            <a href='{{ session_href }}'><pre class='session-preview'>{{- session.first_user_message|e -}}</pre></a>
             {% endif %}
-        </a>
+        </div>
         {% endfor %}
     </div>
 </div>

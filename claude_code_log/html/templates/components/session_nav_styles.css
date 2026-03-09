@@ -28,13 +28,21 @@
     background-color: var(--white-dimmed);
     border: 1px solid #dee2e6;
     border-radius: 4px;
-    text-decoration: none;
     color: var(--text-secondary);
     transition: background-color 0.2s;
 }
 
 .session-link:hover {
     background-color: #ffffff99;
+}
+
+.session-link a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.session-link a:hover pre {
+    text-decoration: underline;
 }
 
 .session-link-title {
@@ -45,6 +53,7 @@
     align-items: center;
 }
 
+.session-edit-btn,
 .session-delete-btn {
     background: none;
     border: none;
@@ -54,10 +63,53 @@
     padding: 0 2px;
     line-height: 1;
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.session-link:hover .session-edit-btn,
+.session-link:hover .session-delete-btn {
+    opacity: 1;
+}
+
+.session-edit-btn:hover {
+    color: #1976d2;
 }
 
 .session-delete-btn:hover {
     color: #e53935;
+}
+
+.session-title-edit-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
+.session-title-input {
+    font-size: inherit;
+    font-family: inherit;
+    border: 1px solid #1976d2;
+    border-radius: 3px;
+    padding: 1px 4px;
+    outline: none;
+    flex: 1;
+}
+
+.session-title-confirm-btn {
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 1px 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+.session-title-confirm-btn:hover {
+    background: #1565c0;
 }
 
 .session-link-meta {
