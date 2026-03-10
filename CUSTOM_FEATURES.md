@@ -501,7 +501,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `154cb15` | Flask 로컬 웹 서버 모드 (`--serve`) |
 | `e2ca20c` | 세션 제목 인라인 편집 (Flask 기반) |
 | `66fb011` | 세션 삭제 + 캐시 동기화 수정 |
-| *(미커밋)* | 실시간 동기화 (SSE) + 동적 세션 렌더링 |
+| `e4d5501` | 실시간 동기화 (SSE) + 동적 세션 렌더링 |
 
 ---
 
