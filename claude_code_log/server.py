@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time as time_module
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -74,12 +75,35 @@ def create_app(projects_dir: Path) -> Flask:
 
     @app.route("/<path:filepath>")
     def serve_file(filepath: str) -> Response:
+        import re
+
+        # 세션 페이지는 동적 렌더링 (항상 JSONL에서 최신 내용 생성)
+        session_match = re.match(r".+/session-([a-f0-9-]+)\.html$", filepath)
+        if session_match:
+            session_id = session_match.group(1)
+            jsonl_file = _find_session_jsonl(projects_dir, session_id)
+            if jsonl_file is not None:
+                from .converter import load_transcript
+                from .html.renderer import HtmlRenderer
+
+                messages = load_transcript(jsonl_file, silent=True)
+                renderer = HtmlRenderer()
+                html = renderer.generate_session(messages, session_id)
+                return Response(
+                    html,
+                    mimetype="text/html",
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                )
+
         target = (projects_dir / filepath).resolve()
         # Security: prevent path traversal outside projects_dir
         if not str(target).startswith(str(projects_dir.resolve())):
             abort(403)
         if target.exists() and target.is_file():
-            return send_file(target)  # type: ignore[return-value]
+            response = send_file(target)
+            if filepath.endswith(".html"):
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"  # type: ignore[union-attr]
+            return response  # type: ignore[return-value]
         abort(404)
 
     # --- API endpoints (Phase 2~4) ---
@@ -147,6 +171,53 @@ def create_app(projects_dir: Path) -> Flask:
         process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
 
         return jsonify({"status": "ok"})  # type: ignore[return-value]
+
+    # --- Live streaming endpoints ---
+
+    @app.route("/api/sessions/<session_id>/stream")
+    def stream_session(session_id: str) -> Response:
+        """SSE endpoint: polls JSONL file for changes, notifies browser."""
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        def generate():  # type: ignore[no-untyped-def]
+            last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
+            last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
+            while True:
+                time_module.sleep(2)
+                try:
+                    stat = jsonl_file.stat()
+                except FileNotFoundError:
+                    yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
+                    break
+                if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                    last_size = stat.st_size
+                    last_mtime = stat.st_mtime
+                    yield f"data: {json.dumps({'type': 'updated'})}\n\n"
+                else:
+                    yield ":\n\n"  # SSE keepalive
+
+        return Response(
+            generate(),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.route("/api/sessions/<session_id>/render")
+    def render_session(session_id: str) -> Response:
+        """Dynamically render session HTML from JSONL (for live updates)."""
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        from .converter import load_transcript
+        from .html.renderer import HtmlRenderer
+
+        messages = load_transcript(jsonl_file, silent=True)
+        renderer = HtmlRenderer()
+        html = renderer.generate_session(messages, session_id)
+        return Response(html, mimetype="text/html")
 
     return app
 
