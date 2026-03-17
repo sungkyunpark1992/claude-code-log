@@ -169,14 +169,12 @@
     </div>
     {% endif %}
     {% endfor %}
-    {% if ns.last_css == 'assistant' %}
     <div class='message user empty-prompt'>
         <div class='header'><span>🤷 User</span></div>
         <div class='content'>
             <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
         </div>
     </div>
-    {% endif %}
     </div>{# end messages-container #}
 
     <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
@@ -877,16 +875,22 @@
         document.body.appendChild(indicator);
 
         source.onmessage = function(e) {
+            console.log('[SSE] message received:', e.data);
             var data = JSON.parse(e.data);
             if (data.type === 'updated') {
                 var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
-                fetch('/api/sessions/' + sessionId + '/render')
-                    .then(function(r) { return r.text(); })
+                fetch('/api/sessions/' + sessionId + '/render', { cache: 'no-store' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('render failed: ' + r.status);
+                        return r.text();
+                    })
                     .then(function(html) {
                         var parser = new DOMParser();
                         var doc = parser.parseFromString(html, 'text/html');
                         var newContainer = doc.getElementById('messages-container');
                         var oldContainer = document.getElementById('messages-container');
+                        console.log('[SSE] render result - newContainer found:', !!newContainer, 'oldContainer found:', !!oldContainer);
+                        if (newContainer) console.log('[SSE] new HTML length:', newContainer.innerHTML.length, 'old HTML length:', oldContainer ? oldContainer.innerHTML.length : 'N/A');
                         if (newContainer && oldContainer) {
                             oldContainer.innerHTML = newContainer.innerHTML;
                             // Re-initialize event listeners lost during DOM swap
@@ -897,7 +901,8 @@
                         // Flash indicator
                         indicator.style.background = '#3b82f6';
                         setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
-                    });
+                    })
+                    .catch(function(err) { console.error('[SSE] render fetch error:', err); });
             } else if (data.type === 'deleted') {
                 indicator.textContent = 'DELETED';
                 indicator.style.background = '#ef4444';

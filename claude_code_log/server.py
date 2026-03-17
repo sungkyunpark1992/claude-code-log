@@ -64,6 +64,20 @@ def create_app(projects_dir: Path) -> Flask:
     """Create Flask app that serves HTML files from projects_dir."""
     app = Flask(__name__)
 
+    LOADING_HTML = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loading...</title>
+<meta http-equiv="refresh" content="2">
+<style>
+body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;
+font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0}
+.loader{text-align:center}
+.spinner{width:40px;height:40px;border:4px solid #333;border-top:4px solid #3b82f6;
+border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head>
+<body><div class="loader"><div class="spinner"></div><p>Regenerating index...</p></div></body>
+</html>"""
+
     @app.route("/")
     def index() -> Response:
         index_file = projects_dir / "index.html"
@@ -71,7 +85,7 @@ def create_app(projects_dir: Path) -> Flask:
             response = send_file(index_file)
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"  # type: ignore[union-attr]
             return response  # type: ignore[return-value]
-        abort(404)
+        return Response(LOADING_HTML, mimetype="text/html")
 
     @app.route("/<path:filepath>")
     def serve_file(filepath: str) -> Response:
@@ -184,6 +198,7 @@ def create_app(projects_dir: Path) -> Flask:
         def generate():  # type: ignore[no-untyped-def]
             last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
             last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
+            print(f"[SSE] watching {jsonl_file.name}, size={last_size}, mtime={last_mtime}")
             while True:
                 time_module.sleep(2)
                 try:
@@ -192,6 +207,7 @@ def create_app(projects_dir: Path) -> Flask:
                     yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                     break
                 if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                    print(f"[SSE] change detected: size {last_size}->{stat.st_size}, sending updated")
                     last_size = stat.st_size
                     last_mtime = stat.st_mtime
                     yield f"data: {json.dumps({'type': 'updated'})}\n\n"
@@ -217,7 +233,7 @@ def create_app(projects_dir: Path) -> Flask:
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
         html = renderer.generate_session(messages, session_id)
-        return Response(html, mimetype="text/html")
+        return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     return app
 
