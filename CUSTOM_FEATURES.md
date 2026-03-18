@@ -12,13 +12,14 @@
 3. [세션 삭제 (X 버튼)](#3-세션-삭제-x-버튼)
 4. [Archived 세션 필터링](#4-archived-세션-필터링)
 5. [실시간 동기화 (SSE)](#5-실시간-동기화-sse)
-6. [색상 커스터마이징](#6-색상-커스터마이징)
+6. [인덱스 재생성 로딩 화면](#6-인덱스-재생성-로딩-화면)
+7. [색상 커스터마이징](#7-색상-커스터마이징)
 
 ---
 
 ## 1. 빈 User 메시지 풍선
 
-**목적**: 마지막 메시지가 Assistant 답변이면, 하단에 빈 User 입력 풍선을 자동 추가.
+**목적**: 세션 하단에 빈 User 입력 풍선을 항상 표시.
 
 ### 수정 파일
 
@@ -26,15 +27,15 @@
 
 메시지 루프 끝에 추가 (messages-container 닫기 직전):
 ```html
-{% if ns.last_css == 'assistant' %}
 <div class='message user empty-prompt'>
     <div class='header'><span>🤷 User</span></div>
     <div class='content'>
         <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
     </div>
 </div>
-{% endif %}
 ```
+
+> **변경 이력**: 초기에는 `{% if ns.last_css == 'assistant' %}` 조건부였으나, tool_result/tool_use로 끝나는 세션(중단된 세션)에서도 표시되어야 하므로 조건 제거하여 항상 표시.
 
 같은 파일의 `<script>` 안에 클릭 활성화 JS:
 ```javascript
@@ -309,15 +310,15 @@ for archived_dir in sorted(archived_project_dirs):
 
 ```
 JSONL 파일 변경
-    ↓ (2초 폴링)
+    ↓ (2초 폴링 + debounce)
 SSE 엔드포인트 → {"type": "updated"} 이벤트 전송
     ↓
 브라우저 EventSource 수신
     ↓
-/api/sessions/{id}/render 호출 → JSONL → HTML 동적 생성
-    ↓
-messages-container DOM 교체 + 이벤트 리스너 재바인딩
+스크롤 위치 저장 → location.reload() → 스크롤 위치 복원
 ```
+
+> **설계 결정**: 초기에는 `/api/sessions/{id}/render`를 fetch하여 DOMParser로 `messages-container` innerHTML을 교체하는 방식이었으나, 대용량 세션(3MB+ HTML)에서 DOMParser가 컨테이너를 불완전하게 파싱하는 문제 발견. `location.reload()` + 스크롤 위치 보존 방식으로 변경.
 
 ### 수정 파일 (2개)
 
@@ -347,7 +348,7 @@ def serve_file(filepath: str) -> Response:
 
 > **핵심**: 세션 페이지를 정적 파일에서 서빙하면 템플릿 변경이 반영되지 않고 내용도 구식임. 동적 렌더링으로 항상 최신.
 
-**SSE 엔드포인트**:
+**SSE 엔드포인트** (debounce 포함):
 ```python
 @app.route("/api/sessions/<session_id>/stream")
 def stream_session(session_id: str) -> Response:
@@ -364,6 +365,17 @@ def stream_session(session_id: str) -> Response:
                 yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                 break
             if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                # Debounce: 파일이 안정될 때까지 대기 (최대 5초)
+                # Claude Code가 JSONL에 쓰는 도중 불완전한 파일을 읽는 것 방지
+                for _ in range(5):
+                    time_module.sleep(1)
+                    try:
+                        new_stat = jsonl_file.stat()
+                    except FileNotFoundError:
+                        break
+                    if new_stat.st_size == stat.st_size and new_stat.st_mtime == stat.st_mtime:
+                        break  # 파일 안정됨
+                    stat = new_stat
                 last_size = stat.st_size
                 last_mtime = stat.st_mtime
                 yield f"data: {json.dumps({'type': 'updated'})}\n\n"
@@ -374,6 +386,8 @@ def stream_session(session_id: str) -> Response:
                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 ```
 
+> **Debounce 이유**: Claude Code는 한 번의 응답에서 JSONL에 여러 항목(assistant, file-history-snapshot, tool_result 등)을 순차 기록함. 파일 변경 즉시 `updated`를 보내면 불완전한 JSONL을 읽게 됨. 1초간 추가 변경이 없을 때까지 대기하여 완전한 데이터만 전송.
+
 **렌더 엔드포인트**:
 ```python
 @app.route("/api/sessions/<session_id>/render")
@@ -382,7 +396,8 @@ def render_session(session_id: str) -> Response:
     messages = load_transcript(jsonl_file, silent=True)
     renderer = HtmlRenderer()
     html = renderer.generate_session(messages, session_id)
-    return Response(html, mimetype="text/html")
+    return Response(html, mimetype="text/html",
+                   headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 ```
 
 #### 5-2. `claude_code_log/html/templates/transcript.html` — 3가지 변경
@@ -393,9 +408,7 @@ def render_session(session_id: str) -> Response:
 {% for message, ... in messages %}
     ...
 {% endfor %}
-{% if ns.last_css == 'assistant' %}
-    <div class='message user empty-prompt'>...</div>
-{% endif %}
+<div class='message user empty-prompt'>...</div>
 </div>{# end messages-container #}
 ```
 
@@ -403,8 +416,19 @@ def render_session(session_id: str) -> Response:
 ```html
 <script>
 (function() {
+    // SSE reload 후 스크롤 위치 복원
+    var savedScroll = sessionStorage.getItem('sse-scroll');
+    if (savedScroll) {
+        sessionStorage.removeItem('sse-scroll');
+        if (savedScroll === 'bottom') {
+            window.scrollTo(0, document.body.scrollHeight);
+        } else {
+            window.scrollTo(0, parseInt(savedScroll, 10));
+        }
+    }
+
     var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
-    if (!match) return;  // 세션 페이지가 아니면 종료
+    if (!match) return;
     var sessionId = match[1];
     var source = new EventSource('/api/sessions/' + sessionId + '/stream');
 
@@ -412,31 +436,20 @@ def render_session(session_id: str) -> Response:
     var indicator = document.createElement('div');
     indicator.id = 'live-indicator';
     indicator.textContent = 'LIVE';
-    indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
+    indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;...';
     document.body.appendChild(indicator);
 
     source.onmessage = function(e) {
         var data = JSON.parse(e.data);
         if (data.type === 'updated') {
+            // 스크롤 위치 저장 후 페이지 새로고침
             var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
-            fetch('/api/sessions/' + sessionId + '/render')
-                .then(function(r) { return r.text(); })
-                .then(function(html) {
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(html, 'text/html');
-                    var newContainer = doc.getElementById('messages-container');
-                    var oldContainer = document.getElementById('messages-container');
-                    if (newContainer && oldContainer) {
-                        oldContainer.innerHTML = newContainer.innerHTML;
-                        // DOM 교체 후 이벤트 리스너 재바인딩
-                        if (typeof convertTimestamps === 'function') convertTimestamps();
-                        if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
-                        if (atBottom) window.scrollTo(0, document.body.scrollHeight);
-                    }
-                    // 업데이트 플래시
-                    indicator.style.background = '#3b82f6';
-                    setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
-                });
+            if (atBottom) {
+                sessionStorage.setItem('sse-scroll', 'bottom');
+            } else {
+                sessionStorage.setItem('sse-scroll', String(window.scrollY));
+            }
+            location.reload();
         } else if (data.type === 'deleted') {
             indicator.textContent = 'DELETED';
             indicator.style.background = '#ef4444';
@@ -451,11 +464,53 @@ def render_session(session_id: str) -> Response:
 </script>
 ```
 
-> **주의**: DOM 교체 시 `initEmptyPrompt()`, `convertTimestamps()` 재호출 필수. innerHTML 교체로 기존 리스너가 소멸되기 때문.
+> **DOMParser 방식을 포기한 이유**: 대용량 세션(600+ 메시지, 3MB+ HTML)에서 `DOMParser.parseFromString()`이 `messages-container`의 innerHTML을 불완전하게 파싱하는 현상 발견. 서버는 정상 응답(메시지 수 증가)하지만 DOMParser 결과의 컨테이너 innerHTML이 일관되게 더 작았음. `location.reload()` + `sessionStorage` 스크롤 보존으로 안정적 업데이트 구현.
 
 ---
 
-## 6. 색상 커스터마이징
+## 6. 인덱스 재생성 로딩 화면
+
+**목적**: 세션 삭제 등으로 index.html이 재생성되는 동안 404 대신 로딩 화면 표시.
+
+### 배경
+
+세션 삭제 시 `index.html`을 먼저 삭제하고 `process_projects_hierarchy()`로 재생성하는데, 재생성에 7초 이상 걸림. 그 사이에 `/` 접속 시 404 발생.
+
+### 수정 파일
+
+**`claude_code_log/server.py`**
+
+`create_app()` 내 `LOADING_HTML` 상수 추가 + `index()` 라우트 수정:
+```python
+LOADING_HTML = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loading...</title>
+<meta http-equiv="refresh" content="2">
+<style>
+body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;
+font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0}
+.loader{text-align:center}
+.spinner{width:40px;height:40px;border:4px solid #333;border-top:4px solid #3b82f6;
+border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head>
+<body><div class="loader"><div class="spinner"></div><p>Regenerating index...</p></div></body>
+</html>"""
+
+@app.route("/")
+def index() -> Response:
+    index_file = projects_dir / "index.html"
+    if index_file.exists():
+        response = send_file(index_file)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
+    return Response(LOADING_HTML, mimetype="text/html")  # 404 대신 로딩 화면
+```
+
+> **핵심**: `<meta http-equiv="refresh" content="2">`로 2초마다 자동 새로고침. index.html이 생성되면 자동으로 정상 페이지 표시.
+
+---
+
+## 7. 색상 커스터마이징
 
 **수정 파일**: `claude_code_log/html/templates/components/global_styles.css`
 
@@ -502,6 +557,8 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `e2ca20c` | 세션 제목 인라인 편집 (Flask 기반) |
 | `66fb011` | 세션 삭제 + 캐시 동기화 수정 |
 | `e4d5501` | 실시간 동기화 (SSE) + 동적 세션 렌더링 |
+| `27dc59a` | 세션 삭제 시 404 방지(로딩 화면), empty-prompt 항상 표시, SSE 디버그 로그 |
+| (pending) | SSE debounce 추가, location.reload 방식으로 변경, render endpoint no-cache |
 
 ---
 

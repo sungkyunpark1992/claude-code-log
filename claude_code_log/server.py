@@ -103,6 +103,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                 messages = load_transcript(jsonl_file, silent=True)
                 renderer = HtmlRenderer()
                 html = renderer.generate_session(messages, session_id)
+                print(f"[serve_file] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
                 return Response(
                     html,
                     mimetype="text/html",
@@ -207,6 +208,17 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                     yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                     break
                 if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                    # Debounce: wait until file is stable (no changes for 1 second)
+                    # to avoid reading a partially-written JSONL
+                    for _ in range(5):  # max 5 retries (5 seconds total)
+                        time_module.sleep(1)
+                        try:
+                            new_stat = jsonl_file.stat()
+                        except FileNotFoundError:
+                            break
+                        if new_stat.st_size == stat.st_size and new_stat.st_mtime == stat.st_mtime:
+                            break  # file is stable
+                        stat = new_stat
                     print(f"[SSE] change detected: size {last_size}->{stat.st_size}, sending updated")
                     last_size = stat.st_size
                     last_mtime = stat.st_mtime
@@ -233,6 +245,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
         html = renderer.generate_session(messages, session_id)
+        print(f"[render_session] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
         return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
     return app

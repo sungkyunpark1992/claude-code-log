@@ -863,6 +863,17 @@
     <!-- Live update via SSE -->
     <script>
     (function() {
+        // Restore scroll position after SSE-triggered reload
+        var savedScroll = sessionStorage.getItem('sse-scroll');
+        if (savedScroll) {
+            sessionStorage.removeItem('sse-scroll');
+            if (savedScroll === 'bottom') {
+                window.scrollTo(0, document.body.scrollHeight);
+            } else {
+                window.scrollTo(0, parseInt(savedScroll, 10));
+            }
+        }
+
         // Extract session ID from URL: session-{uuid}.html
         var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
         if (!match) return;
@@ -875,34 +886,16 @@
         document.body.appendChild(indicator);
 
         source.onmessage = function(e) {
-            console.log('[SSE] message received:', e.data);
             var data = JSON.parse(e.data);
             if (data.type === 'updated') {
+                // Save scroll position and reload to get fresh server-rendered content
                 var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
-                fetch('/api/sessions/' + sessionId + '/render', { cache: 'no-store' })
-                    .then(function(r) {
-                        if (!r.ok) throw new Error('render failed: ' + r.status);
-                        return r.text();
-                    })
-                    .then(function(html) {
-                        var parser = new DOMParser();
-                        var doc = parser.parseFromString(html, 'text/html');
-                        var newContainer = doc.getElementById('messages-container');
-                        var oldContainer = document.getElementById('messages-container');
-                        console.log('[SSE] render result - newContainer found:', !!newContainer, 'oldContainer found:', !!oldContainer);
-                        if (newContainer) console.log('[SSE] new HTML length:', newContainer.innerHTML.length, 'old HTML length:', oldContainer ? oldContainer.innerHTML.length : 'N/A');
-                        if (newContainer && oldContainer) {
-                            oldContainer.innerHTML = newContainer.innerHTML;
-                            // Re-initialize event listeners lost during DOM swap
-                            if (typeof convertTimestamps === 'function') convertTimestamps();
-                            if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
-                            if (atBottom) window.scrollTo(0, document.body.scrollHeight);
-                        }
-                        // Flash indicator
-                        indicator.style.background = '#3b82f6';
-                        setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
-                    })
-                    .catch(function(err) { console.error('[SSE] render fetch error:', err); });
+                if (atBottom) {
+                    sessionStorage.setItem('sse-scroll', 'bottom');
+                } else {
+                    sessionStorage.setItem('sse-scroll', String(window.scrollY));
+                }
+                location.reload();
             } else if (data.type === 'deleted') {
                 indicator.textContent = 'DELETED';
                 indicator.style.background = '#ef4444';
