@@ -100,6 +100,7 @@
     {% set ns = namespace(last_css='') %}
     {% for message, message_title, html_content, formatted_timestamp in messages %}
     {% if is_session_header(message) %}
+    <!-- @@CCL_MSG_SPLIT@@ -->
     <div class="session-divider"></div>
     <div class='message session-header' data-message-id='{{ message.message_id }}' data-session-id='{{ message.session_id }}' id='msg-{{ message.message_id }}'>
         <div class='header'>Session: {{ html_content }}</div>
@@ -126,6 +127,7 @@
         {% endif %}
     </div>
     {% else %}
+    <!-- @@CCL_MSG_SPLIT@@ -->
     {%- set msg_css_class = css_class_from_message(message) %}
     {% set ns.last_css = msg_css_class %}
     {% set markdown = message.content.has_markdown if message.content else false %}
@@ -169,13 +171,13 @@
     </div>
     {% endif %}
     {% endfor %}
-    <div class='message user empty-prompt'>
+    <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'><span>🤷 User</span></div>
         <div class='content'>
             <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
         </div>
     </div>
-    </div>{# end messages-container #}
+    </div><!-- @@CCL_END_CONTAINER@@ -->
 
     <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
     <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
@@ -860,42 +862,120 @@
     {% set is_transcript = True %}
     {% include 'components/search.html' %}
 
+    <!-- Clean container for SSE live messages (outside broken messages-container DOM) -->
+    <div id="sse-live-messages"></div>
+
     <!-- Live update via SSE -->
     <script>
     (function() {
-        // Restore scroll position after SSE-triggered reload
-        var savedScroll = sessionStorage.getItem('sse-scroll');
-        if (savedScroll) {
-            sessionStorage.removeItem('sse-scroll');
-            if (savedScroll === 'bottom') {
-                window.scrollTo(0, document.body.scrollHeight);
-            } else {
-                window.scrollTo(0, parseInt(savedScroll, 10));
-            }
-        }
-
         // Extract session ID from URL: session-{uuid}.html
         var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
         if (!match) return;
         var sessionId = match[1];
         var source = new EventSource('/api/sessions/' + sessionId + '/stream');
+        var updating = false;
         var indicator = document.createElement('div');
         indicator.id = 'live-indicator';
         indicator.textContent = 'LIVE';
         indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
         document.body.appendChild(indicator);
 
+        // Server-injected message count (reliable, not affected by HTML parsing issues)
+        var msgCount = {{ messages|length }};
+        console.log('[SSE] initial message count (server-injected):', msgCount);
+
         source.onmessage = function(e) {
             var data = JSON.parse(e.data);
             if (data.type === 'updated') {
-                // Save scroll position and reload to get fresh server-rendered content
+                if (updating) return;
+                updating = true;
                 var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
-                if (atBottom) {
-                    sessionStorage.setItem('sse-scroll', 'bottom');
-                } else {
-                    sessionStorage.setItem('sse-scroll', String(window.scrollY));
-                }
-                location.reload();
+
+                // Fetch only new messages after current count
+                fetch('/api/sessions/' + sessionId + '/messages?after=' + msgCount + '&t=' + Date.now())
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('fetch failed: ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(resp) {
+                        var container = document.getElementById('messages-container');
+                        if (!container) return;
+
+                        var serverTotal = resp.total;
+                        var newHtml = resp.html;
+
+                        console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
+
+                        if (serverTotal <= msgCount || !newHtml || !newHtml.trim()) {
+                            // No new messages — must reset flag so future events are processed
+                            updating = false;
+                            return;
+                        }
+
+                        // Remove the empty-prompt element by ID
+                        var oldPrompt = document.getElementById('ccl-live-prompt');
+                        if (oldPrompt) oldPrompt.remove();
+
+                        // Use #sse-live-messages — a CLEAN container outside the broken
+                        // messages-container DOM. It's placed in the template right before
+                        // the SSE script, so it's always at the visual bottom of the page.
+                        var liveContainer = document.getElementById('sse-live-messages');
+
+                        // Use iframe sandbox to safely parse potentially malformed HTML
+                        var iframe = document.createElement('iframe');
+                        iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+                        document.body.appendChild(iframe);
+
+                        var iframeDoc = '<!DOCTYPE html><html><body><div id="__wrapper">' + newHtml + '</div></body></html>';
+                        iframe.srcdoc = iframeDoc;
+
+                        iframe.onload = function() {
+                            var wrapper = iframe.contentDocument.getElementById('__wrapper');
+
+                            if (wrapper) {
+                                var nodeCount = 0;
+                                while (wrapper.firstChild) {
+                                    var node = document.adoptNode(wrapper.firstChild);
+                                    liveContainer.appendChild(node);
+                                    nodeCount++;
+                                }
+                                console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
+                            }
+
+                            // Add empty-prompt at the end of liveContainer
+                            var promptDiv = document.createElement('div');
+                            promptDiv.id = 'ccl-live-prompt';
+                            promptDiv.className = 'message user empty-prompt';
+                            promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span></div>' +
+                                '<div class="content">' +
+                                '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                '</div>';
+                            liveContainer.appendChild(promptDiv);
+
+                            // Cleanup iframe
+                            document.body.removeChild(iframe);
+
+                            // Post-processing on new content
+                            if (typeof convertTimestamps === 'function') convertTimestamps();
+                            if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+
+                            if (atBottom) {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+
+                            indicator.style.background = '#3b82f6';
+                            setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
+
+                            // Update count inside onload (after DOM is ready)
+                            msgCount = serverTotal;
+                            updating = false;
+                            console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+                        };
+                    })
+                    .catch(function(err) {
+                        console.error('[SSE] update error:', err);
+                        updating = false;
+                    });
             } else if (data.type === 'deleted') {
                 indicator.textContent = 'DELETED';
                 indicator.style.background = '#ef4444';
@@ -905,6 +985,10 @@
         source.onerror = function() {
             indicator.textContent = 'OFFLINE';
             indicator.style.background = '#6b7280';
+        };
+        source.onopen = function() {
+            indicator.textContent = 'LIVE';
+            indicator.style.background = '#22c55e';
         };
     })();
     </script>

@@ -252,6 +252,7 @@ def format_compacted_summary_content(content: CompactedSummaryMessage) -> str:
         "compacted-summary",
         line_threshold=30,
         preview_line_count=10,
+        escape_html=True,
     )
 
 

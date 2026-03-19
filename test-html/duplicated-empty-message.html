@@ -1,0 +1,86 @@
+<div class="message user d-0" data-message-id="d-763" id="msg-d-763">
+        <div class="header">
+            <span>🤷 User</span>
+            <div class="header-info">
+                <div class="timestamp-row">
+                    <span class="timestamp" data-timestamp="2026-03-18T06:44:12.469Z">2026-03-18 06:44:12</span>
+                </div>
+                
+            </div>
+        </div>
+        <div class="content"><div class="ide-notification">🤖 The user opened the file c:\Users\User\Desktop\kyochon-prj\fo-komis-be\komis-svc-portal\src\main\java\komis\portal\fooddash\terms\controller\TermController.java in the IDE. This may or may not be related to the current task.</div>
+<pre>좋았어 이제, 너가 백엔드에서 수정한 내용이 뭔지 다시 설명해줘.</pre></div>
+        
+    </div>
+
+    <div id="sse-empty-prompt" class="message user"><div class="header"><span>🤷 User</span></div><div class="content"><textarea class="user-input" placeholder="메시지를 입력하세요..." style="height: 55px;"></textarea></div></div>
+    <!-- MSG -->
+     <div class="message assistant d-0 d-763" data-message-id="d-764" id="msg-d-764">
+        <div class="header">
+            <span>🤖 Assistant</span>
+            <div class="header-info">
+                <div class="timestamp-row">
+                    <span class="timestamp" data-timestamp="2026-03-18T06:44:22.241Z">2026-03-18 06:44:22</span>
+                </div>
+                
+                <span class="token-usage">Input: 3 | Output: 479 | Cache Creation: 574 | Cache Read: 98589</span>
+                
+            </div>
+        </div>
+        <div class="content markdown"><div class="assistant-text"><details class="collapsible-code">
+        <summary>
+            <span class="line-count">39 lines</span>
+            <div class="preview-content markdown"><h2>수정한 파일 2개</h2>
+<h3>1. TermController.java</h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// 수정 전</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">ApiResult</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">TermListGetResDto</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nf">getTermList</span><span class="p">(</span><span class="nd">@Valid</span><span class="w"> </span><span class="n">TermListGetResDto</span><span class="w"> </span><span class="n">termListGetResDto</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ApiResult</span><span class="p">.</span><span class="na">createResult</span><span class="p">(</span><span class="n">termService</span><span class="p">.</span><span class="na">getTermList</span><span class="p">(</span><span class="n">termListGetResDto</span><span class="p">));</span>
+
+<span class="p">...</span>
+</code></pre></div>
+</div>
+        </summary>
+        <div class="code-full markdown"><h2>수정한 파일 2개</h2>
+<h3>1. TermController.java</h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// 수정 전</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">ApiResult</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">TermListGetResDto</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nf">getTermList</span><span class="p">(</span><span class="nd">@Valid</span><span class="w"> </span><span class="n">TermListGetResDto</span><span class="w"> </span><span class="n">termListGetResDto</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ApiResult</span><span class="p">.</span><span class="na">createResult</span><span class="p">(</span><span class="n">termService</span><span class="p">.</span><span class="na">getTermList</span><span class="p">(</span><span class="n">termListGetResDto</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="c1">// 수정 후</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">ApiResult</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">TermListGetResDto</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nf">getTermList</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ApiResult</span><span class="p">.</span><span class="na">createResult</span><span class="p">(</span><span class="n">termService</span><span class="p">.</span><span class="na">getTermList</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>→ 파라미터에 있던 <code>@Valid TermListGetResDto termListGetResDto</code> 제거</p>
+<h3>2. TermService.java</h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// 수정 전</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">TermListGetResDto</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getTermList</span><span class="p">(</span><span class="n">TermListGetResDto</span><span class="w"> </span><span class="n">termListGetResDto</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">commonDao</span><span class="p">.</span><span class="na">selectList</span><span class="p">(</span><span class="s">"termService.getTermList"</span><span class="p">,</span><span class="w"> </span><span class="n">termListGetResDto</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// 수정 후</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">TermListGetResDto</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getTermList</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">commonDao</span><span class="p">.</span><span class="na">selectList</span><span class="p">(</span><span class="s">"termService.getTermList"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>→ 파라미터 <code>TermListGetResDto termListGetResDto</code> 제거, <code>commonDao.selectList</code>에서도 두 번째 인자 제거</p>
+<h3>왜 수정했나</h3>
+<p>목록 조회 API는 <strong>파라미터 없이 전체 약관 종류를 조회</strong>하는 API인데, 응답 DTO(<code>ResDto</code>)가 파라미터 자리에 들어가 있었음. SQL에서도 이 파라미터를 사용하지 않으므로 제거해도 동작에 영향 없음. 제거 후 Swagger에서 불필요한 required 파라미터 표시가 사라짐.</p>
+</div>
+    </details></div></div>
+        
+    </div>
+
+    <div id="sse-empty-prompt" class="message user empty-prompt">
+        <div class="header"><span>🤷 User</span></div>
+        <div class="content">
+            <textarea class="user-input" placeholder="메시지를 입력하세요..."></textarea>
+        </div>
+    </div>
+    <div id="sse-empty-prompt" class="message user empty-prompt">
+        <div class="header"><span>🤷 User</span></div>
+        <div class="content">
+            <textarea class="user-input" placeholder="메시지를 입력하세요..."></textarea>
+        </div>
+    </div>

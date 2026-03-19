@@ -11,7 +11,7 @@
 2. [세션 제목 수정](#2-세션-제목-수정)
 3. [세션 삭제 (X 버튼)](#3-세션-삭제-x-버튼)
 4. [Archived 세션 필터링](#4-archived-세션-필터링)
-5. [실시간 동기화 (SSE)](#5-실시간-동기화-sse)
+5. [실시간 동기화 (SSE)](LIVE_SYNC.md) — 별도 문서
 6. [인덱스 재생성 로딩 화면](#6-인덱스-재생성-로딩-화면)
 7. [색상 커스터마이징](#7-색상-커스터마이징)
 
@@ -57,7 +57,7 @@ window.initEmptyPrompt = function() {
 window.initEmptyPrompt();
 ```
 
-> **주의**: `window.initEmptyPrompt`로 전역 함수 선언 필수. SSE DOM 교체 후 재바인딩에 사용됨.
+> **주의**: `window.initEmptyPrompt`로 전역 함수 선언 필수. SSE DOM 교체 후 재바인딩에 사용됨 (`ccl-live-prompt` 재생성 후 호출).
 
 ---
 
@@ -304,167 +304,7 @@ for archived_dir in sorted(archived_project_dirs):
 
 ## 5. 실시간 동기화 (SSE)
 
-**목적**: 세션 페이지를 열어두면, Claude Code 대화 시 브라우저에 실시간 반영.
-
-### 아키텍처
-
-```
-JSONL 파일 변경
-    ↓ (2초 폴링 + debounce)
-SSE 엔드포인트 → {"type": "updated"} 이벤트 전송
-    ↓
-브라우저 EventSource 수신
-    ↓
-스크롤 위치 저장 → location.reload() → 스크롤 위치 복원
-```
-
-> **설계 결정**: 초기에는 `/api/sessions/{id}/render`를 fetch하여 DOMParser로 `messages-container` innerHTML을 교체하는 방식이었으나, 대용량 세션(3MB+ HTML)에서 DOMParser가 컨테이너를 불완전하게 파싱하는 문제 발견. `location.reload()` + 스크롤 위치 보존 방식으로 변경.
-
-### 수정 파일 (2개)
-
-#### 5-1. `claude_code_log/server.py` — 3개 엔드포인트
-
-**동적 세션 렌더링** (`serve_file` 수정):
-```python
-@app.route("/<path:filepath>")
-def serve_file(filepath: str) -> Response:
-    import re
-    # 세션 페이지 요청이면 정적 파일 대신 JSONL에서 동적 렌더링
-    session_match = re.match(r".+/session-([a-f0-9-]+)\.html$", filepath)
-    if session_match:
-        session_id = session_match.group(1)
-        jsonl_file = _find_session_jsonl(projects_dir, session_id)
-        if jsonl_file is not None:
-            from .converter import load_transcript
-            from .html.renderer import HtmlRenderer
-            messages = load_transcript(jsonl_file, silent=True)
-            renderer = HtmlRenderer()
-            html = renderer.generate_session(messages, session_id)
-            return Response(html, mimetype="text/html",
-                          headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-    # 그 외 파일은 정적 서빙
-    ...
-```
-
-> **핵심**: 세션 페이지를 정적 파일에서 서빙하면 템플릿 변경이 반영되지 않고 내용도 구식임. 동적 렌더링으로 항상 최신.
-
-**SSE 엔드포인트** (debounce 포함):
-```python
-@app.route("/api/sessions/<session_id>/stream")
-def stream_session(session_id: str) -> Response:
-    jsonl_file = _find_session_jsonl(projects_dir, session_id)
-
-    def generate():
-        last_size = jsonl_file.stat().st_size
-        last_mtime = jsonl_file.stat().st_mtime
-        while True:
-            time_module.sleep(2)  # 2초 간격 폴링
-            try:
-                stat = jsonl_file.stat()
-            except FileNotFoundError:
-                yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
-                break
-            if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                # Debounce: 파일이 안정될 때까지 대기 (최대 5초)
-                # Claude Code가 JSONL에 쓰는 도중 불완전한 파일을 읽는 것 방지
-                for _ in range(5):
-                    time_module.sleep(1)
-                    try:
-                        new_stat = jsonl_file.stat()
-                    except FileNotFoundError:
-                        break
-                    if new_stat.st_size == stat.st_size and new_stat.st_mtime == stat.st_mtime:
-                        break  # 파일 안정됨
-                    stat = new_stat
-                last_size = stat.st_size
-                last_mtime = stat.st_mtime
-                yield f"data: {json.dumps({'type': 'updated'})}\n\n"
-            else:
-                yield ":\n\n"  # SSE keepalive
-
-    return Response(generate(), mimetype="text/event-stream",
-                   headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-```
-
-> **Debounce 이유**: Claude Code는 한 번의 응답에서 JSONL에 여러 항목(assistant, file-history-snapshot, tool_result 등)을 순차 기록함. 파일 변경 즉시 `updated`를 보내면 불완전한 JSONL을 읽게 됨. 1초간 추가 변경이 없을 때까지 대기하여 완전한 데이터만 전송.
-
-**렌더 엔드포인트**:
-```python
-@app.route("/api/sessions/<session_id>/render")
-def render_session(session_id: str) -> Response:
-    jsonl_file = _find_session_jsonl(projects_dir, session_id)
-    messages = load_transcript(jsonl_file, silent=True)
-    renderer = HtmlRenderer()
-    html = renderer.generate_session(messages, session_id)
-    return Response(html, mimetype="text/html",
-                   headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-```
-
-#### 5-2. `claude_code_log/html/templates/transcript.html` — 3가지 변경
-
-**messages-container 래퍼** (메시지 루프를 감쌈):
-```html
-<div id="messages-container">
-{% for message, ... in messages %}
-    ...
-{% endfor %}
-<div class='message user empty-prompt'>...</div>
-</div>{# end messages-container #}
-```
-
-**EventSource JS** (`</body>` 직전):
-```html
-<script>
-(function() {
-    // SSE reload 후 스크롤 위치 복원
-    var savedScroll = sessionStorage.getItem('sse-scroll');
-    if (savedScroll) {
-        sessionStorage.removeItem('sse-scroll');
-        if (savedScroll === 'bottom') {
-            window.scrollTo(0, document.body.scrollHeight);
-        } else {
-            window.scrollTo(0, parseInt(savedScroll, 10));
-        }
-    }
-
-    var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
-    if (!match) return;
-    var sessionId = match[1];
-    var source = new EventSource('/api/sessions/' + sessionId + '/stream');
-
-    // LIVE 인디케이터
-    var indicator = document.createElement('div');
-    indicator.id = 'live-indicator';
-    indicator.textContent = 'LIVE';
-    indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;...';
-    document.body.appendChild(indicator);
-
-    source.onmessage = function(e) {
-        var data = JSON.parse(e.data);
-        if (data.type === 'updated') {
-            // 스크롤 위치 저장 후 페이지 새로고침
-            var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
-            if (atBottom) {
-                sessionStorage.setItem('sse-scroll', 'bottom');
-            } else {
-                sessionStorage.setItem('sse-scroll', String(window.scrollY));
-            }
-            location.reload();
-        } else if (data.type === 'deleted') {
-            indicator.textContent = 'DELETED';
-            indicator.style.background = '#ef4444';
-            source.close();
-        }
-    };
-    source.onerror = function() {
-        indicator.textContent = 'OFFLINE';
-        indicator.style.background = '#6b7280';
-    };
-})();
-</script>
-```
-
-> **DOMParser 방식을 포기한 이유**: 대용량 세션(600+ 메시지, 3MB+ HTML)에서 `DOMParser.parseFromString()`이 `messages-container`의 innerHTML을 불완전하게 파싱하는 현상 발견. 서버는 정상 응답(메시지 수 증가)하지만 DOMParser 결과의 컨테이너 innerHTML이 일관되게 더 작았음. `location.reload()` + `sessionStorage` 스크롤 보존으로 안정적 업데이트 구현.
+> **별도 문서로 분리**: 아키텍처, 설계 결정, 디버깅 히스토리, 전체 코드를 포함한 상세 문서는 **[LIVE_SYNC.md](LIVE_SYNC.md)** 참조.
 
 ---
 
@@ -558,7 +398,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `66fb011` | 세션 삭제 + 캐시 동기화 수정 |
 | `e4d5501` | 실시간 동기화 (SSE) + 동적 세션 렌더링 |
 | `27dc59a` | 세션 삭제 시 404 방지(로딩 화면), empty-prompt 항상 표시, SSE 디버그 로그 |
-| (pending) | SSE debounce 추가, location.reload 방식으로 변경, render endpoint no-cache |
+| (pending) | iframe sandbox DOM 삽입, 마커 이름 `@@CCL_` 접두사로 변경, `rfind()` 안전장치, `updating` 플래그 리셋 버그 수정, `after>=total` 조기 반환, `source.onopen` 재연결 복구 |
 
 ---
 

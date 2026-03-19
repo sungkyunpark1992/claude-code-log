@@ -258,11 +258,45 @@ def _get_markdown_renderer() -> mistune.Markdown:
     )
 
 
-def render_markdown(text: str) -> str:
-    """Convert markdown text to HTML using mistune with Pygments syntax highlighting."""
+@functools.lru_cache(maxsize=1)
+def _get_markdown_renderer_escaped() -> mistune.Markdown:
+    """Get cached Mistune markdown renderer that escapes raw HTML in source text.
+
+    Used for content like compacted conversation summaries where user-quoted text
+    may contain literal HTML tags (e.g. ``<div>``, ``</div>``) that would create
+    unbalanced HTML if passed through unescaped, breaking the page structure.
+    """
+    return mistune.create_markdown(
+        plugins=[
+            "strikethrough",
+            "footnotes",
+            "table",
+            "url",
+            "task_lists",
+            "def_list",
+            _create_pygments_plugin(),
+        ],
+        escape=True,  # Escape HTML tags in source text
+        hard_wrap=True,
+    )
+
+
+def render_markdown(text: str, escape_html: bool = False) -> str:
+    """Convert markdown text to HTML using mistune with Pygments syntax highlighting.
+
+    Args:
+        text: Markdown text to render.
+        escape_html: If True, escape raw HTML tags in the source text.
+            Use this for content that may contain user-quoted HTML (e.g. compacted
+            conversation summaries) to prevent unbalanced tags from breaking the
+            page structure.
+    """
     # Track markdown rendering time if enabled
     with timing_stat("_markdown_timings"):
-        renderer = _get_markdown_renderer()
+        if escape_html:
+            renderer = _get_markdown_renderer_escaped()
+        else:
+            renderer = _get_markdown_renderer()
         return str(renderer(text))
 
 
@@ -304,6 +338,7 @@ def render_markdown_collapsible(
     css_class: str,
     line_threshold: int = 20,
     preview_line_count: int = 5,
+    escape_html: bool = False,
 ) -> str:
     """Render markdown content, making it collapsible if it exceeds a line threshold.
 
@@ -315,11 +350,12 @@ def render_markdown_collapsible(
         css_class: CSS class for the wrapper div (e.g., "task-prompt", "task-result")
         line_threshold: Number of lines above which content becomes collapsible (default 20)
         preview_line_count: Number of lines to show in the preview (default 5)
+        escape_html: If True, escape raw HTML tags in the source text before rendering
 
     Returns:
         HTML string with rendered markdown, optionally wrapped in collapsible details
     """
-    rendered_html = render_markdown(raw_content)
+    rendered_html = render_markdown(raw_content, escape_html=escape_html)
 
     lines = raw_content.splitlines()
     if len(lines) <= line_threshold:
@@ -332,7 +368,7 @@ def render_markdown_collapsible(
     if len(lines) > preview_line_count:
         preview_text += "\n\n..."
     # Render truncated markdown (produces valid HTML with proper tag closure)
-    preview_html = render_markdown(preview_text)
+    preview_html = render_markdown(preview_text, escape_html=escape_html)
 
     collapsible = render_collapsible_code(
         preview_html, rendered_html, len(lines), is_markdown=True

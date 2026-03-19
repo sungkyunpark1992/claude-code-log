@@ -155,6 +155,12 @@ def truncate_highlighted_preview(highlighted_html: str, max_lines: int) -> str:
         prefix, content, suffix = match.groups()
         lines = content.split("\n")
         truncated = "\n".join(lines[:max_lines])
+        # Pygments wraps code in <code>...</code> inside <pre>. When we truncate
+        # lines, the closing </code> at the end gets dropped, producing an unclosed
+        # <code> tag that causes the browser's HTML parser to swallow subsequent
+        # sibling elements (e.g. message divs).  Re-close it if needed.
+        if "<code>" in truncated and "</code>" not in truncated:
+            truncated += "\n</code>"
         return prefix + truncated + suffix
 
     # Truncate linenos <pre> content (line numbers separated by newlines)
