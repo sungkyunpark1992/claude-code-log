@@ -1,5 +1,7 @@
 {
   "permissions": {
+    "_주석처리_defaultMode": "bypassPermissions",
+    "_주석처리_skipDangerousModePermissionPrompt": true,
     "allow": [
       "Edit",
       "Write",
@@ -7,9 +9,18 @@
       "Bash(git *)",
       "Bash(python *)",
       "Bash(uv *)",
+      "Bash(cat *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(~/.local/bin/uv *)",
+      "Bash(\"/c/Users/User/AppData/Local/uv/bin/uv.exe\" *)",
       "Bash(pip *)",
       "Bash(ls *)",
-      "Bash(where *)"
+      "Bash(where *)",
+      "Bash(which *)",
+      "Bash(command *)",
+      "Bash(powershell.exe *)",
+      "Bash(powershell *)"
     ]
   },
   "hooks": {
