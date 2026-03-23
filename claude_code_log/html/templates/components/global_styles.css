@@ -221,16 +221,20 @@ pre {
     bottom: 20px;
 }
 
-.toggle-details.floating-btn {
+.scroll-bottom.floating-btn {
     bottom: 80px;
 }
 
-.filter-messages.floating-btn {
+.toggle-details.floating-btn {
     bottom: 140px;
 }
 
-.timeline-toggle.floating-btn {
+.filter-messages.floating-btn {
     bottom: 200px;
+}
+
+.timeline-toggle.floating-btn {
+    bottom: 260px;
 }
 
 @media (max-width: 1280px) {
