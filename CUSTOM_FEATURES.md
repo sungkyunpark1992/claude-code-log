@@ -65,23 +65,50 @@ window.initEmptyPrompt();
 
 ## 2. 세션 제목 수정
 
-**목적**: 인덱스/세션 네비게이션에서 ✏️ 버튼으로 세션 제목을 인라인 편집.
+**목적**: 인덱스/세션 네비게이션에서 ✏️ 버튼으로 세션 제목을 인라인 편집. 수정된 제목은 브라우저 탭 제목과 VS Code Claude Code 확장에도 반영됨.
 
 ### 수정 파일 (3개)
 
 #### 2-1. `claude_code_log/server.py` — API 엔드포인트
 
-헬퍼 함수:
+헬퍼 함수 2개:
+
 ```python
+def _get_custom_title(jsonl_file: Path, session_id: str) -> Optional[str]:
+    """JSONL에서 직접 custom title을 읽어 반환 (마지막 항목 기준).
+
+    load_transcript()는 CustomTitleTranscriptEntry를 날짜 필터링 중 skip하므로
+    JSONL을 직접 읽어야 함. 동일 sessionId 항목이 여러 개일 경우 마지막(최신)을 반환.
+    """
+    result: Optional[str] = None
+    for line in jsonl_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            data = json.loads(stripped)
+            if (
+                data.get("type") == "custom-title"
+                and data.get("sessionId") == session_id
+            ):
+                result = str(data["customTitle"])
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return result
+
+
 def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> None:
-    """JSONL 파일에 custom-title 항목 추가/수정."""
+    """JSONL 파일의 custom-title 항목을 갱신.
+
+    기존 custom-title 항목을 sessionId 무관하게 모두 삭제 후 새 항목을 맨 뒤에 추가.
+    Claude Code가 자동으로 작성한 garbage 항목이 남아 있으면 VS Code 확장이
+    첫 번째 항목을 읽어 잘못된 제목을 표시하는 버그를 방지.
+    """
     lines = jsonl_file.read_text(encoding="utf-8").splitlines()
     new_entry = json.dumps(
         {"type": "custom-title", "customTitle": new_title, "sessionId": session_id},
         ensure_ascii=False,
     )
-    # 기존 custom-title 항목이 있으면 덮어쓰고, 없으면 맨 뒤에 추가
-    updated = False
     new_lines = []
     for line in lines:
         stripped = line.strip()
@@ -90,15 +117,12 @@ def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> N
             continue
         try:
             data = json.loads(stripped)
-            if data.get("type") == "custom-title" and data.get("sessionId") == session_id:
-                new_lines.append(new_entry)
-                updated = True
-                continue
+            if data.get("type") == "custom-title":
+                continue  # 모든 custom-title 항목 제거
         except json.JSONDecodeError:
             pass
         new_lines.append(line)
-    if not updated:
-        new_lines.append(new_entry)
+    new_lines.append(new_entry)
     jsonl_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 ```
 
@@ -113,6 +137,18 @@ def update_title(session_id: str) -> Response:
     process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
     return jsonify({"status": "ok", "title": new_title})
 ```
+
+세션 페이지 동적 렌더링 시 custom title을 `<title>` 태그에 반영 (serve_file, render_session, render_messages 세 곳 모두):
+```python
+messages = load_transcript(jsonl_file, silent=True)
+renderer = HtmlRenderer()
+custom_title = _get_custom_title(jsonl_file, session_id)
+html = renderer.generate_session(messages, session_id, title=custom_title)
+```
+
+> **핵심 설계 결정**:
+> - `_get_custom_title`은 마지막 항목을 반환 → ✏️ 이전에 Claude Code가 자동으로 쓴 garbage 항목보다 나중에 추가된 항목이 우선
+> - `_update_custom_title`은 모든 `custom-title` 항목을 삭제 후 재추가 → sessionId가 다른 형식의 garbage 항목까지 완전히 제거. VS Code Claude Code 확장은 JSONL의 첫 번째 `custom-title` 항목을 읽으므로, 항목이 하나뿐이어야 VS Code에도 올바르게 반영됨.
 
 #### 2-2. `claude_code_log/html/templates/components/session_nav.html` — 편집 버튼
 
@@ -452,7 +488,9 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `27dc59a` | 세션 삭제 시 404 방지(로딩 화면), empty-prompt 항상 표시, SSE 디버그 로그 |
 | `3f85f77` | iframe sandbox DOM 삽입, 마커 이름 `@@CCL_` 접두사로 변경, `rfind()` 안전장치, `updating` 플래그 리셋 버그 수정, `after>=total` 조기 반환, `source.onopen` 재연결 복구 |
 | `47fdc2d` | 맨 아래로 이동 플로팅 버튼 추가, 맨 위로 버튼 이모지 변경 (🔝→⬆️) |
-| (pending) | 플로팅 버튼 정리 (`<a>`→`<button>` 통일, scrollTo 방식 통일, ⬆️⬇️ 위치 조정), 인덱스 새로고침 시 자동 재생성 |
+| `f62c312` | 플로팅 버튼 정리 (`<a>`→`<button>` 통일, scrollTo 방식 통일, ⬆️⬇️ 위치 조정) |
+| `3dc6fef` | 인덱스 페이지 새로고침 시 자동 재생성 |
+| (pending) | 세션 custom title을 브라우저 탭 제목에 반영, VS Code 연동 버그 수정 (`_get_custom_title` 마지막 항목 반환, `_update_custom_title` 전체 교체) |
 
 ---
 

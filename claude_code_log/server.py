@@ -29,15 +29,44 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
     return None
 
 
+def _get_custom_title(jsonl_file: Path, session_id: str) -> Optional[str]:
+    """Extract the custom title for a session directly from the JSONL file.
+
+    load_transcript() skips CustomTitleTranscriptEntry during date filtering,
+    so we read the JSONL directly to reliably find the custom title.
+    Returns the LAST matching entry (most recent override wins).
+    """
+    result: Optional[str] = None
+    for line in jsonl_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            data = json.loads(stripped)
+            if (
+                data.get("type") == "custom-title"
+                and data.get("sessionId") == session_id
+            ):
+                result = str(data["customTitle"])
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return result
+
+
 def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> None:
-    """Add or update a custom-title entry in the JSONL file."""
+    """Add or update a custom-title entry in the JSONL file.
+
+    Removes ALL existing custom-title entries (regardless of sessionId) and
+    appends a single authoritative entry. This prevents stale/garbage entries
+    written by Claude Code from confusing VS Code extension (which reads the
+    first matching entry).
+    """
     lines = jsonl_file.read_text(encoding="utf-8").splitlines()
     new_entry = json.dumps(
         {"type": "custom-title", "customTitle": new_title, "sessionId": session_id},
         ensure_ascii=False,
     )
 
-    updated = False
     new_lines = []
     for line in lines:
         stripped = line.strip()
@@ -46,17 +75,13 @@ def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> N
             continue
         try:
             data = json.loads(stripped)
-            if data.get("type") == "custom-title" and data.get("sessionId") == session_id:
-                new_lines.append(new_entry)
-                updated = True
-                continue
+            if data.get("type") == "custom-title":
+                continue  # Remove all custom-title entries
         except json.JSONDecodeError:
             pass
         new_lines.append(line)
 
-    if not updated:
-        new_lines.append(new_entry)
-
+    new_lines.append(new_entry)
     jsonl_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 
@@ -105,7 +130,8 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
                 messages = load_transcript(jsonl_file, silent=True)
                 renderer = HtmlRenderer()
-                html = renderer.generate_session(messages, session_id)
+                custom_title = _get_custom_title(jsonl_file, session_id)
+                html = renderer.generate_session(messages, session_id, title=custom_title)
                 print(f"[serve_file] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
                 return Response(
                     html,
@@ -247,7 +273,8 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        html = renderer.generate_session(messages, session_id)
+        custom_title = _get_custom_title(messages, session_id)
+        html = renderer.generate_session(messages, session_id, title=custom_title)
         print(f"[render_session] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
         return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
@@ -263,7 +290,8 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        html = renderer.generate_session(messages, session_id)
+        custom_title = _get_custom_title(messages, session_id)
+        html = renderer.generate_session(messages, session_id, title=custom_title)
 
         # Extract messages-container innerHTML using markers
         start_marker = '<div id="messages-container">'
