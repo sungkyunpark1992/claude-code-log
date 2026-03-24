@@ -218,11 +218,11 @@ pre {
 
 /* Floating buttons positioning */
 .scroll-top.floating-btn {
-    bottom: 20px;
+    bottom: 80px;
 }
 
 .scroll-bottom.floating-btn {
-    bottom: 80px;
+    bottom: 20px;
 }
 
 .toggle-details.floating-btn {
