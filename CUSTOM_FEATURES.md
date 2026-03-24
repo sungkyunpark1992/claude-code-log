@@ -14,6 +14,8 @@
 5. [실시간 동기화 (SSE)](LIVE_SYNC.md) — 별도 문서
 6. [인덱스 재생성 로딩 화면](#6-인덱스-재생성-로딩-화면)
 7. [색상 커스터마이징](#7-색상-커스터마이징)
+8. [맨 아래로 이동 플로팅 버튼](#8-맨-아래로-이동-플로팅-버튼)
+9. [인덱스 페이지 새로고침 시 자동 재생성](#9-인덱스-페이지-새로고침-시-자동-재생성)
 
 ---
 
@@ -338,6 +340,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
 @app.route("/")
 def index() -> Response:
+    from .converter import process_projects_hierarchy
+
+    process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
     index_file = projects_dir / "index.html"
     if index_file.exists():
         response = send_file(index_file)
@@ -356,6 +361,53 @@ def index() -> Response:
 
 배경색, 세션 색상 등을 CSS 변수 또는 직접 수정으로 커스터마이징.
 (커밋 `0643826 session 색상 변경`, `20303bd 배경색 수정`)
+
+---
+
+## 8. 맨 아래로 이동 플로팅 버튼
+
+**목적**: 세션 페이지 우하단에 맨 아래/위로 이동하는 플로팅 버튼 쌍 구성. 기존 `<a>` 태그를 `<button>`으로 통일하고 동작 방식도 일관되게 정리.
+
+### 수정 파일 (2개)
+
+#### 8-1. `claude_code_log/html/templates/transcript.html` — 버튼 추가 및 통일
+
+```html
+<button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+<button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+```
+
+> - 기존 scroll-top은 `<a href="#title">` → `<button onclick="window.scrollTo(0,0)">`으로 변경 (다른 플로팅 버튼들과 동일한 형태)
+> - ⬇️가 맨 아래(시각적으로 하단), ⬆️가 그 위에 위치
+
+#### 8-2. `claude_code_log/html/templates/components/global_styles.css` — 버튼 위치 CSS
+
+플로팅 버튼 스택 순서 (아래에서 위 방향):
+```css
+.scroll-bottom.floating-btn {
+    bottom: 20px;   /* 맨 아래 */
+}
+
+.scroll-top.floating-btn {
+    bottom: 80px;   /* 그 위 */
+}
+
+.toggle-details.floating-btn {
+    bottom: 140px;
+}
+
+.filter-messages.floating-btn {
+    bottom: 200px;
+}
+```
+
+---
+
+## 9. 인덱스 페이지 새로고침 시 자동 재생성
+
+**목적**: `http://localhost:5678/` 페이지를 수동 새로고침할 때 새 세션이 자동으로 반영되도록.
+
+> 구현 상세 및 설계 결정은 **[LIVE_SYNC.md — 인덱스 페이지 업데이트 방식](LIVE_SYNC.md#9-인덱스-페이지-업데이트-방식)** 참조.
 
 ---
 
@@ -398,7 +450,9 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `66fb011` | 세션 삭제 + 캐시 동기화 수정 |
 | `e4d5501` | 실시간 동기화 (SSE) + 동적 세션 렌더링 |
 | `27dc59a` | 세션 삭제 시 404 방지(로딩 화면), empty-prompt 항상 표시, SSE 디버그 로그 |
-| (pending) | iframe sandbox DOM 삽입, 마커 이름 `@@CCL_` 접두사로 변경, `rfind()` 안전장치, `updating` 플래그 리셋 버그 수정, `after>=total` 조기 반환, `source.onopen` 재연결 복구 |
+| `3f85f77` | iframe sandbox DOM 삽입, 마커 이름 `@@CCL_` 접두사로 변경, `rfind()` 안전장치, `updating` 플래그 리셋 버그 수정, `after>=total` 조기 반환, `source.onopen` 재연결 복구 |
+| `47fdc2d` | 맨 아래로 이동 플로팅 버튼 추가, 맨 위로 버튼 이모지 변경 (🔝→⬆️) |
+| (pending) | 플로팅 버튼 정리 (`<a>`→`<button>` 통일, scrollTo 방식 통일, ⬆️⬇️ 위치 조정), 인덱스 새로고침 시 자동 재생성 |
 
 ---
 

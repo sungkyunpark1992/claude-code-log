@@ -15,6 +15,7 @@
 6. [현재 구현 코드](#6-현재-구현-코드)
 7. [현재 한계점](#7-현재-한계점)
 8. [변경 이력 요약](#8-변경-이력-요약)
+9. [인덱스 페이지 업데이트 방식](#9-인덱스-페이지-업데이트-방식)
 
 ---
 
@@ -525,3 +526,48 @@ def render_messages(session_id: str) -> Response:
 ### 관련 커밋
 
 > 커밋 히스토리는 [CUSTOM_FEATURES.md](CUSTOM_FEATURES.md#커밋-히스토리-시간순)에서 통합 관리.
+
+---
+
+## 9. 인덱스 페이지 업데이트 방식
+
+세션 페이지는 SSE로 실시간 동기화되지만, 인덱스 페이지(`/`)는 별도의 메커니즘이 필요하다.
+
+### 배경
+
+기존에는 서버 시작 시 `index.html`을 한 번만 생성했고, 이후 Claude가 새 세션을 만들어도 브라우저를 새로고침해도 반영되지 않았음.
+
+### 비교: 세션 페이지 vs 인덱스 페이지
+
+| 구분 | 세션 페이지 | 인덱스 페이지 |
+|------|------------|-------------|
+| **업데이트 방식** | SSE + EventSource (자동) | 수동 새로고침 시 재생성 |
+| **필요성** | Claude 대화 중 실시간 확인 필요 | 새 세션 확인은 세션 시작 전후 → 수동 새로고침으로 충분 |
+| **부하** | JSONL 폴링 2초 간격 | 새로고침할 때만 1회 |
+
+### 설계 결정: 왜 폴링/SSE 없이 새로고침 기반인가?
+
+인덱스 페이지에서 실시간 감지까지 구현하는 건 과잉이다:
+- 새 세션이 생겼는지 확인하는 행위 자체가 이미 사용자의 의식적인 액션 (탭 전환, 새로고침)
+- 10초 폴링도 불필요한 서버 부하 발생
+- 수동 새로고침 시 재생성으로 요구사항 100% 충족
+
+### 구현
+
+**`claude_code_log/server.py`** — `index()` 라우트
+
+```python
+@app.route("/")
+def index() -> Response:
+    from .converter import process_projects_hierarchy
+
+    process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+    index_file = projects_dir / "index.html"
+    if index_file.exists():
+        response = send_file(index_file)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
+    return Response(LOADING_HTML, mimetype="text/html")
+```
+
+> **핵심**: `use_cache=True`로 호출하므로 변경된 파일만 처리. 캐시 덕분에 대부분의 경우 빠르게 완료. index.html이 없으면(삭제된 경우) 로딩 화면 표시 후 재생성 완료 시 자동 전환 (섹션 6 참조).
