@@ -273,7 +273,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        custom_title = _get_custom_title(messages, session_id)
+        custom_title = _get_custom_title(jsonl_file, session_id)
         html = renderer.generate_session(messages, session_id, title=custom_title)
         print(f"[render_session] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
         return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
@@ -290,7 +290,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        custom_title = _get_custom_title(messages, session_id)
+        custom_title = _get_custom_title(jsonl_file, session_id)
         html = renderer.generate_session(messages, session_id, title=custom_title)
 
         # Extract messages-container innerHTML using markers

@@ -238,6 +238,29 @@ html.find('<!-- end-messages-container -->')
 
 **교훈**: 서버 코드와 템플릿의 마커는 반드시 동시에 변경해야 함. 재설치 없이 서버만 재시작하면 캐시된 구 템플릿이 사용될 수 있음.
 
+### Bug 6: custom title 기능 추가 후 SSE 500 에러
+
+**증상**: SSE 실시간 동기화가 완전히 멈춤. 브라우저 콘솔에 매 업데이트마다 `500 INTERNAL SERVER ERROR`. 서버 로그에 `AttributeError: 'list' object has no attribute 'read_text'`.
+
+**원인**: 다른 세션에서 custom title 기능(`_get_custom_title`)을 추가하면서 `render_session`과 `render_messages` 두 곳에서 잘못된 인자를 넘김.
+
+```python
+# 버그 코드 (render_session, render_messages 둘 다)
+messages = load_transcript(jsonl_file, silent=True)
+custom_title = _get_custom_title(messages, session_id)
+#                                ↑ list를 넘김 — _get_custom_title은 Path를 받아야 함
+
+# 수정 코드
+custom_title = _get_custom_title(jsonl_file, session_id)
+#                                ↑ Path 객체를 넘김
+```
+
+**영향**: `/api/sessions/.../messages` 엔드포인트(SSE가 새 메시지를 가져오는 곳)가 매번 500으로 실패 → 실시간 동기화 완전 중단. SSE 연결 자체(`/stream`)는 살아있어 LIVE 표시는 유지되지만 실제 내용 업데이트 없음.
+
+**참고**: `serve_file`(세션 페이지 초기 로딩)은 `_get_custom_title(jsonl_file, ...)` 올바르게 호출하고 있었음. 그래서 페이지 열기는 정상, 실시간 업데이트만 실패.
+
+---
+
 ### Bug 5: SSE 재연결 시 OFFLINE 표시 복구 안 됨
 
 **증상**: 서버를 재시작하면 기존 탭에서 SSE가 자동 재연결되어 실시간 동기화는 정상 작동하지만, 우상단 인디케이터가 "OFFLINE"으로 유지됨.
@@ -522,6 +545,7 @@ def render_messages(session_id: str) -> Response:
 | 9 | early return | `updating` 미리셋 | `updating = false` 추가 | SSE 영구 차단 버그 |
 | 10 | 재연결 복구 | 없음 | `source.onopen` 핸들러 | OFFLINE→LIVE 자동 복구 |
 | 11 | 에러 처리 | 없음 | `.catch()` 핸들러 | fetch 실패 시 플래그 리셋 |
+| 12 | `_get_custom_title` 인자 | `messages`(list) 잘못 전달 | `jsonl_file`(Path) 올바르게 전달 | custom title 추가 시 버그, SSE 500 에러 유발 |
 
 ### 관련 커밋
 

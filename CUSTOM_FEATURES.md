@@ -491,6 +491,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `f62c312` | 플로팅 버튼 정리 (`<a>`→`<button>` 통일, scrollTo 방식 통일, ⬆️⬇️ 위치 조정) |
 | `3dc6fef` | 인덱스 페이지 새로고침 시 자동 재생성 |
 | (pending) | 세션 custom title을 브라우저 탭 제목에 반영, VS Code 연동 버그 수정 (`_get_custom_title` 마지막 항목 반환, `_update_custom_title` 전체 교체) |
+| (pending) | SSE 500 버그 수정 — `render_session`, `render_messages`에서 `_get_custom_title(messages, ...)` → `_get_custom_title(jsonl_file, ...)` 잘못된 인자 수정. custom title 기능 추가 시 발생한 버그, SSE 실시간 동기화 완전 중단 유발. 상세: [LIVE_SYNC.md Bug 6](LIVE_SYNC.md#bug-6-custom-title-기능-추가-후-sse-500-에러) |
 
 ---
 
