@@ -261,6 +261,35 @@ custom_title = _get_custom_title(jsonl_file, session_id)
 
 ---
 
+### Bug 7: SSE로 추가된 메시지의 타임스탬프가 UTC 그대로 표시
+
+**증상**: 초기 페이지 로드 시 메시지 시간은 로컬 시간(KST)으로 표시되지만, SSE로 실시간 추가된 메시지는 UTC 시간 그대로 표시됨.
+
+**원인**: `timezone_converter.js`의 변환 함수가 IIFE 안에 갇혀 전역으로 노출되지 않음. SSE 코드가 `convertTimestamps()`를 호출하지만 해당 함수가 전역에 존재하지 않아 무시됨.
+
+```javascript
+// timezone_converter.js (수정 전)
+(function() {
+    function convertTimestampsToLocalTimezone() { ... }
+    convertTimestampsToLocalTimezone(); // 초기 실행은 되지만 전역 노출 없음
+})();
+
+// SSE 코드에서 호출 시도
+if (typeof convertTimestamps === 'function') convertTimestamps(); // undefined → 무시됨
+```
+
+**수정**: `timezone_converter.js`에 전역 노출 한 줄 추가:
+
+```javascript
+    convertTimestampsToLocalTimezone();
+    window.convertTimestamps = convertTimestampsToLocalTimezone; // ← 추가
+})();
+```
+
+**영향**: 초기 페이지 로드 시 모든 타임스탬프는 변환됨. SSE 추가 메시지만 UTC 그대로 표시되는 문제였음.
+
+---
+
 ### Bug 5: SSE 재연결 시 OFFLINE 표시 복구 안 됨
 
 **증상**: 서버를 재시작하면 기존 탭에서 SSE가 자동 재연결되어 실시간 동기화는 정상 작동하지만, 우상단 인디케이터가 "OFFLINE"으로 유지됨.
@@ -546,6 +575,7 @@ def render_messages(session_id: str) -> Response:
 | 10 | 재연결 복구 | 없음 | `source.onopen` 핸들러 | OFFLINE→LIVE 자동 복구 |
 | 11 | 에러 처리 | 없음 | `.catch()` 핸들러 | fetch 실패 시 플래그 리셋 |
 | 12 | `_get_custom_title` 인자 | `messages`(list) 잘못 전달 | `jsonl_file`(Path) 올바르게 전달 | custom title 추가 시 버그, SSE 500 에러 유발 |
+| 13 | SSE 추가 메시지 시간 변환 | 변환 안 됨 (UTC 그대로) | `window.convertTimestamps` 전역 노출 | `timezone_converter.js` 함수가 IIFE 안에 갇혀 SSE 호출 불가 |
 
 ### 관련 커밋
 

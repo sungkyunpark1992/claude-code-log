@@ -112,4 +112,7 @@
 
     // Execute immediately - assumes this is included within a DOMContentLoaded handler
     convertTimestampsToLocalTimezone();
+
+    // Expose globally so SSE update handler can re-run after injecting new messages
+    window.convertTimestamps = convertTimestampsToLocalTimezone;
 })();
