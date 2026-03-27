@@ -470,19 +470,21 @@ def index() -> Response:
 ```css
 #prompt-dock.sticky {
     position: fixed;
-    bottom: 0;
+    bottom: 10px; /* body padding-bottom(10px)과 일치 — 0이면 sticky 전환 시 10px 점프 발생 */
     left: 0;
-    right: 0;          /* viewport 전체 너비 */
+    right: 60px;  /* 우측 사이드바 너비 */
     z-index: 100;
-    max-width: 1200px; /* body와 동일 */
-    margin: 0 auto;    /* body처럼 중앙 정렬 */
-    padding: 0 10px;   /* body padding과 동일 */
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
     border-radius: 8px 8px 0 0;
 }
 ```
 
 > `left: 50%; transform: translateX(-50%)` 방식은 스크롤바 너비 등으로 미세하게 어긋남.
 > `left: 0; right: 0; margin: auto` 방식이 body 레이아웃과 픽셀 단위로 일치.
+
+> **주의**: `bottom` 값은 반드시 `body`의 `padding-bottom`과 동일해야 함. 다르면 sticky 전환 순간 dock이 해당 차이만큼 점프함.
 
 ### 수정 파일 (2개)
 
@@ -515,8 +517,15 @@ textarea.addEventListener('input', function () {
         this.style.overflowY = 'hidden';
     }
     if (this.value.trim()) {
-        dock.classList.add('sticky');
-        document.body.style.paddingBottom = dock.offsetHeight + 'px';
+        if (!dock.classList.contains('sticky')) {
+            // 최초 전환만: dock이 흐름에서 차지하던 공간 전체(gap 포함)를 paddingBottom으로
+            // 보상한 뒤 sticky 적용 → 메시지 위치 변화 없음
+            var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
+            var docHeight = document.documentElement.scrollHeight;
+            document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+            dock.classList.add('sticky');
+        }
+        // 이후 키스트로크: dock이 이미 fixed(흐름 밖) → 레이아웃 변화 없음, 추가 처리 불필요
     } else {
         dock.classList.remove('sticky');
         document.body.style.paddingBottom = '';
@@ -524,7 +533,10 @@ textarea.addEventListener('input', function () {
 });
 ```
 
-> `document.body.style.paddingBottom = dock.offsetHeight + 'px'`: fixed 요소가 마지막 메시지를 가리지 않도록 body 하단 여백 동적 보상.
+> **핵심 설계 결정**:
+> - `paddingBottom = dock.offsetHeight`만 쓰면 dock 위의 gap이 보상에서 빠져 메시지가 dock에 붙어버림 → `docHeight - dockAbsTop`(dock 상단~문서 끝 전체)으로 보상.
+> - sticky 전환은 **한 번만** 실행 (`!dock.classList.contains('sticky')` 가드). 매 키스트로크마다 실행하면 DOM 변경이 반복되어 브라우저가 `window.scrollTo` 없이는 화면을 위로 밀어버림.
+> - `window.scrollTo`를 입력 핸들러에서 호출하지 않음 — 위 두 조건(pre-compensation + one-time)으로 자연스럽게 해결.
 
 **JS** (SSE 코드): 기존 prompt 제거 및 dock 내에 새 prompt 재생성:
 ```javascript
@@ -716,9 +728,8 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `2db16c5` | SSE 추가 메시지 타임스탬프 UTC 표시 수정 — `timezone_converter.js`에 `window.convertTimestamps` 전역 노출 추가. 상세: [LIVE_SYNC.md Bug 7](LIVE_SYNC.md#bug-7-sse로-추가된-메시지의-타임스탬프가-utc-그대로-표시) |
 | `556e3b4` | 빈 말풍선 하단 고정 (sticky) — `#prompt-dock` 래퍼 방식, 최대 16줄, 헤더 ▼/▲ 토글 |
 | `2f0726b` | 플로팅 버튼 우측 사이드바 고정 — `#floating-buttons` 컨테이너, `body padding-right: 70px`, dock `right: 60px` |
-| (pending) | SSE `total` 고정 버그 최종 해결 — HTML 마커 방식 완전 폐기, Python `TemplateMessage` 객체 기반 카운트(`get_template_messages()` + `render_fragment()`). 신규 파일: `messages_fragment.html`. 상세: [LIVE_SYNC.md Bug 8](LIVE_SYNC.md#bug-8-total-값-고정--마커-오염-재발-최종-해결-마커-방식-완전-폐기) |
-| (pending) | `#sse-live-messages` DOM 순서 수정 — `#prompt-dock` 뒤 → 앞으로 이동. 새 메시지가 빈 말풍선 아래에 삽입되는 레이아웃 버그 수정 |
-| (pending) | 테스트 5개 수정 — `test_empty_messages_handling`, `test_html_escaping`, `test_index_template_rendering`, `test_projects_index_generation`, `test_projects_index_regeneration_on_jsonl_change` |
+| `cbb193f` | SSE `total` 고정 버그 최종 해결 — HTML 마커 방식 완전 폐기, Python `TemplateMessage` 객체 기반 카운트(`get_template_messages()` + `render_fragment()`). `#sse-live-messages` DOM 순서 수정. 테스트 5개 수정. 상세: [LIVE_SYNC.md Bug 8](LIVE_SYNC.md#bug-8-total-값-고정--마커-오염-재발-최종-해결-마커-방식-완전-폐기) |
+| (pending) | sticky 전환 시 레이아웃 점프 버그 수정 — `paddingBottom` pre-compensation(dock 상단~문서 끝 전체), sticky 전환 1회 가드, `window.scrollTo` 제거. `bottom: 0` → `bottom: 10px` (body padding-bottom 일치) |
 
 ---
 

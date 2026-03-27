@@ -339,7 +339,7 @@
 /* Prompt dock: fixed bottom bar when user is typing */
 #prompt-dock.sticky {
     position: fixed;
-    bottom: 0;
+    bottom: 10px; /* matches body padding-bottom so dock doesn't jump on sticky transition */
     left: 0;
     right: 60px; /* sidebar width */
     z-index: 100;
