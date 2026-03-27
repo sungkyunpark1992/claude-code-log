@@ -149,8 +149,10 @@ class TestTemplateRendering:
             assert "<!DOCTYPE html>" in html_content
             assert "<title>Claude Transcript - empty_test</title>" in html_content
 
-            # Should have no messages
-            assert "class='message" not in html_content
+            # Should have no actual conversation messages (empty-prompt bubble is always present)
+            assert "class='message user empty-prompt'" in html_content  # empty prompt bubble
+            assert "class='message user'" not in html_content  # no real user messages
+            assert "class='message assistant'" not in html_content  # no assistant messages
 
     def test_tool_content_rendering(self):
         """Test detailed tool use and tool result rendering."""
@@ -194,6 +196,16 @@ class TestTemplateRendering:
     def test_index_template_rendering(self):
         """Test index template with project summaries."""
         # Create mock project summaries
+        mock_session = {
+            "id": "mock-session-id",
+            "summary": "Test session",
+            "custom_title": None,
+            "timestamp_range": "2023-11-14",
+            "first_timestamp": "2023-11-14T10:00:00Z",
+            "last_timestamp": "2023-11-14T11:00:00Z",
+            "message_count": 5,
+            "first_user_message": "Hello",
+        }
         project_summaries = [
             {
                 "name": "test-project-1",
@@ -202,6 +214,7 @@ class TestTemplateRendering:
                 "jsonl_count": 3,
                 "message_count": 15,
                 "last_modified": 1700000000.0,  # Mock timestamp
+                "sessions": [mock_session],
             },
             {
                 "name": "-user-workspace-my-app",
@@ -210,6 +223,7 @@ class TestTemplateRendering:
                 "jsonl_count": 2,
                 "message_count": 8,
                 "last_modified": 1700000100.0,  # Mock timestamp
+                "sessions": [mock_session],
             },
         ]
 
@@ -320,8 +334,8 @@ class TestTemplateRendering:
             assert "&quot;" in html_content
             # Should not contain unescaped HTML
             assert (
-                "<script>" not in html_content or html_content.count("<script>") <= 2
-            )  # Allow for the markdown script and search script
+                "<script>" not in html_content or html_content.count("<script>") <= 5
+            )  # Allow for inline scripts (timezone, SSE, search, etc.)
 
 
 if __name__ == "__main__":

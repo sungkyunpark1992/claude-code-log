@@ -280,7 +280,11 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
     @app.route("/api/sessions/<session_id>/messages")
     def render_messages(session_id: str) -> Response:
-        """Return messages for live updates. Use ?after=N to get only new messages."""
+        """Return messages for live updates. Use ?after=N to get only new messages.
+
+        total = len(flattened template messages) — no string markers used,
+        so conversation content can never corrupt the count.
+        """
         jsonl_file = _find_session_jsonl(projects_dir, session_id)
         if jsonl_file is None:
             return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
@@ -290,66 +294,32 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        custom_title = _get_custom_title(jsonl_file, session_id)
-        html = renderer.generate_session(messages, session_id, title=custom_title)
-
-        # Extract messages-container innerHTML using markers
-        start_marker = '<div id="messages-container">'
-        end_marker = '<!-- @@CCL_END_CONTAINER@@ -->'
-        start_idx = html.find(start_marker)
-        end_idx = html.rfind(end_marker)
-        if start_idx == -1 or end_idx == -1:
-            return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
-
-        container_html = html[start_idx + len(start_marker):end_idx].rstrip()
-        # Remove the trailing </div> that closes messages-container
-        if container_html.endswith('</div>'):
-            container_html = container_html[:-len('</div>')].rstrip()
-
-        # Strip the empty-prompt element (managed by browser JS for SSE)
-        prompt_marker = "id='ccl-live-prompt'"
-        prompt_alt = 'id="ccl-live-prompt"'
-        prompt_idx = container_html.rfind(prompt_marker)
-        if prompt_idx == -1:
-            prompt_idx = container_html.rfind(prompt_alt)
-        if prompt_idx != -1:
-            # Find the start of the <div containing the id
-            div_start = container_html.rfind('<div', 0, prompt_idx)
-            if div_start != -1:
-                container_html = container_html[:div_start].rstrip()
-
-        # Split by message markers to support incremental updates
-        msg_marker = '<!-- @@CCL_MSG_SPLIT@@ -->'
-        parts = container_html.split(msg_marker)
-        # parts[0] is content before first message (empty/whitespace)
-        # parts[1:] are individual messages
-        total_msgs = len(parts) - 1  # exclude pre-message content
+        template_messages = renderer.get_template_messages(messages, session_id=session_id)
+        total_msgs = len(template_messages)
 
         after = request.args.get('after', type=int)
         if after is not None:
             if after >= total_msgs:
-                # Already up to date — return empty response (avoid sending full container)
                 print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, up-to-date")
                 return Response(
                     json.dumps({"total": total_msgs, "html": ""}),
                     mimetype="application/json",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
                 )
-            # Return only new messages (after index N)
-            new_parts = parts[after + 1:]  # +1 because parts[0] is pre-content
-            # Prepend marker before each part so browser can count them
-            new_html = ''.join(msg_marker + p for p in new_parts)
-            print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, new={len(new_parts)}")
-            return Response(
+            new_tmpl = template_messages[after:]
+            new_html = renderer.render_fragment(new_tmpl)
+            print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, new={len(new_tmpl)}")
+            return Response(  # type: ignore[return-value]
                 json.dumps({"total": total_msgs, "html": new_html}),
                 mimetype="application/json",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
 
-        # Full container (no after param)
-        print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, container_len={len(container_html)}")
-        return Response(
-            json.dumps({"total": total_msgs, "html": container_html}),
+        # Full fragment (no after param)
+        full_html = renderer.render_fragment(template_messages)
+        print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, fragment_len={len(full_html)}")
+        return Response(  # type: ignore[return-value]
+            json.dumps({"total": total_msgs, "html": full_html}),
             mimetype="application/json",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )

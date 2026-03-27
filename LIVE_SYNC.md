@@ -34,10 +34,10 @@
 | 컴포넌트 | 위치 | 역할 |
 |---------|------|------|
 | SSE 스트림 서버 | `server.py` → `stream_session()` | JSONL 파일 폴링, 변경 시 이벤트 전송 |
-| 메시지 증분 API | `server.py` → `render_messages()` | 전체 HTML 렌더링 후 마커로 분할, `after=N` 이후만 반환 |
+| 메시지 증분 API | `server.py` → `render_messages()` | Python 객체(`TemplateMessage`) 리스트 기반 카운트, `after=N` 이후만 `render_fragment()`로 렌더링 |
 | 동적 세션 렌더링 | `server.py` → `serve_file()` | 세션 페이지 요청 시 JSONL에서 최신 HTML 동적 생성 |
 | EventSource 클라이언트 | `transcript.html` → `<script>` | SSE 수신, iframe sandbox 파싱, DOM 증분 추가 |
-| 메시지 분할 마커 | `transcript.html` → 템플릿 | `<!-- @@CCL_MSG_SPLIT@@ -->` 주석으로 메시지 경계 표시 |
+| ~~메시지 분할 마커~~ | ~~`transcript.html` → 템플릿~~ | **폐기** — HTML 마커 방식은 Bug 8로 완전 폐기. Python 객체 카운트로 대체 |
 
 ---
 
@@ -56,7 +56,7 @@
        ↓
 6. /api/sessions/{id}/messages?after=N 으로 새 메시지만 요청
        ↓
-7. 서버: JSONL 전체 파싱 → HTML 렌더링 → <!-- @@CCL_MSG_SPLIT@@ --> 마커로 분할 → N 이후 메시지만 반환
+7. 서버: JSONL 전체 파싱 → `get_template_messages()` → Python `TemplateMessage` 리스트로 총 수 계산 → `[N:]` 슬라이스 → `render_fragment()`로 증분 HTML 반환
        ↓
 8. 브라우저: iframe sandbox에서 HTML 파싱 → document.adoptNode()로 #sse-live-messages에 추가
        ↓
@@ -76,7 +76,7 @@
 | **API 응답** | JSON | `{"total": N, "html": "..."}` 형식 |
 | **HTML 렌더링** | Jinja2 + mistune + Pygments | JSONL → 메시지 파싱 → HTML 생성 |
 | **DOM 조작** | iframe sandbox + `document.adoptNode()` | 격리 환경에서 HTML 파싱 후 안전한 DOM 이동 |
-| **메시지 분할** | `<!-- @@CCL_MSG_SPLIT@@ -->` HTML 주석 마커 | 서버/브라우저 간 메시지 단위 동기화 |
+| **메시지 카운트/분할** | Python `TemplateMessage` 객체 리스트 | `get_template_messages()` → `len()` / `[after:]` 슬라이스 → `render_fragment()` |
 
 추가된 외부 의존성 **없음**. 모두 기존 의존성(Flask, Jinja2 등)만 사용.
 
@@ -117,7 +117,7 @@ DOM 삽입 방식의 진화 과정:
 - 별도의 깨끗한 컨테이너(`#sse-live-messages`)를 `messages-container` 바로 뒤에 배치
 - 시각적으로는 연속으로 보이지만, DOM 구조적으로는 독립
 
-### 4-3. 왜 `@@CCL_` 접두사 마커인가? (`<!-- MSG -->` 아닌 이유)
+### 4-3. 왜 `@@CCL_` 접두사 마커인가? (`<!-- MSG -->` 아닌 이유) — *역사적 기록, 이 방식도 결국 폐기됨*
 
 **문제 상황**: claude-code-log 자체의 대화 세션에서 마커 문자열이 대화 내용에 리터럴로 포함됨.
 
@@ -228,6 +228,8 @@ html.find('<!-- end-messages-container -->')
 2. 모든 마커를 고유 접두사로 변경 (`@@CCL_MSG_SPLIT@@`, `@@CCL_END_CONTAINER@@`, `ccl-live-prompt`)
 3. 서버 + 템플릿 양쪽 모두 동시에 마커 변경 (안 하면 Bug 4 발생)
 
+> **⚠️ 이 접근법도 결국 실패**: Bug 8 참고. `rfind()`로 안전장치를 달아도, 대화 내용이 동일한 마커 문자열을 포함하면 대화 마지막 부분에서 여전히 오작동. HTML 마커 방식 자체를 완전 폐기하고 Python 객체 기반으로 전환.
+
 ### Bug 4: 마커 불일치로 `total=0` + `SyntaxError`
 
 **증상**: 재설치 전에 브라우저 콘솔에서 `total=0`, `SyntaxError: Unexpected token '<'` 에러.
@@ -287,6 +289,51 @@ if (typeof convertTimestamps === 'function') convertTimestamps(); // undefined �
 ```
 
 **영향**: 초기 페이지 로드 시 모든 타임스탬프는 변환됨. SSE 추가 메시지만 UTC 그대로 표시되는 문제였음.
+
+---
+
+### Bug 8: `total` 값 고정 — 마커 오염 재발 (최종 해결: 마커 방식 완전 폐기)
+
+**증상**: `total=1692`(또는 특정 값)으로 고정, 이후 새 메시지 추가되어도 SSE 업데이트 미발생. 브라우저 콘솔에 "server total: 1692, local count: 1692, no new messages"가 반복 출력됨.
+
+**원인**: Bug 3에서 `@@CCL_MSG_SPLIT@@` 마커로 교체하고 `rfind()`로 안전장치를 달았지만, 근본 원인이 해결되지 않았음.
+
+이 프로젝트의 세션 대화 자체에서 다음과 같은 대화가 이루어짐:
+```
+"서버의 <!-- @@CCL_MSG_SPLIT@@ --> 마커가..."
+"`<ccl-msg-split></ccl-msg-split>` 방식으로 교체 후..."
+```
+
+이 텍스트가 JSONL에 저장 → mistune이 HTML 주석/태그를 이스케이프 없이 통과 → 렌더링된 HTML에 95개 이상의 마커 문자열이 대화 내용으로 포함. `rfind()`는 HTML 마지막에 위치한 `<!-- @@CCL_MSG_SPLIT@@ -->`을 찾지만, 그게 진짜 마커가 아니라 대화 내용에서 온 것일 경우 카운트가 오염됨.
+
+**근본 문제**: HTML 마커는 어떤 접두사/이름을 쓰든, 마커 자체가 대화 주제가 될 경우 오염 불가피. `rfind()`는 위치 기반 안전장치일 뿐 내용 오염을 막지 못함.
+
+**최종 해결: 마커 방식 완전 폐기**
+
+```python
+# 이전 (마커 기반)
+html = renderer.generate_session(messages, session_id)
+container_html = html[html.find('<div id="messages-container">'):html.rfind('<!-- @@CCL_END_CONTAINER@@ -->')]
+parts = container_html.split('<!-- @@CCL_MSG_SPLIT@@ -->')
+total_msgs = len(parts) - 1  # ← 대화 내용에 마커가 있으면 오염
+
+# 현재 (Python 객체 기반)
+template_messages = renderer.get_template_messages(messages, session_id=session_id)
+total_msgs = len(template_messages)  # ← 순수 Python 리스트 길이, 오염 불가
+if after is not None:
+    new_tmpl = template_messages[after:]
+    new_html = renderer.render_fragment(new_tmpl)  # 증분 렌더링
+```
+
+**추가 변경 (레이아웃 버그)**:
+- 새 메시지가 `#prompt-dock` 아래에 표시되는 버그 발생
+- 원인: DOM에서 `#sse-live-messages`가 `#prompt-dock` 뒤에 위치
+- 수정: `#sse-live-messages`를 `#prompt-dock` 바로 앞으로 이동
+
+**관련 추가 구현**:
+- `html/renderer.py`: `get_template_messages()`, `render_fragment()` 메서드 추가
+- `html/templates/messages_fragment.html`: 증분 렌더링용 Jinja2 프래그먼트 템플릿 (신규)
+- `transcript.html`: 마커 3개 모두 제거 (`<!-- @@CCL_MSG_SPLIT@@ -->` 2곳, `<!-- @@CCL_END_CONTAINER@@ -->` 1곳)
 
 ---
 
@@ -391,55 +438,48 @@ def render_session(session_id: str) -> Response:
 ```python
 @app.route("/api/sessions/<session_id>/messages")
 def render_messages(session_id: str) -> Response:
-    # JSONL → 전체 HTML 렌더링
+    # JSONL 파싱 → Python TemplateMessage 리스트 (HTML 렌더링 없이 객체만 생성)
     messages = load_transcript(jsonl_file, silent=True)
-    html = renderer.generate_session(messages, session_id)
-
-    # messages-container 내용 추출 (rfind로 마지막 마커 매칭 — 대화 내용과의 충돌 방지)
-    start_marker = '<div id="messages-container">'
-    end_marker = '<!-- @@CCL_END_CONTAINER@@ -->'
-    start_idx = html.find(start_marker)
-    end_idx = html.rfind(end_marker)  # rfind: 대화 내용에 마커 문자열이 있어도 마지막(진짜) 마커를 찾음
-    container_html = html[start_idx + len(start_marker):end_idx]
-
-    # empty-prompt 제거 (브라우저 JS가 관리) — rfind로 마지막 매칭
-    prompt_marker = "id='ccl-live-prompt'"
-    prompt_idx = container_html.rfind(prompt_marker)
-    if prompt_idx != -1:
-        div_start = container_html.rfind('<div', 0, prompt_idx)
-        container_html = container_html[:div_start].rstrip()
-
-    # <!-- @@CCL_MSG_SPLIT@@ --> 마커로 분할
-    msg_marker = '<!-- @@CCL_MSG_SPLIT@@ -->'
-    parts = container_html.split(msg_marker)
-    total_msgs = len(parts) - 1
+    renderer = HtmlRenderer()
+    template_messages = renderer.get_template_messages(messages, session_id=session_id)
+    total_msgs = len(template_messages)  # ← 순수 Python 리스트 길이, 대화 내용에 무관
 
     after = request.args.get('after', type=int)
     if after is not None:
         if after >= total_msgs:
-            # 이미 최신 — 빈 응답 반환 (불필요한 4MB+ HTML 전송 방지)
-            return json({"total": total_msgs, "html": ""})
-        new_parts = parts[after + 1:]
-        new_html = ''.join(msg_marker + p for p in new_parts)
-        return json({"total": total_msgs, "html": new_html})
+            # 이미 최신 — 빈 응답 반환 (불필요한 전송 방지)
+            return Response(
+                json.dumps({"total": total_msgs, "html": ""}),
+                mimetype="application/json", ...
+            )
+        new_tmpl = template_messages[after:]   # Python 슬라이싱
+        new_html = renderer.render_fragment(new_tmpl)  # 증분 렌더링
+        return Response(json.dumps({"total": total_msgs, "html": new_html}), ...)
 
-    return json({"total": total_msgs, "html": container_html})
+    # after 없음: 전체 프래그먼트
+    full_html = renderer.render_fragment(template_messages)
+    return Response(json.dumps({"total": total_msgs, "html": full_html}), ...)
 ```
 
-#### 6-2. `claude_code_log/html/templates/transcript.html` — 3가지 변경
+> **핵심 차이**: 이전에는 전체 HTML을 렌더링 후 마커로 문자열 파싱. 현재는 Python 객체 리스트를 슬라이싱 후 해당 부분만 렌더링. 대화 내용에 마커가 포함되어도 카운트 오염 자체가 불가능.
 
-**`<!-- @@CCL_MSG_SPLIT@@ -->` 마커 추가** (각 메시지 div 앞):
+#### 6-2. `claude_code_log/html/templates/transcript.html`
+
+**마커 완전 제거**: `<!-- @@CCL_MSG_SPLIT@@ -->` (메시지 앞 2곳), `<!-- @@CCL_END_CONTAINER@@ -->` (컨테이너 종료 1곳) 모두 삭제.
+
+**`#sse-live-messages` 위치**: `#prompt-dock` 바로 앞에 배치 (DOM 순서가 시각적 순서를 결정):
 ```html
-<div id="messages-container">
-{% for message, ... in messages %}
-    <!-- @@CCL_MSG_SPLIT@@ -->
-    <div class='message {{ css_class }}' ...>
-        ...
-    </div>
-{% endfor %}
+</div><!-- messages-container 닫기 -->
+<!-- SSE 실시간 메시지 컨테이너: #prompt-dock 앞에 위치해야 새 메시지가 올바른 순서로 표시됨 -->
+<div id="sse-live-messages"></div>
+<div id="prompt-dock">
     <div id='ccl-live-prompt' class='message user empty-prompt'>...</div>
-</div><!-- @@CCL_END_CONTAINER@@ -->
+</div>
 ```
+
+> 이전: `#sse-live-messages`가 `#prompt-dock` 뒤에 있어 새 메시지가 빈 말풍선 아래에 삽입되는 레이아웃 버그 존재.
+
+**신규 파일**: `claude_code_log/html/templates/messages_fragment.html` — 증분 렌더링용 Jinja2 프래그먼트 템플릿. `transcript.html`의 메시지 루프와 동일하되 페이지 구조(`<html>`, `<head>` 등) 없음.
 
 **EventSource JS** (iframe sandbox + adoptNode 방식):
 ```javascript
@@ -550,7 +590,7 @@ def render_messages(session_id: str) -> Response:
 
 ## 7. 현재 한계점
 
-1. **매 요청마다 전체 JSONL 파싱 + 전체 HTML 렌더링**: 새 메시지 1개를 위해 전체를 렌더링하고 잘라서 반환 (증분 렌더링 미구현)
+1. **매 요청마다 전체 JSONL 파싱**: 새 메시지 1개를 위해 JSONL 전체를 파싱하고 `TemplateMessage` 리스트를 생성. 단, `render_fragment()`는 `after:` 슬라이스만 렌더링하므로 HTML 생성은 증분으로 이루어짐.
 2. **폴링 기반 감지**: 최소 2초 + 디바운스 1초 = 최소 3초 지연 (파일시스템 이벤트 방식으로 개선 가능)
 3. **Flask 내장 서버 제한**: SSE 연결이 스레드 하나를 점유, 동시 연결 수 제한
 4. **메시지 카운트 기반 동기화**: 메시지 수정/삭제는 감지하지 못함 (추가만 감지)
@@ -576,6 +616,10 @@ def render_messages(session_id: str) -> Response:
 | 11 | 에러 처리 | 없음 | `.catch()` 핸들러 | fetch 실패 시 플래그 리셋 |
 | 12 | `_get_custom_title` 인자 | `messages`(list) 잘못 전달 | `jsonl_file`(Path) 올바르게 전달 | custom title 추가 시 버그, SSE 500 에러 유발 |
 | 13 | SSE 추가 메시지 시간 변환 | 변환 안 됨 (UTC 그대로) | `window.convertTimestamps` 전역 노출 | `timezone_converter.js` 함수가 IIFE 안에 갇혀 SSE 호출 불가 |
+| 14 | 메시지 카운트 방식 | HTML 마커 + `rfind()` 문자열 파싱 | `get_template_messages()` Python 객체 `len()` | Bug 8: 마커 문자열이 대화 내용에 포함 → `rfind()`도 오염 방어 불가 |
+| 15 | 증분 렌더링 | 마커 분할 + 문자열 슬라이싱 | `template_messages[after:]` + `render_fragment()` | 마커 방식 폐기의 연장선 |
+| 16 | `#sse-live-messages` DOM 위치 | `#prompt-dock` 뒤 | `#prompt-dock` 앞 | 새 메시지가 빈 말풍선 아래에 표시되는 레이아웃 버그 수정 |
+| 17 | 마커 파일 | `<!-- @@CCL_MSG_SPLIT@@ -->`, `<!-- @@CCL_END_CONTAINER@@ -->` in `transcript.html` | 마커 완전 제거 | 마커 방식 폐기 |
 
 ### 관련 커밋
 

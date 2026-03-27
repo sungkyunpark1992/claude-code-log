@@ -601,6 +601,41 @@ class HtmlRenderer(Renderer):
             output_dir=output_dir,
         )
 
+    def get_template_messages(
+        self,
+        messages: list[TranscriptEntry],
+        session_id: Optional[str] = None,
+    ) -> list[Tuple[Any, str, str, str]]:
+        """Return the flat list of (message, title, html, timestamp) tuples.
+
+        Used by render_messages API to get authoritative total count and
+        to render incremental HTML fragments without string markers.
+        """
+        if session_id is not None:
+            messages = [msg for msg in messages if msg.sessionId == session_id]
+        root_messages, _, _ = generate_template_messages(messages)
+        return self._flatten_preorder(root_messages)
+
+    def render_fragment(
+        self,
+        template_messages: list[Tuple[Any, str, str, str]],
+    ) -> str:
+        """Render a list of (message, title, html, timestamp) tuples as an HTML fragment.
+
+        Returns bare message divs without full page structure — suitable for
+        appending to the live SSE container in the browser.
+        """
+        env = get_template_environment()
+        template = env.get_template("messages_fragment.html")
+        return str(
+            template.render(
+                messages=template_messages,
+                css_class_from_message=css_class_from_message,
+                get_message_emoji=get_message_emoji,
+                is_session_header=is_session_header,
+            )
+        )
+
     def generate_projects_index(
         self,
         project_summaries: list[dict[str, Any]],

@@ -39,7 +39,8 @@
       --neutral-semi: #f8f9fa88;
   
       /* Slightly transparent variants (55 = ~33% opacity) */
-      --highlight-light: #e3f2fd55;
+      /* --highlight-light: #e3f2fd55; */
+      --highlight-light: #ffff;
   
       /* Solid colors for message types */
       --user-color: #ff9800;
@@ -102,8 +103,10 @@
       line-height: 1.5;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 10px;
-      background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+      padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
+      /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+      /* background: #ffff; */
+      background: #e3f2fd55;
       color: var(--text-primary);
   }
   
@@ -195,9 +198,23 @@
   }
   
   /* Floating action buttons */
-  .floating-btn {
+  #floating-buttons {
       position: fixed;
-      right: 20px;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+      gap: 10px;
+      z-index: 99;
+  }
+  
+  .floating-btn {
+      position: relative;
       background-color: var(--session-bg-dimmed);
       color: var(--text-muted);
       border: none;
@@ -225,22 +242,12 @@
       color: var(--text-muted);
   }
   
-  /* Floating buttons positioning */
-  .scroll-top.floating-btn {
-      bottom: 20px;
-  }
-  
-  .toggle-details.floating-btn {
-      bottom: 80px;
-  }
-  
-  .filter-messages.floating-btn {
-      bottom: 140px;
-  }
-  
-  .timeline-toggle.floating-btn {
-      bottom: 200px;
-  }
+  /* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+  .timeline-toggle.floating-btn  { order: 1; }
+  .filter-messages.floating-btn  { order: 2; }
+  .toggle-details.floating-btn   { order: 3; }
+  .scroll-top.floating-btn       { order: 4; }
+  .scroll-bottom.floating-btn    { order: 5; }
   
   @media (max-width: 1280px) {
       .header > span:first-child {
@@ -277,7 +284,6 @@
       background-color: var(--white-dimmed);
       border: 1px solid #dee2e6;
       border-radius: 4px;
-      text-decoration: none;
       color: var(--text-secondary);
       transition: background-color 0.2s;
   }
@@ -286,9 +292,80 @@
       background-color: #ffffff99;
   }
   
+  .session-link a {
+      text-decoration: none;
+      color: inherit;
+  }
+  
+  .session-link a:hover pre {
+      text-decoration: underline;
+  }
+  
   .session-link-title {
       font-weight: 600;
       font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  
+  .session-edit-btn,
+  .session-delete-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+  }
+  
+  .session-link:hover .session-edit-btn,
+  .session-link:hover .session-delete-btn {
+      opacity: 1;
+  }
+  
+  .session-edit-btn:hover {
+      color: #1976d2;
+  }
+  
+  .session-delete-btn:hover {
+      color: #e53935;
+  }
+  
+  .session-title-edit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+  }
+  
+  .session-title-input {
+      font-size: inherit;
+      font-family: inherit;
+      border: 1px solid #1976d2;
+      border-radius: 3px;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+  }
+  
+  .session-title-confirm-btn {
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      flex-shrink: 0;
+  }
+  
+  .session-title-confirm-btn:hover {
+      background: #1565c0;
   }
   
   .session-link-meta {
@@ -360,7 +437,8 @@
   }
   
   .project-card {
-      background-color: #ffffff66;
+      /* background-color: #ffffff66; */
+      background-color: #ffffffdd;
       border-radius: 8px;
       padding: 20px;
       box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
@@ -416,7 +494,8 @@
       text-align: center;
       margin-bottom: 30px;
       padding: 15px;
-      background-color: #ffffff66;
+      /* background-color: #ffffff66; */
+      background-color: #ffffffdd;
       border-radius: 8px;
       box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
       border-left: #ffffff66 1px solid;
@@ -535,7 +614,8 @@
   .search-input {
       width: 100%;
       padding: 8px 40px 8px 12px;
-      background: #ffffff88;
+      /* background: #ffffff88; */
+      background: #ffffffdd;
       border: 1px solid #dee2e6;
       border-radius: 20px;
       color: var(--text-secondary);
@@ -547,7 +627,8 @@
   .search-input:focus {
       outline: none;
       border-color: var(--system-warning-color);
-      background: #ffffff99;
+      /* background: #ffffff99; */
+      background: #ffffffff;
       box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
@@ -1682,24 +1763,8 @@
   
       <div class='project-list'>
           
-          <div class='project-card'>
-              <div class='project-name'>
-                  <a href='-Users-test-project-beta/combined_transcripts.html'>Users/test/project/beta</a>
-                  
-                  <span class="transcript-link-hint">(← open combined transcript)</span>
-                  
-              </div>
-              <div class='project-stats'>
-                  <div class='stat'>📁 3 transcript files</div>
-                  <div class='stat'>💬 25 messages</div>
-                  
-                  <div class='stat'>🕒 [LAST_MODIFIED]</div>
-                  
-                  
-              </div>
-  
-              
-          </div>
+          
+          
           
           <div class='project-card'>
               <div class='project-name'>
@@ -1733,22 +1798,26 @@
   
       <div class='session-nav'>
           
-          <a href='-Users-test-project-alpha/session-session-abc12345.html'
-              class='session-link'>
+          
+          <div class='session-link' data-session-id='session-abc12345'>
               <div class='session-link-title'>
+                  <span class='session-title' data-title='Test session summary'>
                   
                   Test session summary •
                   
                   session-
+                  </span>
+                  <button class='session-edit-btn' title='제목 수정'>✏️</button>
+                  <button class='session-delete-btn' title='삭제'>✕</button>
               </div>
               <div class='session-link-meta'>
                   <span class="timestamp">2025-01-15 10:00:00</span> • 10 messages
                   
               </div>
               
-              <pre class='session-preview'>Hello, this is a test</pre>
+              <a href='-Users-test-project-alpha/session-session-abc12345.html'><pre class='session-preview'>Test session summary</pre></a>
               
-          </a>
+          </div>
           
       </div>
   </div>
@@ -1759,9 +1828,16 @@
               
           </div>
           
+          
       </div>
   
       <script>
+          function hideSession(event, btn) {
+              event.preventDefault();
+              event.stopPropagation();
+              btn.closest('.session-link').style.display = 'none';
+          }
+  
           document.addEventListener('DOMContentLoaded', function () {
               // Convert timestamps to user's timezone
   // This function can be called directly or will auto-run on DOMContentLoaded if included standalone
@@ -1877,9 +1953,140 @@
   
       // Execute immediately - assumes this is included within a DOMContentLoaded handler
       convertTimestampsToLocalTimezone();
+  
+      // Expose globally so SSE update handler can re-run after injecting new messages
+      window.convertTimestamps = convertTimestampsToLocalTimezone;
   })();
+              document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+  
+          if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+              return;
+          }
+  
+          fetch('/api/sessions/' + sessionId, {
+              method: 'DELETE',
+          })
+              .then(function (resp) {
+                  if (resp.ok) {
+                      location.reload();
+                  } else {
+                      alert('세션 삭제에 실패했습니다.');
+                  }
+              })
+              .catch(function () {
+                  alert('서버 연결 오류가 발생했습니다.');
+              });
+      });
+  });
+  
+  document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+          var titleSpan = sessionLink.querySelector('.session-title');
+          var currentTitle = titleSpan.dataset.title || '';
+  
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'session-title-input';
+          input.value = currentTitle;
+  
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'session-title-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = '저장';
+  
+          var wrapper = document.createElement('span');
+          wrapper.className = 'session-title-edit-wrapper';
+          wrapper.appendChild(input);
+          wrapper.appendChild(confirmBtn);
+          titleSpan.replaceWith(wrapper);
+          input.focus();
+          input.select();
+  
+          var isConfirming = false;
+  
+          function cancel() {
+              wrapper.replaceWith(titleSpan);
+          }
+  
+          function save() {
+              var newTitle = input.value.trim();
+              if (!newTitle || newTitle === currentTitle) {
+                  cancel();
+                  return;
+              }
+  
+              fetch('/api/sessions/' + sessionId + '/title', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle }),
+              })
+                  .then(function (resp) {
+                      if (resp.ok) {
+                          location.reload();
+                      } else {
+                          alert('제목 수정에 실패했습니다.');
+                          cancel();
+                      }
+                  })
+                  .catch(function () {
+                      alert('서버 연결 오류가 발생했습니다.');
+                      cancel();
+                  });
+          }
+  
+          confirmBtn.addEventListener('mousedown', function () {
+              isConfirming = true;
+          });
+  
+          confirmBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              isConfirming = false;
+              save();
+          });
+  
+          input.addEventListener('blur', function () {
+              if (!isConfirming) {
+                  cancel();
+              }
+              isConfirming = false;
+          });
+  
+          input.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  save();
+              }
+              if (e.key === 'Escape') {
+                  cancel();
+              }
+          });
+      });
+  });
           });
       </script>
+  
+      <footer style="text-align: center; margin-top: 40px; padding: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
+          <div>claude-code-log</div>
+          <div>깃헙 : <a href="https://github.com/daaain/claude-code-log" target="_blank">https://github.com/daaain/claude-code-log</a></div>
+          <div style="margin-top: 8px;">
+              <a href="https://www.reddit.com/r/ClaudeAI/comments/1j5nh09/is_there_any_way_to_get_a_history_of_my/?tl=ko" target="_blank">출처 1</a>
+              &nbsp;/&nbsp;
+              <a href="https://www.reddit.com/r/ClaudeAI/comments/1lcp8bt/i_created_a_python_cli_tool_to_parse_claude_codes/" target="_blank">출처 2</a>
+          </div>
+      </footer>
   </body>
   
   </html>
@@ -1924,7 +2131,8 @@
       --neutral-semi: #f8f9fa88;
   
       /* Slightly transparent variants (55 = ~33% opacity) */
-      --highlight-light: #e3f2fd55;
+      /* --highlight-light: #e3f2fd55; */
+      --highlight-light: #ffff;
   
       /* Solid colors for message types */
       --user-color: #ff9800;
@@ -1987,8 +2195,10 @@
       line-height: 1.5;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 10px;
-      background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+      padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
+      /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+      /* background: #ffff; */
+      background: #e3f2fd55;
       color: var(--text-primary);
   }
   
@@ -2080,9 +2290,23 @@
   }
   
   /* Floating action buttons */
-  .floating-btn {
+  #floating-buttons {
       position: fixed;
-      right: 20px;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+      gap: 10px;
+      z-index: 99;
+  }
+  
+  .floating-btn {
+      position: relative;
       background-color: var(--session-bg-dimmed);
       color: var(--text-muted);
       border: none;
@@ -2110,22 +2334,12 @@
       color: var(--text-muted);
   }
   
-  /* Floating buttons positioning */
-  .scroll-top.floating-btn {
-      bottom: 20px;
-  }
-  
-  .toggle-details.floating-btn {
-      bottom: 80px;
-  }
-  
-  .filter-messages.floating-btn {
-      bottom: 140px;
-  }
-  
-  .timeline-toggle.floating-btn {
-      bottom: 200px;
-  }
+  /* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+  .timeline-toggle.floating-btn  { order: 1; }
+  .filter-messages.floating-btn  { order: 2; }
+  .toggle-details.floating-btn   { order: 3; }
+  .scroll-top.floating-btn       { order: 4; }
+  .scroll-bottom.floating-btn    { order: 5; }
   
   @media (max-width: 1280px) {
       .header > span:first-child {
@@ -2434,6 +2648,73 @@
       border-left-color: var(--user-color);
   }
   
+  /* Empty user prompt bubble shown at end of conversation */
+  .user.empty-prompt {
+      opacity: 0.4;
+      cursor: pointer;
+  }
+  .user.empty-prompt:hover {
+      opacity: 0.7;
+  }
+  .user.empty-prompt * {
+      pointer-events: none;
+  }
+  
+  /* Minimize/maximize toggle button in prompt header */
+  .prompt-minimize-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8em;
+      color: var(--text-muted);
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+  }
+  .prompt-minimize-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Minimized state: content hidden, no bottom margin */
+  #ccl-live-prompt.minimized .content {
+      display: none;
+  }
+  #ccl-live-prompt.minimized {
+      margin-bottom: 0;
+  }
+  
+  /* Prompt dock: fixed bottom bar when user is typing */
+  #prompt-dock.sticky {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 60px; /* sidebar width */
+      z-index: 100;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+      border-radius: 8px 8px 0 0;
+  }
+  .user-input {
+      display: block;
+      width: 100%;
+      min-height: 3em;
+      border: 1px solid var(--user-color);
+      border-radius: 4px;
+      outline: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      caret-color: var(--user-color);
+      resize: none;
+      overflow-y: hidden;
+      max-height: calc(16 * 1.5em);
+      padding: 6px 8px;
+      box-sizing: border-box;
+  }
+  
   .assistant {
       border-left-color: var(--assistant-color);
   }
@@ -2683,7 +2964,7 @@
   
   /* Session header styling */
   .session-header {
-      background-color: var(--session-bg-dimmed);
+      /* background-color: var(--session-bg-dimmed); */
       border-radius: 8px;
       padding: 16px;
       margin: 30px 0 20px 0;
@@ -3165,7 +3446,6 @@
       background-color: var(--white-dimmed);
       border: 1px solid #dee2e6;
       border-radius: 4px;
-      text-decoration: none;
       color: var(--text-secondary);
       transition: background-color 0.2s;
   }
@@ -3174,9 +3454,80 @@
       background-color: #ffffff99;
   }
   
+  .session-link a {
+      text-decoration: none;
+      color: inherit;
+  }
+  
+  .session-link a:hover pre {
+      text-decoration: underline;
+  }
+  
   .session-link-title {
       font-weight: 600;
       font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  
+  .session-edit-btn,
+  .session-delete-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+  }
+  
+  .session-link:hover .session-edit-btn,
+  .session-link:hover .session-delete-btn {
+      opacity: 1;
+  }
+  
+  .session-edit-btn:hover {
+      color: #1976d2;
+  }
+  
+  .session-delete-btn:hover {
+      color: #e53935;
+  }
+  
+  .session-title-edit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+  }
+  
+  .session-title-input {
+      font-size: inherit;
+      font-family: inherit;
+      border: 1px solid #1976d2;
+      border-radius: 3px;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+  }
+  
+  .session-title-confirm-btn {
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      flex-shrink: 0;
+  }
+  
+  .session-title-confirm-btn:hover {
+      background: #1565c0;
   }
   
   .session-link-meta {
@@ -3790,7 +4141,8 @@
   .search-input {
       width: 100%;
       padding: 8px 40px 8px 12px;
-      background: #ffffff88;
+      /* background: #ffffff88; */
+      background: #ffffffdd;
       border: 1px solid #dee2e6;
       border-radius: 20px;
       color: var(--text-secondary);
@@ -3802,7 +4154,8 @@
   .search-input:focus {
       outline: none;
       border-color: var(--system-warning-color);
-      background: #ffffff99;
+      /* background: #ffffff99; */
+      background: #ffffffff;
       box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
@@ -5056,6 +5409,8 @@
   
       
   
+      <div id="messages-container">
+      
       
       
       <div class="session-divider"></div>
@@ -5077,6 +5432,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -5104,6 +5460,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -5147,6 +5504,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-3' id='msg-d-3'>
           <div class='header'>
               <span>🤷 User</span>
@@ -5174,6 +5532,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-0 d-3' data-message-id='d-4' id='msg-d-4'>
           <div class='header'>
               <span title="ID: tool_001">📝 Edit <span class='tool-summary'>/tmp/decorator_example.py</span></span>
@@ -5191,6 +5550,7 @@
       
       
       
+      
       <div class='message tool_result pair_last d-0 d-3' data-message-id='d-5' id='msg-d-5'>
           <div class='header'>
               <span title="ID: tool_001"></span>
@@ -5204,6 +5564,7 @@
           <div class='content'><pre>File created successfully at: /tmp/decorator_example.py</pre></div>
           
       </div>
+      
       
       
       
@@ -5240,6 +5601,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-7' id='msg-d-7'>
           <div class='header'>
               <span>🤷 User</span>
@@ -5267,6 +5629,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-0 d-7' data-message-id='d-8' id='msg-d-8'>
           <div class='header'>
               <span title="ID: tool_002">💻 Bash <span class='tool-summary'>Run the decorator example to show output</span></span>
@@ -5280,6 +5643,7 @@
           <div class='content'><div class='bash-tool-content'><pre class='bash-tool-command'>python /tmp/decorator_example.py</pre></div></div>
           
       </div>
+      
       
       
       
@@ -5299,6 +5663,7 @@
   Hello, Alice!</pre></div>
           
       </div>
+      
       
       
       
@@ -5331,6 +5696,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-11' id='msg-d-11'>
           <div class='header'>
               <span>🤷 User</span>
@@ -5346,11 +5712,28 @@
       </div>
       
       
+      </div>
+      <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
+      <div id="sse-live-messages"></div>
+  <div id="prompt-dock">
+      <div id='ccl-live-prompt' class='message user empty-prompt'>
+          <div class='header'>
+              <span>🤷 User</span>
+              <button class='prompt-minimize-btn' title='최소화'>▼</button>
+          </div>
+          <div class='content'>
+              <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+          </div>
+      </div>
+  </div>
   
-      <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
-      <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
-      <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-      <a class="scroll-top floating-btn" title="Scroll to top" href="#title">🔝</a>
+      <div id="floating-buttons">
+          <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
+          <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+          <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+          <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+          <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+      </div>
   
       <script>
           document.addEventListener('DOMContentLoaded', function () {
@@ -5478,6 +5861,9 @@
   
       // Execute immediately - assumes this is included within a DOMContentLoaded handler
       convertTimestampsToLocalTimezone();
+  
+      // Expose globally so SSE update handler can re-run after injecting new messages
+      window.convertTimestamps = convertTimestampsToLocalTimezone;
   })();
   
               // Parse URL parameters
@@ -6117,6 +6503,173 @@
   
               // Apply initial fold state
               setInitialFoldState();
+  
+              // Empty user prompt: click to activate (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
+              window.initEmptyPrompt = function() {
+                  var ep = document.querySelector('.message.user.empty-prompt');
+                  if (ep) {
+                      ep.addEventListener('click', function () {
+                          this.classList.remove('empty-prompt');
+                          var textarea = this.querySelector('.user-input');
+                          var dock = document.getElementById('prompt-dock');
+                          textarea.addEventListener('input', function () {
+                              this.style.height = 'auto';
+                              var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                              if (this.scrollHeight > maxH) {
+                                  this.style.height = maxH + 'px';
+                                  this.style.overflowY = 'auto';
+                              } else {
+                                  this.style.height = this.scrollHeight + 'px';
+                                  this.style.overflowY = 'hidden';
+                              }
+                              if (this.value.trim()) {
+                                  dock.classList.add('sticky');
+                                  document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                              } else {
+                                  dock.classList.remove('sticky');
+                                  document.body.style.paddingBottom = '';
+                              }
+                          });
+                          // Minimize/maximize toggle
+                          var dock = document.getElementById('prompt-dock');
+                          var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                          if (minimizeBtn) {
+                              minimizeBtn.addEventListener('click', function (e) {
+                                  e.stopPropagation();
+                                  var isMinimized = ep.classList.toggle('minimized');
+                                  this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                                  this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                                  if (dock) {
+                                      document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                                  }
+                              });
+                          }
+  
+                          textarea.focus();
+                      }, { once: true });
+                  }
+              };
+              window.initEmptyPrompt();
+  
+  
+              document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+  
+          if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+              return;
+          }
+  
+          fetch('/api/sessions/' + sessionId, {
+              method: 'DELETE',
+          })
+              .then(function (resp) {
+                  if (resp.ok) {
+                      location.reload();
+                  } else {
+                      alert('세션 삭제에 실패했습니다.');
+                  }
+              })
+              .catch(function () {
+                  alert('서버 연결 오류가 발생했습니다.');
+              });
+      });
+  });
+  
+  document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+          var titleSpan = sessionLink.querySelector('.session-title');
+          var currentTitle = titleSpan.dataset.title || '';
+  
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'session-title-input';
+          input.value = currentTitle;
+  
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'session-title-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = '저장';
+  
+          var wrapper = document.createElement('span');
+          wrapper.className = 'session-title-edit-wrapper';
+          wrapper.appendChild(input);
+          wrapper.appendChild(confirmBtn);
+          titleSpan.replaceWith(wrapper);
+          input.focus();
+          input.select();
+  
+          var isConfirming = false;
+  
+          function cancel() {
+              wrapper.replaceWith(titleSpan);
+          }
+  
+          function save() {
+              var newTitle = input.value.trim();
+              if (!newTitle || newTitle === currentTitle) {
+                  cancel();
+                  return;
+              }
+  
+              fetch('/api/sessions/' + sessionId + '/title', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle }),
+              })
+                  .then(function (resp) {
+                      if (resp.ok) {
+                          location.reload();
+                      } else {
+                          alert('제목 수정에 실패했습니다.');
+                          cancel();
+                      }
+                  })
+                  .catch(function () {
+                      alert('서버 연결 오류가 발생했습니다.');
+                      cancel();
+                  });
+          }
+  
+          confirmBtn.addEventListener('mousedown', function () {
+              isConfirming = true;
+          });
+  
+          confirmBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              isConfirming = false;
+              save();
+          });
+  
+          input.addEventListener('blur', function () {
+              if (!isConfirming) {
+                  cancel();
+              }
+              isConfirming = false;
+          });
+  
+          input.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  save();
+              }
+              if (e.key === 'Escape') {
+                  cancel();
+              }
+          });
+      });
+  });
           });
       </script>
       <!-- Search functionality script -->
@@ -6852,6 +7405,152 @@
       }
   })();
   </script>
+  
+      <!-- Live update via SSE -->
+      <script>
+      (function() {
+          // Extract session ID from URL: session-{uuid}.html
+          var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
+          if (!match) return;
+          var sessionId = match[1];
+          var source = new EventSource('/api/sessions/' + sessionId + '/stream');
+          var updating = false;
+          var indicator = document.createElement('div');
+          indicator.id = 'live-indicator';
+          indicator.textContent = 'LIVE';
+          indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
+          document.body.appendChild(indicator);
+  
+          // Authoritative message count from server (marker-based, matches render_messages counting)
+          // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
+          var msgCount = 12; // fallback until async fetch completes
+          fetch('/api/sessions/' + sessionId + '/messages?after=999999&t=' + Date.now())
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                  msgCount = data.total;
+                  console.log('[SSE] initial message count (server marker count):', msgCount);
+              })
+              .catch(function() {
+                  console.log('[SSE] initial message count fallback (template length):', msgCount);
+              });
+  
+          source.onmessage = function(e) {
+              var data = JSON.parse(e.data);
+              if (data.type === 'updated') {
+                  if (updating) return;
+                  updating = true;
+                  var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
+  
+                  // Fetch only new messages after current count
+                  fetch('/api/sessions/' + sessionId + '/messages?after=' + msgCount + '&t=' + Date.now())
+                      .then(function(r) {
+                          if (!r.ok) throw new Error('fetch failed: ' + r.status);
+                          return r.json();
+                      })
+                      .then(function(resp) {
+                          var container = document.getElementById('messages-container');
+                          if (!container) return;
+  
+                          var serverTotal = resp.total;
+                          var newHtml = resp.html;
+  
+                          console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
+  
+                          if (serverTotal <= msgCount || !newHtml || !newHtml.trim()) {
+                              // No new messages — must reset flag so future events are processed
+                              updating = false;
+                              return;
+                          }
+  
+                          // Remove old prompt and reset dock sticky state
+                          var oldPrompt = document.getElementById('ccl-live-prompt');
+                          if (oldPrompt) oldPrompt.remove();
+                          var dock = document.getElementById('prompt-dock');
+                          if (dock) {
+                              dock.classList.remove('sticky');
+                              document.body.style.paddingBottom = '';
+                          }
+  
+                          // Use #sse-live-messages — a CLEAN container outside the broken
+                          // messages-container DOM. It's placed in the template right before
+                          // the SSE script, so it's always at the visual bottom of the page.
+                          var liveContainer = document.getElementById('sse-live-messages');
+  
+                          // Use iframe sandbox to safely parse potentially malformed HTML
+                          var iframe = document.createElement('iframe');
+                          iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+                          document.body.appendChild(iframe);
+  
+                          var iframeDoc = '<!DOCTYPE html><html><body><div id="__wrapper">' + newHtml + '</div></body></html>';
+                          iframe.srcdoc = iframeDoc;
+  
+                          iframe.onload = function() {
+                              var wrapper = iframe.contentDocument.getElementById('__wrapper');
+  
+                              if (wrapper) {
+                                  var nodeCount = 0;
+                                  while (wrapper.firstChild) {
+                                      var node = document.adoptNode(wrapper.firstChild);
+                                      liveContainer.appendChild(node);
+                                      nodeCount++;
+                                  }
+                                  console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
+                              }
+  
+                              // Re-create prompt inside #prompt-dock (always at page bottom)
+                              var dock = document.getElementById('prompt-dock');
+                              if (dock) {
+                                  var promptDiv = document.createElement('div');
+                                  promptDiv.id = 'ccl-live-prompt';
+                                  promptDiv.className = 'message user empty-prompt';
+                                  promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
+                                      '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
+                                      '<div class="content">' +
+                                      '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                      '</div>';
+                                  dock.appendChild(promptDiv);
+                              }
+  
+                              // Cleanup iframe
+                              document.body.removeChild(iframe);
+  
+                              // Post-processing on new content
+                              if (typeof convertTimestamps === 'function') convertTimestamps();
+                              if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+  
+                              if (atBottom) {
+                                  window.scrollTo(0, document.body.scrollHeight);
+                              }
+  
+                              indicator.style.background = '#3b82f6';
+                              setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
+  
+                              // Update count inside onload (after DOM is ready)
+                              msgCount = serverTotal;
+                              updating = false;
+                              console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+                          };
+                      })
+                      .catch(function(err) {
+                          console.error('[SSE] update error:', err);
+                          updating = false;
+                      });
+              } else if (data.type === 'deleted') {
+                  indicator.textContent = 'DELETED';
+                  indicator.style.background = '#ef4444';
+                  source.close();
+              }
+          };
+          source.onerror = function() {
+              indicator.textContent = 'OFFLINE';
+              indicator.style.background = '#6b7280';
+          };
+          source.onopen = function() {
+              indicator.textContent = 'LIVE';
+              indicator.style.background = '#22c55e';
+          };
+      })();
+      </script>
   </body>
   
   </html>
@@ -6896,7 +7595,8 @@
       --neutral-semi: #f8f9fa88;
   
       /* Slightly transparent variants (55 = ~33% opacity) */
-      --highlight-light: #e3f2fd55;
+      /* --highlight-light: #e3f2fd55; */
+      --highlight-light: #ffff;
   
       /* Solid colors for message types */
       --user-color: #ff9800;
@@ -6959,8 +7659,10 @@
       line-height: 1.5;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 10px;
-      background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+      padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
+      /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+      /* background: #ffff; */
+      background: #e3f2fd55;
       color: var(--text-primary);
   }
   
@@ -7052,9 +7754,23 @@
   }
   
   /* Floating action buttons */
-  .floating-btn {
+  #floating-buttons {
       position: fixed;
-      right: 20px;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+      gap: 10px;
+      z-index: 99;
+  }
+  
+  .floating-btn {
+      position: relative;
       background-color: var(--session-bg-dimmed);
       color: var(--text-muted);
       border: none;
@@ -7082,22 +7798,12 @@
       color: var(--text-muted);
   }
   
-  /* Floating buttons positioning */
-  .scroll-top.floating-btn {
-      bottom: 20px;
-  }
-  
-  .toggle-details.floating-btn {
-      bottom: 80px;
-  }
-  
-  .filter-messages.floating-btn {
-      bottom: 140px;
-  }
-  
-  .timeline-toggle.floating-btn {
-      bottom: 200px;
-  }
+  /* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+  .timeline-toggle.floating-btn  { order: 1; }
+  .filter-messages.floating-btn  { order: 2; }
+  .toggle-details.floating-btn   { order: 3; }
+  .scroll-top.floating-btn       { order: 4; }
+  .scroll-bottom.floating-btn    { order: 5; }
   
   @media (max-width: 1280px) {
       .header > span:first-child {
@@ -7406,6 +8112,73 @@
       border-left-color: var(--user-color);
   }
   
+  /* Empty user prompt bubble shown at end of conversation */
+  .user.empty-prompt {
+      opacity: 0.4;
+      cursor: pointer;
+  }
+  .user.empty-prompt:hover {
+      opacity: 0.7;
+  }
+  .user.empty-prompt * {
+      pointer-events: none;
+  }
+  
+  /* Minimize/maximize toggle button in prompt header */
+  .prompt-minimize-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8em;
+      color: var(--text-muted);
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+  }
+  .prompt-minimize-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Minimized state: content hidden, no bottom margin */
+  #ccl-live-prompt.minimized .content {
+      display: none;
+  }
+  #ccl-live-prompt.minimized {
+      margin-bottom: 0;
+  }
+  
+  /* Prompt dock: fixed bottom bar when user is typing */
+  #prompt-dock.sticky {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 60px; /* sidebar width */
+      z-index: 100;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+      border-radius: 8px 8px 0 0;
+  }
+  .user-input {
+      display: block;
+      width: 100%;
+      min-height: 3em;
+      border: 1px solid var(--user-color);
+      border-radius: 4px;
+      outline: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      caret-color: var(--user-color);
+      resize: none;
+      overflow-y: hidden;
+      max-height: calc(16 * 1.5em);
+      padding: 6px 8px;
+      box-sizing: border-box;
+  }
+  
   .assistant {
       border-left-color: var(--assistant-color);
   }
@@ -7655,7 +8428,7 @@
   
   /* Session header styling */
   .session-header {
-      background-color: var(--session-bg-dimmed);
+      /* background-color: var(--session-bg-dimmed); */
       border-radius: 8px;
       padding: 16px;
       margin: 30px 0 20px 0;
@@ -8137,7 +8910,6 @@
       background-color: var(--white-dimmed);
       border: 1px solid #dee2e6;
       border-radius: 4px;
-      text-decoration: none;
       color: var(--text-secondary);
       transition: background-color 0.2s;
   }
@@ -8146,9 +8918,80 @@
       background-color: #ffffff99;
   }
   
+  .session-link a {
+      text-decoration: none;
+      color: inherit;
+  }
+  
+  .session-link a:hover pre {
+      text-decoration: underline;
+  }
+  
   .session-link-title {
       font-weight: 600;
       font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  
+  .session-edit-btn,
+  .session-delete-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+  }
+  
+  .session-link:hover .session-edit-btn,
+  .session-link:hover .session-delete-btn {
+      opacity: 1;
+  }
+  
+  .session-edit-btn:hover {
+      color: #1976d2;
+  }
+  
+  .session-delete-btn:hover {
+      color: #e53935;
+  }
+  
+  .session-title-edit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+  }
+  
+  .session-title-input {
+      font-size: inherit;
+      font-family: inherit;
+      border: 1px solid #1976d2;
+      border-radius: 3px;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+  }
+  
+  .session-title-confirm-btn {
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      flex-shrink: 0;
+  }
+  
+  .session-title-confirm-btn:hover {
+      background: #1565c0;
   }
   
   .session-link-meta {
@@ -8762,7 +9605,8 @@
   .search-input {
       width: 100%;
       padding: 8px 40px 8px 12px;
-      background: #ffffff88;
+      /* background: #ffffff88; */
+      background: #ffffffdd;
       border: 1px solid #dee2e6;
       border-radius: 20px;
       color: var(--text-secondary);
@@ -8774,7 +9618,8 @@
   .search-input:focus {
       outline: none;
       border-color: var(--system-warning-color);
-      background: #ffffff99;
+      /* background: #ffffff99; */
+      background: #ffffffff;
       box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
@@ -10028,6 +10873,8 @@
   
       
   
+      <div id="messages-container">
+      
       
       
       <div class="session-divider"></div>
@@ -10049,6 +10896,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -10076,6 +10924,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -10138,6 +10987,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-3' id='msg-d-3'>
           <div class='header'>
               <span>🤷 User</span>
@@ -10165,6 +11015,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-0 d-3' data-message-id='d-4' id='msg-d-4'>
           <div class='header'>
               <span title="ID: tool_edge_001">🛠️ FailingTool</span>
@@ -10187,6 +11038,7 @@
       
       
       
+      
       <div class='message tool_result error pair_last d-0 d-3' data-message-id='d-5' id='msg-d-5'>
           <div class='header'>
               <span title="ID: tool_edge_001">🚨 Error</span>
@@ -10200,6 +11052,7 @@
           <div class='content'><pre>Error: Tool execution failed with error: Command not found</pre></div>
           
       </div>
+      
       
       
       
@@ -10219,6 +11072,7 @@
   </pre></div>
           
       </div>
+      
       
       
       
@@ -10259,6 +11113,7 @@
       
       
       
+      
       <div class='message assistant d-0 d-7' data-message-id='d-8' id='msg-d-8'>
           <div class='header'>
               <span>🤖 Assistant</span>
@@ -10289,6 +11144,7 @@
       
       
       
+      
       <div class='message tool_use d-0 d-7 d-8' data-message-id='d-9' id='msg-d-9'>
           <div class='header'>
               <span title="ID: tool_edge_002">🛠️ MultiEdit</span>
@@ -10306,6 +11162,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-10' id='msg-d-10'>
           <div class='header'>
               <span>🤷 User</span>
@@ -10319,6 +11176,7 @@
           <div class='content'><pre>Testing special characters: café, naïve, résumé, 中文, العربية, русский, 🎉 emojis 🚀 and symbols ∑∆√π∞</pre></div>
           
       </div>
+      
       
       
       
@@ -10354,6 +11212,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -10414,11 +11273,28 @@
       </div>
       
       
+      </div>
+      <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
+      <div id="sse-live-messages"></div>
+  <div id="prompt-dock">
+      <div id='ccl-live-prompt' class='message user empty-prompt'>
+          <div class='header'>
+              <span>🤷 User</span>
+              <button class='prompt-minimize-btn' title='최소화'>▼</button>
+          </div>
+          <div class='content'>
+              <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+          </div>
+      </div>
+  </div>
   
-      <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
-      <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
-      <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-      <a class="scroll-top floating-btn" title="Scroll to top" href="#title">🔝</a>
+      <div id="floating-buttons">
+          <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
+          <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+          <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+          <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+          <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+      </div>
   
       <script>
           document.addEventListener('DOMContentLoaded', function () {
@@ -10546,6 +11422,9 @@
   
       // Execute immediately - assumes this is included within a DOMContentLoaded handler
       convertTimestampsToLocalTimezone();
+  
+      // Expose globally so SSE update handler can re-run after injecting new messages
+      window.convertTimestamps = convertTimestampsToLocalTimezone;
   })();
   
               // Parse URL parameters
@@ -11185,6 +12064,173 @@
   
               // Apply initial fold state
               setInitialFoldState();
+  
+              // Empty user prompt: click to activate (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
+              window.initEmptyPrompt = function() {
+                  var ep = document.querySelector('.message.user.empty-prompt');
+                  if (ep) {
+                      ep.addEventListener('click', function () {
+                          this.classList.remove('empty-prompt');
+                          var textarea = this.querySelector('.user-input');
+                          var dock = document.getElementById('prompt-dock');
+                          textarea.addEventListener('input', function () {
+                              this.style.height = 'auto';
+                              var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                              if (this.scrollHeight > maxH) {
+                                  this.style.height = maxH + 'px';
+                                  this.style.overflowY = 'auto';
+                              } else {
+                                  this.style.height = this.scrollHeight + 'px';
+                                  this.style.overflowY = 'hidden';
+                              }
+                              if (this.value.trim()) {
+                                  dock.classList.add('sticky');
+                                  document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                              } else {
+                                  dock.classList.remove('sticky');
+                                  document.body.style.paddingBottom = '';
+                              }
+                          });
+                          // Minimize/maximize toggle
+                          var dock = document.getElementById('prompt-dock');
+                          var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                          if (minimizeBtn) {
+                              minimizeBtn.addEventListener('click', function (e) {
+                                  e.stopPropagation();
+                                  var isMinimized = ep.classList.toggle('minimized');
+                                  this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                                  this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                                  if (dock) {
+                                      document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                                  }
+                              });
+                          }
+  
+                          textarea.focus();
+                      }, { once: true });
+                  }
+              };
+              window.initEmptyPrompt();
+  
+  
+              document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+  
+          if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+              return;
+          }
+  
+          fetch('/api/sessions/' + sessionId, {
+              method: 'DELETE',
+          })
+              .then(function (resp) {
+                  if (resp.ok) {
+                      location.reload();
+                  } else {
+                      alert('세션 삭제에 실패했습니다.');
+                  }
+              })
+              .catch(function () {
+                  alert('서버 연결 오류가 발생했습니다.');
+              });
+      });
+  });
+  
+  document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+          var titleSpan = sessionLink.querySelector('.session-title');
+          var currentTitle = titleSpan.dataset.title || '';
+  
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'session-title-input';
+          input.value = currentTitle;
+  
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'session-title-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = '저장';
+  
+          var wrapper = document.createElement('span');
+          wrapper.className = 'session-title-edit-wrapper';
+          wrapper.appendChild(input);
+          wrapper.appendChild(confirmBtn);
+          titleSpan.replaceWith(wrapper);
+          input.focus();
+          input.select();
+  
+          var isConfirming = false;
+  
+          function cancel() {
+              wrapper.replaceWith(titleSpan);
+          }
+  
+          function save() {
+              var newTitle = input.value.trim();
+              if (!newTitle || newTitle === currentTitle) {
+                  cancel();
+                  return;
+              }
+  
+              fetch('/api/sessions/' + sessionId + '/title', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle }),
+              })
+                  .then(function (resp) {
+                      if (resp.ok) {
+                          location.reload();
+                      } else {
+                          alert('제목 수정에 실패했습니다.');
+                          cancel();
+                      }
+                  })
+                  .catch(function () {
+                      alert('서버 연결 오류가 발생했습니다.');
+                      cancel();
+                  });
+          }
+  
+          confirmBtn.addEventListener('mousedown', function () {
+              isConfirming = true;
+          });
+  
+          confirmBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              isConfirming = false;
+              save();
+          });
+  
+          input.addEventListener('blur', function () {
+              if (!isConfirming) {
+                  cancel();
+              }
+              isConfirming = false;
+          });
+  
+          input.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  save();
+              }
+              if (e.key === 'Escape') {
+                  cancel();
+              }
+          });
+      });
+  });
           });
       </script>
       <!-- Search functionality script -->
@@ -11920,6 +12966,152 @@
       }
   })();
   </script>
+  
+      <!-- Live update via SSE -->
+      <script>
+      (function() {
+          // Extract session ID from URL: session-{uuid}.html
+          var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
+          if (!match) return;
+          var sessionId = match[1];
+          var source = new EventSource('/api/sessions/' + sessionId + '/stream');
+          var updating = false;
+          var indicator = document.createElement('div');
+          indicator.id = 'live-indicator';
+          indicator.textContent = 'LIVE';
+          indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
+          document.body.appendChild(indicator);
+  
+          // Authoritative message count from server (marker-based, matches render_messages counting)
+          // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
+          var msgCount = 14; // fallback until async fetch completes
+          fetch('/api/sessions/' + sessionId + '/messages?after=999999&t=' + Date.now())
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                  msgCount = data.total;
+                  console.log('[SSE] initial message count (server marker count):', msgCount);
+              })
+              .catch(function() {
+                  console.log('[SSE] initial message count fallback (template length):', msgCount);
+              });
+  
+          source.onmessage = function(e) {
+              var data = JSON.parse(e.data);
+              if (data.type === 'updated') {
+                  if (updating) return;
+                  updating = true;
+                  var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
+  
+                  // Fetch only new messages after current count
+                  fetch('/api/sessions/' + sessionId + '/messages?after=' + msgCount + '&t=' + Date.now())
+                      .then(function(r) {
+                          if (!r.ok) throw new Error('fetch failed: ' + r.status);
+                          return r.json();
+                      })
+                      .then(function(resp) {
+                          var container = document.getElementById('messages-container');
+                          if (!container) return;
+  
+                          var serverTotal = resp.total;
+                          var newHtml = resp.html;
+  
+                          console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
+  
+                          if (serverTotal <= msgCount || !newHtml || !newHtml.trim()) {
+                              // No new messages — must reset flag so future events are processed
+                              updating = false;
+                              return;
+                          }
+  
+                          // Remove old prompt and reset dock sticky state
+                          var oldPrompt = document.getElementById('ccl-live-prompt');
+                          if (oldPrompt) oldPrompt.remove();
+                          var dock = document.getElementById('prompt-dock');
+                          if (dock) {
+                              dock.classList.remove('sticky');
+                              document.body.style.paddingBottom = '';
+                          }
+  
+                          // Use #sse-live-messages — a CLEAN container outside the broken
+                          // messages-container DOM. It's placed in the template right before
+                          // the SSE script, so it's always at the visual bottom of the page.
+                          var liveContainer = document.getElementById('sse-live-messages');
+  
+                          // Use iframe sandbox to safely parse potentially malformed HTML
+                          var iframe = document.createElement('iframe');
+                          iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+                          document.body.appendChild(iframe);
+  
+                          var iframeDoc = '<!DOCTYPE html><html><body><div id="__wrapper">' + newHtml + '</div></body></html>';
+                          iframe.srcdoc = iframeDoc;
+  
+                          iframe.onload = function() {
+                              var wrapper = iframe.contentDocument.getElementById('__wrapper');
+  
+                              if (wrapper) {
+                                  var nodeCount = 0;
+                                  while (wrapper.firstChild) {
+                                      var node = document.adoptNode(wrapper.firstChild);
+                                      liveContainer.appendChild(node);
+                                      nodeCount++;
+                                  }
+                                  console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
+                              }
+  
+                              // Re-create prompt inside #prompt-dock (always at page bottom)
+                              var dock = document.getElementById('prompt-dock');
+                              if (dock) {
+                                  var promptDiv = document.createElement('div');
+                                  promptDiv.id = 'ccl-live-prompt';
+                                  promptDiv.className = 'message user empty-prompt';
+                                  promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
+                                      '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
+                                      '<div class="content">' +
+                                      '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                      '</div>';
+                                  dock.appendChild(promptDiv);
+                              }
+  
+                              // Cleanup iframe
+                              document.body.removeChild(iframe);
+  
+                              // Post-processing on new content
+                              if (typeof convertTimestamps === 'function') convertTimestamps();
+                              if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+  
+                              if (atBottom) {
+                                  window.scrollTo(0, document.body.scrollHeight);
+                              }
+  
+                              indicator.style.background = '#3b82f6';
+                              setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
+  
+                              // Update count inside onload (after DOM is ready)
+                              msgCount = serverTotal;
+                              updating = false;
+                              console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+                          };
+                      })
+                      .catch(function(err) {
+                          console.error('[SSE] update error:', err);
+                          updating = false;
+                      });
+              } else if (data.type === 'deleted') {
+                  indicator.textContent = 'DELETED';
+                  indicator.style.background = '#ef4444';
+                  source.close();
+              }
+          };
+          source.onerror = function() {
+              indicator.textContent = 'OFFLINE';
+              indicator.style.background = '#6b7280';
+          };
+          source.onopen = function() {
+              indicator.textContent = 'LIVE';
+              indicator.style.background = '#22c55e';
+          };
+      })();
+      </script>
   </body>
   
   </html>
@@ -11964,7 +13156,8 @@
       --neutral-semi: #f8f9fa88;
   
       /* Slightly transparent variants (55 = ~33% opacity) */
-      --highlight-light: #e3f2fd55;
+      /* --highlight-light: #e3f2fd55; */
+      --highlight-light: #ffff;
   
       /* Solid colors for message types */
       --user-color: #ff9800;
@@ -12027,8 +13220,10 @@
       line-height: 1.5;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 10px;
-      background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+      padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
+      /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+      /* background: #ffff; */
+      background: #e3f2fd55;
       color: var(--text-primary);
   }
   
@@ -12120,9 +13315,23 @@
   }
   
   /* Floating action buttons */
-  .floating-btn {
+  #floating-buttons {
       position: fixed;
-      right: 20px;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+      gap: 10px;
+      z-index: 99;
+  }
+  
+  .floating-btn {
+      position: relative;
       background-color: var(--session-bg-dimmed);
       color: var(--text-muted);
       border: none;
@@ -12150,22 +13359,12 @@
       color: var(--text-muted);
   }
   
-  /* Floating buttons positioning */
-  .scroll-top.floating-btn {
-      bottom: 20px;
-  }
-  
-  .toggle-details.floating-btn {
-      bottom: 80px;
-  }
-  
-  .filter-messages.floating-btn {
-      bottom: 140px;
-  }
-  
-  .timeline-toggle.floating-btn {
-      bottom: 200px;
-  }
+  /* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+  .timeline-toggle.floating-btn  { order: 1; }
+  .filter-messages.floating-btn  { order: 2; }
+  .toggle-details.floating-btn   { order: 3; }
+  .scroll-top.floating-btn       { order: 4; }
+  .scroll-bottom.floating-btn    { order: 5; }
   
   @media (max-width: 1280px) {
       .header > span:first-child {
@@ -12474,6 +13673,73 @@
       border-left-color: var(--user-color);
   }
   
+  /* Empty user prompt bubble shown at end of conversation */
+  .user.empty-prompt {
+      opacity: 0.4;
+      cursor: pointer;
+  }
+  .user.empty-prompt:hover {
+      opacity: 0.7;
+  }
+  .user.empty-prompt * {
+      pointer-events: none;
+  }
+  
+  /* Minimize/maximize toggle button in prompt header */
+  .prompt-minimize-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8em;
+      color: var(--text-muted);
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+  }
+  .prompt-minimize-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Minimized state: content hidden, no bottom margin */
+  #ccl-live-prompt.minimized .content {
+      display: none;
+  }
+  #ccl-live-prompt.minimized {
+      margin-bottom: 0;
+  }
+  
+  /* Prompt dock: fixed bottom bar when user is typing */
+  #prompt-dock.sticky {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 60px; /* sidebar width */
+      z-index: 100;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+      border-radius: 8px 8px 0 0;
+  }
+  .user-input {
+      display: block;
+      width: 100%;
+      min-height: 3em;
+      border: 1px solid var(--user-color);
+      border-radius: 4px;
+      outline: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      caret-color: var(--user-color);
+      resize: none;
+      overflow-y: hidden;
+      max-height: calc(16 * 1.5em);
+      padding: 6px 8px;
+      box-sizing: border-box;
+  }
+  
   .assistant {
       border-left-color: var(--assistant-color);
   }
@@ -12723,7 +13989,7 @@
   
   /* Session header styling */
   .session-header {
-      background-color: var(--session-bg-dimmed);
+      /* background-color: var(--session-bg-dimmed); */
       border-radius: 8px;
       padding: 16px;
       margin: 30px 0 20px 0;
@@ -13205,7 +14471,6 @@
       background-color: var(--white-dimmed);
       border: 1px solid #dee2e6;
       border-radius: 4px;
-      text-decoration: none;
       color: var(--text-secondary);
       transition: background-color 0.2s;
   }
@@ -13214,9 +14479,80 @@
       background-color: #ffffff99;
   }
   
+  .session-link a {
+      text-decoration: none;
+      color: inherit;
+  }
+  
+  .session-link a:hover pre {
+      text-decoration: underline;
+  }
+  
   .session-link-title {
       font-weight: 600;
       font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  
+  .session-edit-btn,
+  .session-delete-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+  }
+  
+  .session-link:hover .session-edit-btn,
+  .session-link:hover .session-delete-btn {
+      opacity: 1;
+  }
+  
+  .session-edit-btn:hover {
+      color: #1976d2;
+  }
+  
+  .session-delete-btn:hover {
+      color: #e53935;
+  }
+  
+  .session-title-edit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+  }
+  
+  .session-title-input {
+      font-size: inherit;
+      font-family: inherit;
+      border: 1px solid #1976d2;
+      border-radius: 3px;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+  }
+  
+  .session-title-confirm-btn {
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      flex-shrink: 0;
+  }
+  
+  .session-title-confirm-btn:hover {
+      background: #1565c0;
   }
   
   .session-link-meta {
@@ -13830,7 +15166,8 @@
   .search-input {
       width: 100%;
       padding: 8px 40px 8px 12px;
-      background: #ffffff88;
+      /* background: #ffffff88; */
+      background: #ffffffdd;
       border: 1px solid #dee2e6;
       border-radius: 20px;
       color: var(--text-secondary);
@@ -13842,7 +15179,8 @@
   .search-input:focus {
       outline: none;
       border-color: var(--system-warning-color);
-      background: #ffffff99;
+      /* background: #ffffff99; */
+      background: #ffffffff;
       box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
@@ -15105,11 +16443,15 @@
   
       <div class='session-nav'>
           
-          <a href='#msg-d-0'
-              class='session-link'>
+          
+          <div class='session-link' data-session-id='session_b'>
               <div class='session-link-title'>
+                  <span class='session-title' data-title=''>
                   
                   session_
+                  </span>
+                  <button class='session-edit-btn' title='제목 수정'>✏️</button>
+                  <button class='session-delete-btn' title='삭제'>✕</button>
               </div>
               <div class='session-link-meta'>
                   <span class="timestamp" data-timestamp="2025-07-03T15:50:07.874717Z" data-timestamp-end="2025-07-03T15:54:07.874717Z">2025-07-03 15:50:07 - 2025-07-03 15:54:07</span> • 3 messages
@@ -15118,17 +16460,21 @@
                   
               </div>
               
-              <pre class='session-preview'>This is from a different session file to test multi-session handling.</pre>
+              <a href='#msg-d-0'><pre class='session-preview'>This is from a different session file to test multi-session handling.</pre></a>
               
-          </a>
+          </div>
           
-          <a href='#msg-d-2'
-              class='session-link'>
+          
+          <div class='session-link' data-session-id='test_session'>
               <div class='session-link-title'>
+                  <span class='session-title' data-title='User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator.'>
                   
                   User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator. •
                   
                   test_ses
+                  </span>
+                  <button class='session-edit-btn' title='제목 수정'>✏️</button>
+                  <button class='session-delete-btn' title='삭제'>✕</button>
               </div>
               <div class='session-link-meta'>
                   <span class="timestamp" data-timestamp="2025-07-03T15:50:07.874907Z" data-timestamp-end="2025-07-03T16:10:07.874907Z">2025-07-03 15:50:07 - 2025-07-03 16:10:07</span> • 11 messages
@@ -15137,9 +16483,9 @@
                   
               </div>
               
-              <pre class='session-preview'>Hello Claude! Can you help me understand how Python decorators work?</pre>
+              <a href='#msg-d-2'><pre class='session-preview'>User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator.</pre></a>
               
-          </a>
+          </div>
           
       </div>
   </div>
@@ -15147,6 +16493,8 @@
   
       
   
+      <div id="messages-container">
+      
       
       
       <div class="session-divider"></div>
@@ -15168,6 +16516,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -15199,6 +16548,7 @@
       
       
       
+      
       <div class='message assistant d-0 d-1' data-message-id='d-4' id='msg-d-4'>
           <div class='header'>
               <span>🤖 Assistant</span>
@@ -15215,6 +16565,7 @@
   </div></div>
           
       </div>
+      
       
       
       
@@ -15258,6 +16609,7 @@
       
       
       
+      
       <div class='message user d-2' data-message-id='d-3' id='msg-d-3'>
           <div class='header'>
               <span>🤷 User</span>
@@ -15281,6 +16633,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -15324,6 +16677,7 @@
       
       
       
+      
       <div class='message user d-2' data-message-id='d-7' id='msg-d-7'>
           <div class='header'>
               <span>🤷 User</span>
@@ -15351,6 +16705,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-2 d-7' data-message-id='d-8' id='msg-d-8'>
           <div class='header'>
               <span title="ID: tool_001">📝 Edit <span class='tool-summary'>/tmp/decorator_example.py</span></span>
@@ -15368,6 +16723,7 @@
       
       
       
+      
       <div class='message tool_result pair_last d-2 d-7' data-message-id='d-9' id='msg-d-9'>
           <div class='header'>
               <span title="ID: tool_001"></span>
@@ -15381,6 +16737,7 @@
           <div class='content'><pre>File created successfully at: /tmp/decorator_example.py</pre></div>
           
       </div>
+      
       
       
       
@@ -15417,6 +16774,7 @@
       
       
       
+      
       <div class='message user d-2' data-message-id='d-11' id='msg-d-11'>
           <div class='header'>
               <span>🤷 User</span>
@@ -15444,6 +16802,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-2 d-11' data-message-id='d-12' id='msg-d-12'>
           <div class='header'>
               <span title="ID: tool_002">💻 Bash <span class='tool-summary'>Run the decorator example to show output</span></span>
@@ -15457,6 +16816,7 @@
           <div class='content'><div class='bash-tool-content'><pre class='bash-tool-command'>python /tmp/decorator_example.py</pre></div></div>
           
       </div>
+      
       
       
       
@@ -15476,6 +16836,7 @@
   Hello, Alice!</pre></div>
           
       </div>
+      
       
       
       
@@ -15508,6 +16869,7 @@
       
       
       
+      
       <div class='message user d-2' data-message-id='d-15' id='msg-d-15'>
           <div class='header'>
               <span>🤷 User</span>
@@ -15523,11 +16885,28 @@
       </div>
       
       
+      </div>
+      <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
+      <div id="sse-live-messages"></div>
+  <div id="prompt-dock">
+      <div id='ccl-live-prompt' class='message user empty-prompt'>
+          <div class='header'>
+              <span>🤷 User</span>
+              <button class='prompt-minimize-btn' title='최소화'>▼</button>
+          </div>
+          <div class='content'>
+              <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+          </div>
+      </div>
+  </div>
   
-      <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
-      <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
-      <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-      <a class="scroll-top floating-btn" title="Scroll to top" href="#title">🔝</a>
+      <div id="floating-buttons">
+          <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
+          <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+          <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+          <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+          <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+      </div>
   
       <script>
           document.addEventListener('DOMContentLoaded', function () {
@@ -15655,6 +17034,9 @@
   
       // Execute immediately - assumes this is included within a DOMContentLoaded handler
       convertTimestampsToLocalTimezone();
+  
+      // Expose globally so SSE update handler can re-run after injecting new messages
+      window.convertTimestamps = convertTimestampsToLocalTimezone;
   })();
   
               // Parse URL parameters
@@ -16294,6 +17676,173 @@
   
               // Apply initial fold state
               setInitialFoldState();
+  
+              // Empty user prompt: click to activate (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
+              window.initEmptyPrompt = function() {
+                  var ep = document.querySelector('.message.user.empty-prompt');
+                  if (ep) {
+                      ep.addEventListener('click', function () {
+                          this.classList.remove('empty-prompt');
+                          var textarea = this.querySelector('.user-input');
+                          var dock = document.getElementById('prompt-dock');
+                          textarea.addEventListener('input', function () {
+                              this.style.height = 'auto';
+                              var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                              if (this.scrollHeight > maxH) {
+                                  this.style.height = maxH + 'px';
+                                  this.style.overflowY = 'auto';
+                              } else {
+                                  this.style.height = this.scrollHeight + 'px';
+                                  this.style.overflowY = 'hidden';
+                              }
+                              if (this.value.trim()) {
+                                  dock.classList.add('sticky');
+                                  document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                              } else {
+                                  dock.classList.remove('sticky');
+                                  document.body.style.paddingBottom = '';
+                              }
+                          });
+                          // Minimize/maximize toggle
+                          var dock = document.getElementById('prompt-dock');
+                          var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                          if (minimizeBtn) {
+                              minimizeBtn.addEventListener('click', function (e) {
+                                  e.stopPropagation();
+                                  var isMinimized = ep.classList.toggle('minimized');
+                                  this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                                  this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                                  if (dock) {
+                                      document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                                  }
+                              });
+                          }
+  
+                          textarea.focus();
+                      }, { once: true });
+                  }
+              };
+              window.initEmptyPrompt();
+  
+  
+              document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+  
+          if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+              return;
+          }
+  
+          fetch('/api/sessions/' + sessionId, {
+              method: 'DELETE',
+          })
+              .then(function (resp) {
+                  if (resp.ok) {
+                      location.reload();
+                  } else {
+                      alert('세션 삭제에 실패했습니다.');
+                  }
+              })
+              .catch(function () {
+                  alert('서버 연결 오류가 발생했습니다.');
+              });
+      });
+  });
+  
+  document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+          var titleSpan = sessionLink.querySelector('.session-title');
+          var currentTitle = titleSpan.dataset.title || '';
+  
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'session-title-input';
+          input.value = currentTitle;
+  
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'session-title-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = '저장';
+  
+          var wrapper = document.createElement('span');
+          wrapper.className = 'session-title-edit-wrapper';
+          wrapper.appendChild(input);
+          wrapper.appendChild(confirmBtn);
+          titleSpan.replaceWith(wrapper);
+          input.focus();
+          input.select();
+  
+          var isConfirming = false;
+  
+          function cancel() {
+              wrapper.replaceWith(titleSpan);
+          }
+  
+          function save() {
+              var newTitle = input.value.trim();
+              if (!newTitle || newTitle === currentTitle) {
+                  cancel();
+                  return;
+              }
+  
+              fetch('/api/sessions/' + sessionId + '/title', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle }),
+              })
+                  .then(function (resp) {
+                      if (resp.ok) {
+                          location.reload();
+                      } else {
+                          alert('제목 수정에 실패했습니다.');
+                          cancel();
+                      }
+                  })
+                  .catch(function () {
+                      alert('서버 연결 오류가 발생했습니다.');
+                      cancel();
+                  });
+          }
+  
+          confirmBtn.addEventListener('mousedown', function () {
+              isConfirming = true;
+          });
+  
+          confirmBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              isConfirming = false;
+              save();
+          });
+  
+          input.addEventListener('blur', function () {
+              if (!isConfirming) {
+                  cancel();
+              }
+              isConfirming = false;
+          });
+  
+          input.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  save();
+              }
+              if (e.key === 'Escape') {
+                  cancel();
+              }
+          });
+      });
+  });
           });
       </script>
       <!-- Search functionality script -->
@@ -17029,6 +18578,152 @@
       }
   })();
   </script>
+  
+      <!-- Live update via SSE -->
+      <script>
+      (function() {
+          // Extract session ID from URL: session-{uuid}.html
+          var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
+          if (!match) return;
+          var sessionId = match[1];
+          var source = new EventSource('/api/sessions/' + sessionId + '/stream');
+          var updating = false;
+          var indicator = document.createElement('div');
+          indicator.id = 'live-indicator';
+          indicator.textContent = 'LIVE';
+          indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
+          document.body.appendChild(indicator);
+  
+          // Authoritative message count from server (marker-based, matches render_messages counting)
+          // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
+          var msgCount = 16; // fallback until async fetch completes
+          fetch('/api/sessions/' + sessionId + '/messages?after=999999&t=' + Date.now())
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                  msgCount = data.total;
+                  console.log('[SSE] initial message count (server marker count):', msgCount);
+              })
+              .catch(function() {
+                  console.log('[SSE] initial message count fallback (template length):', msgCount);
+              });
+  
+          source.onmessage = function(e) {
+              var data = JSON.parse(e.data);
+              if (data.type === 'updated') {
+                  if (updating) return;
+                  updating = true;
+                  var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
+  
+                  // Fetch only new messages after current count
+                  fetch('/api/sessions/' + sessionId + '/messages?after=' + msgCount + '&t=' + Date.now())
+                      .then(function(r) {
+                          if (!r.ok) throw new Error('fetch failed: ' + r.status);
+                          return r.json();
+                      })
+                      .then(function(resp) {
+                          var container = document.getElementById('messages-container');
+                          if (!container) return;
+  
+                          var serverTotal = resp.total;
+                          var newHtml = resp.html;
+  
+                          console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
+  
+                          if (serverTotal <= msgCount || !newHtml || !newHtml.trim()) {
+                              // No new messages — must reset flag so future events are processed
+                              updating = false;
+                              return;
+                          }
+  
+                          // Remove old prompt and reset dock sticky state
+                          var oldPrompt = document.getElementById('ccl-live-prompt');
+                          if (oldPrompt) oldPrompt.remove();
+                          var dock = document.getElementById('prompt-dock');
+                          if (dock) {
+                              dock.classList.remove('sticky');
+                              document.body.style.paddingBottom = '';
+                          }
+  
+                          // Use #sse-live-messages — a CLEAN container outside the broken
+                          // messages-container DOM. It's placed in the template right before
+                          // the SSE script, so it's always at the visual bottom of the page.
+                          var liveContainer = document.getElementById('sse-live-messages');
+  
+                          // Use iframe sandbox to safely parse potentially malformed HTML
+                          var iframe = document.createElement('iframe');
+                          iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+                          document.body.appendChild(iframe);
+  
+                          var iframeDoc = '<!DOCTYPE html><html><body><div id="__wrapper">' + newHtml + '</div></body></html>';
+                          iframe.srcdoc = iframeDoc;
+  
+                          iframe.onload = function() {
+                              var wrapper = iframe.contentDocument.getElementById('__wrapper');
+  
+                              if (wrapper) {
+                                  var nodeCount = 0;
+                                  while (wrapper.firstChild) {
+                                      var node = document.adoptNode(wrapper.firstChild);
+                                      liveContainer.appendChild(node);
+                                      nodeCount++;
+                                  }
+                                  console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
+                              }
+  
+                              // Re-create prompt inside #prompt-dock (always at page bottom)
+                              var dock = document.getElementById('prompt-dock');
+                              if (dock) {
+                                  var promptDiv = document.createElement('div');
+                                  promptDiv.id = 'ccl-live-prompt';
+                                  promptDiv.className = 'message user empty-prompt';
+                                  promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
+                                      '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
+                                      '<div class="content">' +
+                                      '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                      '</div>';
+                                  dock.appendChild(promptDiv);
+                              }
+  
+                              // Cleanup iframe
+                              document.body.removeChild(iframe);
+  
+                              // Post-processing on new content
+                              if (typeof convertTimestamps === 'function') convertTimestamps();
+                              if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+  
+                              if (atBottom) {
+                                  window.scrollTo(0, document.body.scrollHeight);
+                              }
+  
+                              indicator.style.background = '#3b82f6';
+                              setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
+  
+                              // Update count inside onload (after DOM is ready)
+                              msgCount = serverTotal;
+                              updating = false;
+                              console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+                          };
+                      })
+                      .catch(function(err) {
+                          console.error('[SSE] update error:', err);
+                          updating = false;
+                      });
+              } else if (data.type === 'deleted') {
+                  indicator.textContent = 'DELETED';
+                  indicator.style.background = '#ef4444';
+                  source.close();
+              }
+          };
+          source.onerror = function() {
+              indicator.textContent = 'OFFLINE';
+              indicator.style.background = '#6b7280';
+          };
+          source.onopen = function() {
+              indicator.textContent = 'LIVE';
+              indicator.style.background = '#22c55e';
+          };
+      })();
+      </script>
   </body>
   
   </html>
@@ -17073,7 +18768,8 @@
       --neutral-semi: #f8f9fa88;
   
       /* Slightly transparent variants (55 = ~33% opacity) */
-      --highlight-light: #e3f2fd55;
+      /* --highlight-light: #e3f2fd55; */
+      --highlight-light: #ffff;
   
       /* Solid colors for message types */
       --user-color: #ff9800;
@@ -17136,8 +18832,10 @@
       line-height: 1.5;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 10px;
-      background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf);
+      padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
+      /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
+      /* background: #ffff; */
+      background: #e3f2fd55;
       color: var(--text-primary);
   }
   
@@ -17229,9 +18927,23 @@
   }
   
   /* Floating action buttons */
-  .floating-btn {
+  #floating-buttons {
       position: fixed;
-      right: 20px;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 20px;
+      gap: 10px;
+      z-index: 99;
+  }
+  
+  .floating-btn {
+      position: relative;
       background-color: var(--session-bg-dimmed);
       color: var(--text-muted);
       border: none;
@@ -17259,22 +18971,12 @@
       color: var(--text-muted);
   }
   
-  /* Floating buttons positioning */
-  .scroll-top.floating-btn {
-      bottom: 20px;
-  }
-  
-  .toggle-details.floating-btn {
-      bottom: 80px;
-  }
-  
-  .filter-messages.floating-btn {
-      bottom: 140px;
-  }
-  
-  .timeline-toggle.floating-btn {
-      bottom: 200px;
-  }
+  /* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+  .timeline-toggle.floating-btn  { order: 1; }
+  .filter-messages.floating-btn  { order: 2; }
+  .toggle-details.floating-btn   { order: 3; }
+  .scroll-top.floating-btn       { order: 4; }
+  .scroll-bottom.floating-btn    { order: 5; }
   
   @media (max-width: 1280px) {
       .header > span:first-child {
@@ -17583,6 +19285,73 @@
       border-left-color: var(--user-color);
   }
   
+  /* Empty user prompt bubble shown at end of conversation */
+  .user.empty-prompt {
+      opacity: 0.4;
+      cursor: pointer;
+  }
+  .user.empty-prompt:hover {
+      opacity: 0.7;
+  }
+  .user.empty-prompt * {
+      pointer-events: none;
+  }
+  
+  /* Minimize/maximize toggle button in prompt header */
+  .prompt-minimize-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8em;
+      color: var(--text-muted);
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+  }
+  .prompt-minimize-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Minimized state: content hidden, no bottom margin */
+  #ccl-live-prompt.minimized .content {
+      display: none;
+  }
+  #ccl-live-prompt.minimized {
+      margin-bottom: 0;
+  }
+  
+  /* Prompt dock: fixed bottom bar when user is typing */
+  #prompt-dock.sticky {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 60px; /* sidebar width */
+      z-index: 100;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+      border-radius: 8px 8px 0 0;
+  }
+  .user-input {
+      display: block;
+      width: 100%;
+      min-height: 3em;
+      border: 1px solid var(--user-color);
+      border-radius: 4px;
+      outline: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+      caret-color: var(--user-color);
+      resize: none;
+      overflow-y: hidden;
+      max-height: calc(16 * 1.5em);
+      padding: 6px 8px;
+      box-sizing: border-box;
+  }
+  
   .assistant {
       border-left-color: var(--assistant-color);
   }
@@ -17832,7 +19601,7 @@
   
   /* Session header styling */
   .session-header {
-      background-color: var(--session-bg-dimmed);
+      /* background-color: var(--session-bg-dimmed); */
       border-radius: 8px;
       padding: 16px;
       margin: 30px 0 20px 0;
@@ -18314,7 +20083,6 @@
       background-color: var(--white-dimmed);
       border: 1px solid #dee2e6;
       border-radius: 4px;
-      text-decoration: none;
       color: var(--text-secondary);
       transition: background-color 0.2s;
   }
@@ -18323,9 +20091,80 @@
       background-color: #ffffff99;
   }
   
+  .session-link a {
+      text-decoration: none;
+      color: inherit;
+  }
+  
+  .session-link a:hover pre {
+      text-decoration: underline;
+  }
+  
   .session-link-title {
       font-weight: 600;
       font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  
+  .session-edit-btn,
+  .session-delete-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+  }
+  
+  .session-link:hover .session-edit-btn,
+  .session-link:hover .session-delete-btn {
+      opacity: 1;
+  }
+  
+  .session-edit-btn:hover {
+      color: #1976d2;
+  }
+  
+  .session-delete-btn:hover {
+      color: #e53935;
+  }
+  
+  .session-title-edit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+  }
+  
+  .session-title-input {
+      font-size: inherit;
+      font-family: inherit;
+      border: 1px solid #1976d2;
+      border-radius: 3px;
+      padding: 1px 4px;
+      outline: none;
+      flex: 1;
+  }
+  
+  .session-title-confirm-btn {
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      flex-shrink: 0;
+  }
+  
+  .session-title-confirm-btn:hover {
+      background: #1565c0;
   }
   
   .session-link-meta {
@@ -18939,7 +20778,8 @@
   .search-input {
       width: 100%;
       padding: 8px 40px 8px 12px;
-      background: #ffffff88;
+      /* background: #ffffff88; */
+      background: #ffffffdd;
       border: 1px solid #dee2e6;
       border-radius: 20px;
       color: var(--text-secondary);
@@ -18951,7 +20791,8 @@
   .search-input:focus {
       outline: none;
       border-color: var(--system-warning-color);
-      background: #ffffff99;
+      /* background: #ffffff99; */
+      background: #ffffffff;
       box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
   }
   
@@ -20205,6 +22046,8 @@
   
       
   
+      <div id="messages-container">
+      
       
       
       <div class="session-divider"></div>
@@ -20226,6 +22069,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -20253,6 +22097,7 @@
           </div>
           
       </div>
+      
       
       
       
@@ -20296,6 +22141,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-3' id='msg-d-3'>
           <div class='header'>
               <span>🤷 User</span>
@@ -20323,6 +22169,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-0 d-3' data-message-id='d-4' id='msg-d-4'>
           <div class='header'>
               <span title="ID: tool_001">📝 Edit <span class='tool-summary'>/tmp/decorator_example.py</span></span>
@@ -20340,6 +22187,7 @@
       
       
       
+      
       <div class='message tool_result pair_last d-0 d-3' data-message-id='d-5' id='msg-d-5'>
           <div class='header'>
               <span title="ID: tool_001"></span>
@@ -20353,6 +22201,7 @@
           <div class='content'><pre>File created successfully at: /tmp/decorator_example.py</pre></div>
           
       </div>
+      
       
       
       
@@ -20389,6 +22238,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-7' id='msg-d-7'>
           <div class='header'>
               <span>🤷 User</span>
@@ -20416,6 +22266,7 @@
       
       
       
+      
       <div class='message tool_use pair_first d-0 d-7' data-message-id='d-8' id='msg-d-8'>
           <div class='header'>
               <span title="ID: tool_002">💻 Bash <span class='tool-summary'>Run the decorator example to show output</span></span>
@@ -20429,6 +22280,7 @@
           <div class='content'><div class='bash-tool-content'><pre class='bash-tool-command'>python /tmp/decorator_example.py</pre></div></div>
           
       </div>
+      
       
       
       
@@ -20448,6 +22300,7 @@
   Hello, Alice!</pre></div>
           
       </div>
+      
       
       
       
@@ -20480,6 +22333,7 @@
       
       
       
+      
       <div class='message user d-0' data-message-id='d-11' id='msg-d-11'>
           <div class='header'>
               <span>🤷 User</span>
@@ -20495,11 +22349,28 @@
       </div>
       
       
+      </div>
+      <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
+      <div id="sse-live-messages"></div>
+  <div id="prompt-dock">
+      <div id='ccl-live-prompt' class='message user empty-prompt'>
+          <div class='header'>
+              <span>🤷 User</span>
+              <button class='prompt-minimize-btn' title='최소화'>▼</button>
+          </div>
+          <div class='content'>
+              <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+          </div>
+      </div>
+  </div>
   
-      <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
-      <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
-      <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-      <a class="scroll-top floating-btn" title="Scroll to top" href="#title">🔝</a>
+      <div id="floating-buttons">
+          <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
+          <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+          <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+          <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+          <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+      </div>
   
       <script>
           document.addEventListener('DOMContentLoaded', function () {
@@ -20627,6 +22498,9 @@
   
       // Execute immediately - assumes this is included within a DOMContentLoaded handler
       convertTimestampsToLocalTimezone();
+  
+      // Expose globally so SSE update handler can re-run after injecting new messages
+      window.convertTimestamps = convertTimestampsToLocalTimezone;
   })();
   
               // Parse URL parameters
@@ -21266,6 +23140,173 @@
   
               // Apply initial fold state
               setInitialFoldState();
+  
+              // Empty user prompt: click to activate (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
+              window.initEmptyPrompt = function() {
+                  var ep = document.querySelector('.message.user.empty-prompt');
+                  if (ep) {
+                      ep.addEventListener('click', function () {
+                          this.classList.remove('empty-prompt');
+                          var textarea = this.querySelector('.user-input');
+                          var dock = document.getElementById('prompt-dock');
+                          textarea.addEventListener('input', function () {
+                              this.style.height = 'auto';
+                              var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                              if (this.scrollHeight > maxH) {
+                                  this.style.height = maxH + 'px';
+                                  this.style.overflowY = 'auto';
+                              } else {
+                                  this.style.height = this.scrollHeight + 'px';
+                                  this.style.overflowY = 'hidden';
+                              }
+                              if (this.value.trim()) {
+                                  dock.classList.add('sticky');
+                                  document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                              } else {
+                                  dock.classList.remove('sticky');
+                                  document.body.style.paddingBottom = '';
+                              }
+                          });
+                          // Minimize/maximize toggle
+                          var dock = document.getElementById('prompt-dock');
+                          var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                          if (minimizeBtn) {
+                              minimizeBtn.addEventListener('click', function (e) {
+                                  e.stopPropagation();
+                                  var isMinimized = ep.classList.toggle('minimized');
+                                  this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                                  this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                                  if (dock) {
+                                      document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                                  }
+                              });
+                          }
+  
+                          textarea.focus();
+                      }, { once: true });
+                  }
+              };
+              window.initEmptyPrompt();
+  
+  
+              document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+  
+          if (!confirm('이 세션을 삭제하겠습니까?\n삭제된 세션은 복구할 수 없습니다.')) {
+              return;
+          }
+  
+          fetch('/api/sessions/' + sessionId, {
+              method: 'DELETE',
+          })
+              .then(function (resp) {
+                  if (resp.ok) {
+                      location.reload();
+                  } else {
+                      alert('세션 삭제에 실패했습니다.');
+                  }
+              })
+              .catch(function () {
+                  alert('서버 연결 오류가 발생했습니다.');
+              });
+      });
+  });
+  
+  document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+  
+          var sessionLink = this.closest('.session-link');
+          var sessionId = sessionLink.dataset.sessionId;
+          var titleSpan = sessionLink.querySelector('.session-title');
+          var currentTitle = titleSpan.dataset.title || '';
+  
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'session-title-input';
+          input.value = currentTitle;
+  
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'session-title-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = '저장';
+  
+          var wrapper = document.createElement('span');
+          wrapper.className = 'session-title-edit-wrapper';
+          wrapper.appendChild(input);
+          wrapper.appendChild(confirmBtn);
+          titleSpan.replaceWith(wrapper);
+          input.focus();
+          input.select();
+  
+          var isConfirming = false;
+  
+          function cancel() {
+              wrapper.replaceWith(titleSpan);
+          }
+  
+          function save() {
+              var newTitle = input.value.trim();
+              if (!newTitle || newTitle === currentTitle) {
+                  cancel();
+                  return;
+              }
+  
+              fetch('/api/sessions/' + sessionId + '/title', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title: newTitle }),
+              })
+                  .then(function (resp) {
+                      if (resp.ok) {
+                          location.reload();
+                      } else {
+                          alert('제목 수정에 실패했습니다.');
+                          cancel();
+                      }
+                  })
+                  .catch(function () {
+                      alert('서버 연결 오류가 발생했습니다.');
+                      cancel();
+                  });
+          }
+  
+          confirmBtn.addEventListener('mousedown', function () {
+              isConfirming = true;
+          });
+  
+          confirmBtn.addEventListener('click', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              isConfirming = false;
+              save();
+          });
+  
+          input.addEventListener('blur', function () {
+              if (!isConfirming) {
+                  cancel();
+              }
+              isConfirming = false;
+          });
+  
+          input.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                  e.preventDefault();
+                  save();
+              }
+              if (e.key === 'Escape') {
+                  cancel();
+              }
+          });
+      });
+  });
           });
       </script>
       <!-- Search functionality script -->
@@ -22001,6 +24042,152 @@
       }
   })();
   </script>
+  
+      <!-- Live update via SSE -->
+      <script>
+      (function() {
+          // Extract session ID from URL: session-{uuid}.html
+          var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
+          if (!match) return;
+          var sessionId = match[1];
+          var source = new EventSource('/api/sessions/' + sessionId + '/stream');
+          var updating = false;
+          var indicator = document.createElement('div');
+          indicator.id = 'live-indicator';
+          indicator.textContent = 'LIVE';
+          indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
+          document.body.appendChild(indicator);
+  
+          // Authoritative message count from server (marker-based, matches render_messages counting)
+          // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
+          var msgCount = 12; // fallback until async fetch completes
+          fetch('/api/sessions/' + sessionId + '/messages?after=999999&t=' + Date.now())
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                  msgCount = data.total;
+                  console.log('[SSE] initial message count (server marker count):', msgCount);
+              })
+              .catch(function() {
+                  console.log('[SSE] initial message count fallback (template length):', msgCount);
+              });
+  
+          source.onmessage = function(e) {
+              var data = JSON.parse(e.data);
+              if (data.type === 'updated') {
+                  if (updating) return;
+                  updating = true;
+                  var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
+  
+                  // Fetch only new messages after current count
+                  fetch('/api/sessions/' + sessionId + '/messages?after=' + msgCount + '&t=' + Date.now())
+                      .then(function(r) {
+                          if (!r.ok) throw new Error('fetch failed: ' + r.status);
+                          return r.json();
+                      })
+                      .then(function(resp) {
+                          var container = document.getElementById('messages-container');
+                          if (!container) return;
+  
+                          var serverTotal = resp.total;
+                          var newHtml = resp.html;
+  
+                          console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
+  
+                          if (serverTotal <= msgCount || !newHtml || !newHtml.trim()) {
+                              // No new messages — must reset flag so future events are processed
+                              updating = false;
+                              return;
+                          }
+  
+                          // Remove old prompt and reset dock sticky state
+                          var oldPrompt = document.getElementById('ccl-live-prompt');
+                          if (oldPrompt) oldPrompt.remove();
+                          var dock = document.getElementById('prompt-dock');
+                          if (dock) {
+                              dock.classList.remove('sticky');
+                              document.body.style.paddingBottom = '';
+                          }
+  
+                          // Use #sse-live-messages — a CLEAN container outside the broken
+                          // messages-container DOM. It's placed in the template right before
+                          // the SSE script, so it's always at the visual bottom of the page.
+                          var liveContainer = document.getElementById('sse-live-messages');
+  
+                          // Use iframe sandbox to safely parse potentially malformed HTML
+                          var iframe = document.createElement('iframe');
+                          iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;';
+                          document.body.appendChild(iframe);
+  
+                          var iframeDoc = '<!DOCTYPE html><html><body><div id="__wrapper">' + newHtml + '</div></body></html>';
+                          iframe.srcdoc = iframeDoc;
+  
+                          iframe.onload = function() {
+                              var wrapper = iframe.contentDocument.getElementById('__wrapper');
+  
+                              if (wrapper) {
+                                  var nodeCount = 0;
+                                  while (wrapper.firstChild) {
+                                      var node = document.adoptNode(wrapper.firstChild);
+                                      liveContainer.appendChild(node);
+                                      nodeCount++;
+                                  }
+                                  console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
+                              }
+  
+                              // Re-create prompt inside #prompt-dock (always at page bottom)
+                              var dock = document.getElementById('prompt-dock');
+                              if (dock) {
+                                  var promptDiv = document.createElement('div');
+                                  promptDiv.id = 'ccl-live-prompt';
+                                  promptDiv.className = 'message user empty-prompt';
+                                  promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
+                                      '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
+                                      '<div class="content">' +
+                                      '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                      '</div>';
+                                  dock.appendChild(promptDiv);
+                              }
+  
+                              // Cleanup iframe
+                              document.body.removeChild(iframe);
+  
+                              // Post-processing on new content
+                              if (typeof convertTimestamps === 'function') convertTimestamps();
+                              if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+  
+                              if (atBottom) {
+                                  window.scrollTo(0, document.body.scrollHeight);
+                              }
+  
+                              indicator.style.background = '#3b82f6';
+                              setTimeout(function() { indicator.style.background = '#22c55e'; }, 300);
+  
+                              // Update count inside onload (after DOM is ready)
+                              msgCount = serverTotal;
+                              updating = false;
+                              console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+                          };
+                      })
+                      .catch(function(err) {
+                          console.error('[SSE] update error:', err);
+                          updating = false;
+                      });
+              } else if (data.type === 'deleted') {
+                  indicator.textContent = 'DELETED';
+                  indicator.style.background = '#ef4444';
+                  source.close();
+              }
+          };
+          source.onerror = function() {
+              indicator.textContent = 'OFFLINE';
+              indicator.style.background = '#6b7280';
+          };
+          source.onopen = function() {
+              indicator.textContent = 'LIVE';
+              indicator.style.background = '#22c55e';
+          };
+      })();
+      </script>
   </body>
   
   </html>

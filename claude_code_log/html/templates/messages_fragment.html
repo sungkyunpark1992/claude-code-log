@@ -1,0 +1,68 @@
+{% set ns = namespace(last_css='') %}
+{% for message, message_title, html_content, formatted_timestamp in messages %}
+{% if is_session_header(message) %}
+<div class="session-divider"></div>
+<div class='message session-header' data-message-id='{{ message.message_id }}' data-session-id='{{ message.session_id }}' id='msg-{{ message.message_id }}'>
+    <div class='header'>Session: {{ html_content }}</div>
+    {% if message.has_children %}
+    <div class='fold-bar' data-message-id='{{ message.message_id }}' data-border-color='session-header'>
+        {% if message.immediate_children_count == message.total_descendants_count %}
+        <div class='fold-bar-section fold-one-level full-width' data-action='fold-one' data-target='{{ message.message_id }}' data-title-unfolded='Fold {{ message.get_immediate_children_label() }}' data-title-folded='Unfold (1st level) {{ message.get_immediate_children_label() }}' title='Fold {{ message.get_immediate_children_label() }}'>
+            <span class='fold-icon'>▼</span>
+            <span class='fold-label'>{{ message.get_immediate_children_label() }}</span>
+        </div>
+        {% else %}
+        <div class='fold-bar-section fold-one-level' data-action='fold-one' data-target='{{ message.message_id }}' data-title-unfolded='Fold (all levels) all {{ message.total_descendants_count }} descendants' data-title-folded='Unfold (1st level) {{ message.get_immediate_children_label() }}' title='Fold (all levels) all {{ message.total_descendants_count }} descendants'>
+            <span class='fold-icon'>▼</span>
+            <span class='fold-label'>{{ message.get_immediate_children_label() }}</span>
+        </div>
+        <div class='fold-bar-section fold-all-levels' data-action='fold-all' data-target='{{ message.message_id }}' data-title-unfolded='Fold (to 1st level) {{ message.get_immediate_children_label() }}' data-title-folded='Unfold (all levels) all {{ message.total_descendants_count }} descendants' title='Fold (to 1st level) {{ message.get_immediate_children_label() }}'>
+            <span class='fold-icon'>▼▼</span>
+            <span class='fold-label'>{{ message.get_total_descendants_label() }} total</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% else %}
+{%- set msg_css_class = css_class_from_message(message) %}
+{% set ns.last_css = msg_css_class %}
+{% set markdown = message.content.has_markdown if message.content else false %}
+<div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'>
+    <div class='header'>
+        {% set msg_emoji = get_message_emoji(message) -%}
+        <span{% if message.title_hint %} title="{{ message.title_hint }}"{% endif %}>{% if message_title %}{%
+            if message_title == 'Memory' %}💭 {%
+            elif msg_emoji and (message.type != 'tool_use' or not starts_with_emoji(message_title)) %}{{ msg_emoji }} {% endif %}{{ message_title | safe }}{% endif %}</span>
+        <div class='header-info'>
+            <div class='timestamp-row'>
+                <span class='timestamp'{% if message.meta and message.meta.timestamp %} data-timestamp='{{ message.meta.timestamp }}'{% if message.pair_duration %} data-duration='{{ message.pair_duration }}'{% endif %}{% endif %}>{{ formatted_timestamp }}</span>
+            </div>
+            {% if message.token_usage %}
+            <span class='token-usage'>{{ message.token_usage }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class='content{% if markdown %} markdown{% endif %}'>{{ html_content | safe }}</div>
+    {% if message.has_children %}
+    <div class='fold-bar' data-message-id='{{ message.message_id }}' data-border-color='{{ msg_css_class }}'>
+        {% if message.immediate_children_count == message.total_descendants_count %}
+        <div class='fold-bar-section fold-one-level full-width' data-action='fold-one' data-target='{{ message.message_id }}' data-title-unfolded='Fold {{ message.get_immediate_children_label() }}' data-title-folded='Unfold (1st level) {{ message.get_immediate_children_label() }}' title='Fold {{ message.get_immediate_children_label() }}'>
+            <span class='fold-icon'>▼</span>
+            <span class='fold-label'>{{ message.get_immediate_children_label() }}</span>
+        </div>
+        {% else %}
+        <div class='fold-bar-section fold-one-level' data-action='fold-one' data-target='{{ message.message_id }}' data-title-unfolded='Fold (all levels) all {{ message.total_descendants_count }} descendants' data-title-folded='Unfold (1st level) {{ message.get_immediate_children_label() }}' title='Fold (all levels) all {{ message.total_descendants_count }} descendants'>
+            <span class='fold-icon'>▼</span>
+            <span class='fold-label'>{{ message.get_immediate_children_label() }}</span>
+        </div>
+        <div class='fold-bar-section fold-all-levels' data-action='fold-all' data-target='{{ message.message_id }}' data-title-unfolded='Fold (to 1st level) {{ message.get_immediate_children_label() }}' data-title-folded='Unfold (all levels) all {{ message.total_descendants_count }} descendants' title='Fold (to 1st level) {{ message.get_immediate_children_label() }}'>
+            <span class='fold-icon'>▼▼</span>
+            <span class='fold-label'>{{ message.get_total_descendants_label() }} total</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endfor %}

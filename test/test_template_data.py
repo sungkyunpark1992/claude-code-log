@@ -292,6 +292,16 @@ class TestDataWithTestFiles:
 
     def test_projects_index_generation(self):
         """Test generating index HTML with test project data."""
+        mock_session = {
+            "id": "mock-session-id",
+            "summary": "Test session",
+            "custom_title": None,
+            "timestamp_range": "2023-11-14",
+            "first_timestamp": "2023-11-14T10:00:00Z",
+            "last_timestamp": "2023-11-14T11:00:00Z",
+            "message_count": 5,
+            "first_user_message": "Hello",
+        }
         project_summaries = [
             {
                 "name": "test-project-1",
@@ -300,6 +310,7 @@ class TestDataWithTestFiles:
                 "jsonl_count": 3,
                 "message_count": 15,
                 "last_modified": 1700000000.0,
+                "sessions": [mock_session],
             },
             {
                 "name": "-user-workspace-my-app",
@@ -308,6 +319,7 @@ class TestDataWithTestFiles:
                 "jsonl_count": 2,
                 "message_count": 8,
                 "last_modified": 1700000100.0,
+                "sessions": [mock_session],
             },
         ]
 

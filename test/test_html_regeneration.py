@@ -142,8 +142,12 @@ class TestHtmlRegeneration:
         project2.mkdir()
 
         # Copy test data to projects
+        # File names must match session IDs inside the JSONL so sessions aren't
+        # filtered out by the valid_session_ids check in process_projects_hierarchy.
+        # representative_messages.jsonl → session "test_session"
+        # edge_cases.jsonl → sessions "edge_cases", "todowrite_session"
         test_data_dir = Path(__file__).parent / "test_data"
-        jsonl1 = project1 / "test1.jsonl"
+        jsonl1 = project1 / "test_session.jsonl"
         jsonl1.write_text(
             (test_data_dir / "representative_messages.jsonl").read_text(
                 encoding="utf-8"
@@ -151,7 +155,7 @@ class TestHtmlRegeneration:
             encoding="utf-8",
         )
 
-        jsonl2 = project2 / "test2.jsonl"
+        jsonl2 = project2 / "edge_cases.jsonl"
         jsonl2.write_text(
             (test_data_dir / "edge_cases.jsonl").read_text(encoding="utf-8"),
             encoding="utf-8",

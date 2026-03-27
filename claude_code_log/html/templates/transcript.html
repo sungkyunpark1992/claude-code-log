@@ -100,7 +100,6 @@
     {% set ns = namespace(last_css='') %}
     {% for message, message_title, html_content, formatted_timestamp in messages %}
     {% if is_session_header(message) %}
-    <!-- @@CCL_MSG_SPLIT@@ -->
     <div class="session-divider"></div>
     <div class='message session-header' data-message-id='{{ message.message_id }}' data-session-id='{{ message.session_id }}' id='msg-{{ message.message_id }}'>
         <div class='header'>Session: {{ html_content }}</div>
@@ -127,7 +126,6 @@
         {% endif %}
     </div>
     {% else %}
-    <!-- @@CCL_MSG_SPLIT@@ -->
     {%- set msg_css_class = css_class_from_message(message) %}
     {% set ns.last_css = msg_css_class %}
     {% set markdown = message.content.has_markdown if message.content else false %}
@@ -171,7 +169,9 @@
     </div>
     {% endif %}
     {% endfor %}
-    </div><!-- @@CCL_END_CONTAINER@@ -->
+    </div>
+    <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
+    <div id="sse-live-messages"></div>
 <div id="prompt-dock">
     <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'>
@@ -899,9 +899,6 @@
     {% set is_transcript = True %}
     {% include 'components/search.html' %}
 
-    <!-- Clean container for SSE live messages (outside broken messages-container DOM) -->
-    <div id="sse-live-messages"></div>
-
     <!-- Live update via SSE -->
     <script>
     (function() {
@@ -917,9 +914,18 @@
         indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
         document.body.appendChild(indicator);
 
-        // Server-injected message count (reliable, not affected by HTML parsing issues)
-        var msgCount = {{ messages|length }};
-        console.log('[SSE] initial message count (server-injected):', msgCount);
+        // Authoritative message count from server (marker-based, matches render_messages counting)
+        // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
+        var msgCount = {{ messages|length }}; // fallback until async fetch completes
+        fetch('/api/sessions/' + sessionId + '/messages?after=999999&t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                msgCount = data.total;
+                console.log('[SSE] initial message count (server marker count):', msgCount);
+            })
+            .catch(function() {
+                console.log('[SSE] initial message count fallback (template length):', msgCount);
+            });
 
         source.onmessage = function(e) {
             var data = JSON.parse(e.data);
