@@ -171,13 +171,15 @@
     </div>
     {% endif %}
     {% endfor %}
+    </div><!-- @@CCL_END_CONTAINER@@ -->
+<div id="prompt-dock">
     <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'><span>🤷 User</span></div>
         <div class='content'>
             <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
         </div>
     </div>
-    </div><!-- @@CCL_END_CONTAINER@@ -->
+</div>
 
     <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
     <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
@@ -844,10 +846,24 @@
                     ep.addEventListener('click', function () {
                         this.classList.remove('empty-prompt');
                         var textarea = this.querySelector('.user-input');
+                        var dock = document.getElementById('prompt-dock');
                         textarea.addEventListener('input', function () {
                             this.style.height = 'auto';
-                            this.style.height = this.scrollHeight + 'px';
-                            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                            var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                            if (this.scrollHeight > maxH) {
+                                this.style.height = maxH + 'px';
+                                this.style.overflowY = 'auto';
+                            } else {
+                                this.style.height = this.scrollHeight + 'px';
+                                this.style.overflowY = 'hidden';
+                            }
+                            if (this.value.trim()) {
+                                dock.classList.add('sticky');
+                                document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                            } else {
+                                dock.classList.remove('sticky');
+                                document.body.style.paddingBottom = '';
+                            }
                         });
                         textarea.focus();
                     }, { once: true });
@@ -913,9 +929,14 @@
                             return;
                         }
 
-                        // Remove the empty-prompt element by ID
+                        // Remove old prompt and reset dock sticky state
                         var oldPrompt = document.getElementById('ccl-live-prompt');
                         if (oldPrompt) oldPrompt.remove();
+                        var dock = document.getElementById('prompt-dock');
+                        if (dock) {
+                            dock.classList.remove('sticky');
+                            document.body.style.paddingBottom = '';
+                        }
 
                         // Use #sse-live-messages — a CLEAN container outside the broken
                         // messages-container DOM. It's placed in the template right before
@@ -943,15 +964,18 @@
                                 console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
                             }
 
-                            // Add empty-prompt at the end of liveContainer
-                            var promptDiv = document.createElement('div');
-                            promptDiv.id = 'ccl-live-prompt';
-                            promptDiv.className = 'message user empty-prompt';
-                            promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span></div>' +
-                                '<div class="content">' +
-                                '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
-                                '</div>';
-                            liveContainer.appendChild(promptDiv);
+                            // Re-create prompt inside #prompt-dock (always at page bottom)
+                            var dock = document.getElementById('prompt-dock');
+                            if (dock) {
+                                var promptDiv = document.createElement('div');
+                                promptDiv.id = 'ccl-live-prompt';
+                                promptDiv.className = 'message user empty-prompt';
+                                promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span></div>' +
+                                    '<div class="content">' +
+                                    '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
+                                    '</div>';
+                                dock.appendChild(promptDiv);
+                            }
 
                             // Cleanup iframe
                             document.body.removeChild(iframe);

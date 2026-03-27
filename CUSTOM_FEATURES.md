@@ -16,6 +16,7 @@
 7. [색상 커스터마이징](#7-색상-커스터마이징)
 8. [맨 아래로 이동 플로팅 버튼](#8-맨-아래로-이동-플로팅-버튼)
 9. [인덱스 페이지 새로고침 시 자동 재생성](#9-인덱스-페이지-새로고침-시-자동-재생성)
+10. [빈 말풍선 하단 고정 (Sticky Prompt)](#10-빈-말풍선-하단-고정-sticky-prompt)
 
 ---
 
@@ -447,6 +448,131 @@ def index() -> Response:
 
 ---
 
+## 10. 빈 말풍선 하단 고정 (Sticky Prompt)
+
+**목적**: 빈 User 입력 말풍선에 텍스트를 입력하기 시작하면, 헤더처럼 화면 하단에 고정되어 스크롤과 무관하게 항상 보이도록 함. 텍스트를 모두 지우면 일반 위치로 복귀.
+
+### 동작
+
+- 초기 상태: 세션 맨 하단에 반투명 빈 말풍선 (클릭 대기)
+- 클릭 후 타이핑 시작: `#prompt-dock`에 `.sticky` 클래스 → 화면 하단 고정
+- 텍스트 전부 삭제: 고정 해제, 원래 위치로 복귀
+- 최대 16줄까지 자동 확장, 초과 시 스크롤바 표시
+- SSE로 새 메시지 수신 시 고정 해제 + 새 말풍선 재생성
+
+### 핵심 설계: 래퍼 컨테이너 방식
+
+`position: fixed`를 말풍선에 직접 적용하면 부모 컨텍스트를 벗어나 너비/위치가 틀어짐.
+대신 `#prompt-dock` 래퍼에 fixed를 적용하고 내부는 body와 동일한 레이아웃 제약을 적용:
+
+```css
+#prompt-dock.sticky {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;          /* viewport 전체 너비 */
+    z-index: 100;
+    max-width: 1200px; /* body와 동일 */
+    margin: 0 auto;    /* body처럼 중앙 정렬 */
+    padding: 0 10px;   /* body padding과 동일 */
+    border-radius: 8px 8px 0 0;
+}
+```
+
+> `left: 50%; transform: translateX(-50%)` 방식은 스크롤바 너비 등으로 미세하게 어긋남.
+> `left: 0; right: 0; margin: auto` 방식이 body 레이아웃과 픽셀 단위로 일치.
+
+### 수정 파일 (2개)
+
+#### 10-1. `claude_code_log/html/templates/transcript.html`
+
+**HTML**: messages-container 닫는 태그 다음, `#sse-live-messages` 이전에 dock 래퍼 추가:
+```html
+</div><!-- @@CCL_END_CONTAINER@@ -->
+<div id="prompt-dock">
+    <div id='ccl-live-prompt' class='message user empty-prompt'>
+        <div class='header'><span>🤷 User</span></div>
+        <div class='content'>
+            <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
+        </div>
+    </div>
+</div>
+```
+
+**JS** (`initEmptyPrompt` 내부): dock sticky 토글 + body padding 보상:
+```javascript
+var dock = document.getElementById('prompt-dock');
+textarea.addEventListener('input', function () {
+    this.style.height = 'auto';
+    var maxH = parseFloat(getComputedStyle(this).maxHeight);
+    if (this.scrollHeight > maxH) {
+        this.style.height = maxH + 'px';
+        this.style.overflowY = 'auto';
+    } else {
+        this.style.height = this.scrollHeight + 'px';
+        this.style.overflowY = 'hidden';
+    }
+    if (this.value.trim()) {
+        dock.classList.add('sticky');
+        document.body.style.paddingBottom = dock.offsetHeight + 'px';
+    } else {
+        dock.classList.remove('sticky');
+        document.body.style.paddingBottom = '';
+    }
+});
+```
+
+> `document.body.style.paddingBottom = dock.offsetHeight + 'px'`: fixed 요소가 마지막 메시지를 가리지 않도록 body 하단 여백 동적 보상.
+
+**JS** (SSE 코드): 기존 prompt 제거 및 dock 내에 새 prompt 재생성:
+```javascript
+// 기존 prompt 제거 + dock sticky 초기화
+var oldPrompt = document.getElementById('ccl-live-prompt');
+if (oldPrompt) oldPrompt.remove();
+var dock = document.getElementById('prompt-dock');
+if (dock) {
+    dock.classList.remove('sticky');
+    document.body.style.paddingBottom = '';
+}
+
+// SSE 메시지 삽입 후 dock 안에 새 prompt 재생성
+var dock = document.getElementById('prompt-dock');
+if (dock) {
+    var promptDiv = document.createElement('div');
+    promptDiv.id = 'ccl-live-prompt';
+    promptDiv.className = 'message user empty-prompt';
+    promptDiv.innerHTML = '...';
+    dock.appendChild(promptDiv);
+}
+```
+
+#### 10-2. `claude_code_log/html/templates/components/message_styles.css`
+
+```css
+/* Prompt dock: fixed bottom bar when user is typing */
+#prompt-dock.sticky {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    border-radius: 8px 8px 0 0;
+}
+
+/* textarea 최대 16줄, 초과 시 스크롤 */
+.user-input {
+    ...
+    resize: none;
+    overflow-y: hidden;
+    max-height: calc(16 * 1.5em);
+}
+```
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -493,6 +619,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 세션 custom title을 브라우저 탭 제목에 반영, VS Code 연동 버그 수정 (`_get_custom_title` 마지막 항목 반환, `_update_custom_title` 전체 교체) |
 | (pending) | SSE 500 버그 수정 — `render_session`, `render_messages`에서 `_get_custom_title(messages, ...)` → `_get_custom_title(jsonl_file, ...)` 잘못된 인자 수정. custom title 기능 추가 시 발생한 버그, SSE 실시간 동기화 완전 중단 유발. 상세: [LIVE_SYNC.md Bug 6](LIVE_SYNC.md#bug-6-custom-title-기능-추가-후-sse-500-에러) |
 | (pending) | SSE 추가 메시지 타임스탬프 UTC 표시 수정 — `timezone_converter.js`에 `window.convertTimestamps` 전역 노출 추가. 상세: [LIVE_SYNC.md Bug 7](LIVE_SYNC.md#bug-7-sse로-추가된-메시지의-타임스탬프가-utc-그대로-표시) |
+| (pending) | 빈 말풍선 하단 고정 (sticky prompt) — 타이핑 시 `#prompt-dock` 래퍼에 `position:fixed` 적용, 최대 16줄 확장 후 스크롤 |
 
 ---
 

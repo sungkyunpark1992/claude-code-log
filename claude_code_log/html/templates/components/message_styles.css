@@ -311,6 +311,19 @@
 .user.empty-prompt * {
     pointer-events: none;
 }
+
+/* Prompt dock: fixed bottom bar when user is typing */
+#prompt-dock.sticky {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 10px;
+    border-radius: 8px 8px 0 0;
+}
 .user-input {
     display: block;
     width: 100%;
@@ -324,7 +337,8 @@
     color: inherit;
     caret-color: var(--user-color);
     resize: none;
-    overflow: hidden;
+    overflow-y: hidden;
+    max-height: calc(16 * 1.5em);
     padding: 6px 8px;
     box-sizing: border-box;
 }
