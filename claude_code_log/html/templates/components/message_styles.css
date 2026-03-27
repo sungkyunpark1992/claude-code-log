@@ -312,12 +312,36 @@
     pointer-events: none;
 }
 
+/* Minimize/maximize toggle button in prompt header */
+.prompt-minimize-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.prompt-minimize-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Minimized state: content hidden, no bottom margin */
+#ccl-live-prompt.minimized .content {
+    display: none;
+}
+#ccl-live-prompt.minimized {
+    margin-bottom: 0;
+}
+
 /* Prompt dock: fixed bottom bar when user is typing */
 #prompt-dock.sticky {
     position: fixed;
     bottom: 0;
     left: 0;
-    right: 0;
+    right: 60px; /* sidebar width */
     z-index: 100;
     max-width: 1200px;
     margin: 0 auto;

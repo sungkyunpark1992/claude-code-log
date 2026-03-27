@@ -17,6 +17,7 @@
 8. [맨 아래로 이동 플로팅 버튼](#8-맨-아래로-이동-플로팅-버튼)
 9. [인덱스 페이지 새로고침 시 자동 재생성](#9-인덱스-페이지-새로고침-시-자동-재생성)
 10. [빈 말풍선 하단 고정 (Sticky Prompt)](#10-빈-말풍선-하단-고정-sticky-prompt)
+11. [플로팅 버튼 우측 사이드바 고정](#11-플로팅-버튼-우측-사이드바-고정)
 
 ---
 
@@ -459,6 +460,7 @@ def index() -> Response:
 - 텍스트 전부 삭제: 고정 해제, 원래 위치로 복귀
 - 최대 16줄까지 자동 확장, 초과 시 스크롤바 표시
 - SSE로 새 메시지 수신 시 고정 해제 + 새 말풍선 재생성
+- 헤더 우측 `▼` 버튼으로 textarea 최소화/최대화 토글 (내용 유지)
 
 ### 핵심 설계: 래퍼 컨테이너 방식
 
@@ -549,12 +551,36 @@ if (dock) {
 #### 10-2. `claude_code_log/html/templates/components/message_styles.css`
 
 ```css
+/* 최소/최대화 토글 버튼 */
+.prompt-minimize-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.prompt-minimize-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* 최소화 상태: content 숨김 */
+#ccl-live-prompt.minimized .content {
+    display: none;
+}
+#ccl-live-prompt.minimized {
+    margin-bottom: 0;
+}
+
 /* Prompt dock: fixed bottom bar when user is typing */
 #prompt-dock.sticky {
     position: fixed;
     bottom: 0;
     left: 0;
-    right: 0;
+    right: 60px; /* 우측 사이드바 너비만큼 띄움 */
     z-index: 100;
     max-width: 1200px;
     margin: 0 auto;
@@ -570,6 +596,75 @@ if (dock) {
     max-height: calc(16 * 1.5em);
 }
 ```
+
+---
+
+## 11. 플로팅 버튼 우측 사이드바 고정
+
+**목적**: 기존에 각각 `position: fixed; bottom: Npx`으로 흩어져 있던 플로팅 버튼들을 `#floating-buttons` 컨테이너로 묶어 우측 사이드바처럼 고정. 본문/dock과 영역이 겹치지 않음.
+
+### 동작
+
+- 화면 우측에 60px 너비 사이드바로 항상 고정
+- 버튼들은 사이드바 하단에 모여 있음 (`justify-content: flex-end`)
+- 본문(`body`)은 `padding-right: 70px`으로 사이드바와 겹치지 않음
+- `#prompt-dock.sticky`도 `right: 60px`으로 사이드바 침범 없음
+
+### 수정 파일 (2개)
+
+#### 11-1. `claude_code_log/html/templates/transcript.html` — 버튼 컨테이너로 묶기
+
+```html
+<div id="floating-buttons">
+    <button class="timeline-toggle floating-btn" ...>📆</button>
+    <button class="filter-messages floating-btn" ...>🔍</button>
+    <button class="toggle-details floating-btn" ...>📋</button>
+    <button class="scroll-top floating-btn" ...>⬆️</button>
+    <button class="scroll-bottom floating-btn" ...>⬇️</button>
+</div>
+```
+
+#### 11-2. `claude_code_log/html/templates/components/global_styles.css`
+
+```css
+/* 사이드바 컨테이너 */
+#floating-buttons {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;  /* 하단 배치 */
+    padding-bottom: 20px;
+    gap: 10px;
+    z-index: 99;
+}
+
+/* 개별 버튼: position: fixed 제거, relative로 */
+.floating-btn {
+    position: relative;
+    /* right, bottom 제거 */
+}
+
+/* 버튼 순서 (위→아래: 📆 🔍 📋 ⬆️ ⬇️) */
+.timeline-toggle.floating-btn  { order: 1; }
+.filter-messages.floating-btn  { order: 2; }
+.toggle-details.floating-btn   { order: 3; }
+.scroll-top.floating-btn       { order: 4; }
+.scroll-bottom.floating-btn    { order: 5; }
+
+/* 본문이 사이드바와 겹치지 않도록 */
+body {
+    padding: 10px 70px 10px 10px; /* right = 60px 사이드바 + 10px 여백 */
+}
+```
+
+> **이전 방식의 문제**: 버튼들이 각각 독립적인 `position: fixed; bottom: Npx`로 관리되어, `#prompt-dock` 하단 고정 시 dock이 버튼을 덮어버리는 z-index 충돌 발생. JS로 버튼 위치를 동적 조정하는 복잡한 우회책이 필요했음.
+>
+> **사이드바 방식의 장점**: 레이아웃이 CSS만으로 완결. JS 동적 조정 코드 불필요.
 
 ---
 
@@ -619,7 +714,8 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 세션 custom title을 브라우저 탭 제목에 반영, VS Code 연동 버그 수정 (`_get_custom_title` 마지막 항목 반환, `_update_custom_title` 전체 교체) |
 | (pending) | SSE 500 버그 수정 — `render_session`, `render_messages`에서 `_get_custom_title(messages, ...)` → `_get_custom_title(jsonl_file, ...)` 잘못된 인자 수정. custom title 기능 추가 시 발생한 버그, SSE 실시간 동기화 완전 중단 유발. 상세: [LIVE_SYNC.md Bug 6](LIVE_SYNC.md#bug-6-custom-title-기능-추가-후-sse-500-에러) |
 | (pending) | SSE 추가 메시지 타임스탬프 UTC 표시 수정 — `timezone_converter.js`에 `window.convertTimestamps` 전역 노출 추가. 상세: [LIVE_SYNC.md Bug 7](LIVE_SYNC.md#bug-7-sse로-추가된-메시지의-타임스탬프가-utc-그대로-표시) |
-| (pending) | 빈 말풍선 하단 고정 (sticky prompt) — 타이핑 시 `#prompt-dock` 래퍼에 `position:fixed` 적용, 최대 16줄 확장 후 스크롤 |
+| (pending) | 빈 말풍선 하단 고정 + 최소화 버튼 — `#prompt-dock` 래퍼 방식, 최대 16줄, 헤더 ▼/▲ 토글 |
+| (pending) | 플로팅 버튼 우측 사이드바 고정 — `#floating-buttons` 컨테이너, `body padding-right: 70px`, dock `right: 60px` |
 
 ---
 

@@ -91,7 +91,7 @@ body {
     line-height: 1.5;
     max-width: 1200px;
     margin: 0 auto;
-    padding: 10px;
+    padding: 10px 70px 10px 10px; /* right: 60px sidebar + 10px gap */
     /* background: linear-gradient(90deg, #f3d6d2, #f1dcce, #f0e4ca, #eeecc7, #e3ecc3, #d5eac0, #c6e8bd, #b9e6bc, #b6e3c5, #b3e1cf); */
     /* background: #ffff; */
     background: #e3f2fd55;
@@ -186,9 +186,23 @@ pre {
 }
 
 /* Floating action buttons */
-.floating-btn {
+#floating-buttons {
     position: fixed;
-    right: 20px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 20px;
+    gap: 10px;
+    z-index: 99;
+}
+
+.floating-btn {
+    position: relative;
     background-color: var(--session-bg-dimmed);
     color: var(--text-muted);
     border: none;
@@ -216,26 +230,12 @@ pre {
     color: var(--text-muted);
 }
 
-/* Floating buttons positioning */
-.scroll-top.floating-btn {
-    bottom: 80px;
-}
-
-.scroll-bottom.floating-btn {
-    bottom: 20px;
-}
-
-.toggle-details.floating-btn {
-    bottom: 140px;
-}
-
-.filter-messages.floating-btn {
-    bottom: 200px;
-}
-
-.timeline-toggle.floating-btn {
-    bottom: 260px;
-}
+/* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+.timeline-toggle.floating-btn  { order: 1; }
+.filter-messages.floating-btn  { order: 2; }
+.toggle-details.floating-btn   { order: 3; }
+.scroll-top.floating-btn       { order: 4; }
+.scroll-bottom.floating-btn    { order: 5; }
 
 @media (max-width: 1280px) {
     .header > span:first-child {

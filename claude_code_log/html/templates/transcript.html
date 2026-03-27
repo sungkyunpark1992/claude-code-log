@@ -174,18 +174,23 @@
     </div><!-- @@CCL_END_CONTAINER@@ -->
 <div id="prompt-dock">
     <div id='ccl-live-prompt' class='message user empty-prompt'>
-        <div class='header'><span>🤷 User</span></div>
+        <div class='header'>
+            <span>🤷 User</span>
+            <button class='prompt-minimize-btn' title='최소화'>▼</button>
+        </div>
         <div class='content'>
             <textarea class='user-input' placeholder='메시지를 입력하세요...'></textarea>
         </div>
     </div>
 </div>
 
-    <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
-    <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
-    <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-    <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
-    <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+    <div id="floating-buttons">
+        <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
+        <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+        <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+        <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
+        <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -865,6 +870,21 @@
                                 document.body.style.paddingBottom = '';
                             }
                         });
+                        // Minimize/maximize toggle
+                        var dock = document.getElementById('prompt-dock');
+                        var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                        if (minimizeBtn) {
+                            minimizeBtn.addEventListener('click', function (e) {
+                                e.stopPropagation();
+                                var isMinimized = ep.classList.toggle('minimized');
+                                this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                                this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                                if (dock) {
+                                    document.body.style.paddingBottom = dock.offsetHeight + 'px';
+                                }
+                            });
+                        }
+
                         textarea.focus();
                     }, { once: true });
                 }
@@ -970,7 +990,8 @@
                                 var promptDiv = document.createElement('div');
                                 promptDiv.id = 'ccl-live-prompt';
                                 promptDiv.className = 'message user empty-prompt';
-                                promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span></div>' +
+                                promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
+                                    '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
                                     '<div class="content">' +
                                     '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
                                     '</div>';
