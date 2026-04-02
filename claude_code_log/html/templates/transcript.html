@@ -386,7 +386,7 @@
                 });
 
                 // Show/hide messages based on active toggle buttons
-                const allMessages = document.querySelectorAll('.message:not(.session-header)');
+                const allMessages = document.querySelectorAll('.message:not(.session-header):not(#ccl-live-prompt)');
                 allMessages.forEach(message => {
                     let shouldShow = false;
 
@@ -844,59 +844,50 @@
             // Apply initial fold state
             setInitialFoldState();
 
-            // Empty user prompt: click to activate (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
+            // Empty user prompt: always sticky from init (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
             window.initEmptyPrompt = function() {
                 var ep = document.querySelector('.message.user.empty-prompt');
-                if (ep) {
-                    ep.addEventListener('click', function () {
-                        this.classList.remove('empty-prompt');
-                        var textarea = this.querySelector('.user-input');
-                        var dock = document.getElementById('prompt-dock');
-                        textarea.addEventListener('input', function () {
-                            this.style.height = 'auto';
-                            var maxH = parseFloat(getComputedStyle(this).maxHeight);
-                            if (this.scrollHeight > maxH) {
-                                this.style.height = maxH + 'px';
-                                this.style.overflowY = 'auto';
-                            } else {
-                                this.style.height = this.scrollHeight + 'px';
-                                this.style.overflowY = 'hidden';
-                            }
-                            if (this.value.trim()) {
-                                if (!dock.classList.contains('sticky')) {
-                                    // One-time transition: set paddingBottom BEFORE making fixed
-                                    // so the space dock occupied in flow (including gap above it)
-                                    // is preserved. This only runs once — no scrollTo needed.
-                                    var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
-                                    var docHeight = document.documentElement.scrollHeight;
-                                    document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
-                                    dock.classList.add('sticky');
-                                }
-                                // Already sticky: dock is position:fixed (out of flow).
-                                // Textarea height changes don't affect document layout — no action needed.
-                            } else {
-                                dock.classList.remove('sticky');
-                                document.body.style.paddingBottom = '';
+                if (!ep) return;
+                var dock = document.getElementById('prompt-dock');
+
+                // Make dock sticky immediately — no click/typing required
+                if (dock && !dock.classList.contains('sticky')) {
+                    var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
+                    var docHeight = document.documentElement.scrollHeight;
+                    document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+                    dock.classList.add('sticky');
+                }
+
+                ep.addEventListener('click', function () {
+                    this.classList.remove('empty-prompt');
+                    var textarea = this.querySelector('.user-input');
+                    textarea.addEventListener('input', function () {
+                        this.style.height = 'auto';
+                        var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                        if (this.scrollHeight > maxH) {
+                            this.style.height = maxH + 'px';
+                            this.style.overflowY = 'auto';
+                        } else {
+                            this.style.height = this.scrollHeight + 'px';
+                            this.style.overflowY = 'hidden';
+                        }
+                        // Dock is always sticky — no sticky toggle needed here
+                    });
+                    // Minimize/maximize toggle
+                    var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                    if (minimizeBtn) {
+                        minimizeBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            var isMinimized = ep.classList.toggle('minimized');
+                            this.textContent = isMinimized ? '\u25B2' : '\u25BC';
+                            this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
+                            if (dock) {
+                                document.body.style.paddingBottom = dock.offsetHeight + 'px';
                             }
                         });
-                        // Minimize/maximize toggle
-                        var dock = document.getElementById('prompt-dock');
-                        var minimizeBtn = this.querySelector('.prompt-minimize-btn');
-                        if (minimizeBtn) {
-                            minimizeBtn.addEventListener('click', function (e) {
-                                e.stopPropagation();
-                                var isMinimized = ep.classList.toggle('minimized');
-                                this.textContent = isMinimized ? '\u25B2' : '\u25BC';
-                                this.title = isMinimized ? '\uCD5C\uB300\uD654' : '\uCD5C\uC18C\uD654';
-                                if (dock) {
-                                    document.body.style.paddingBottom = dock.offsetHeight + 'px';
-                                }
-                            });
-                        }
-
-                        textarea.focus();
-                    }, { once: true });
-                }
+                    }
+                    textarea.focus();
+                }, { once: true });
             };
             window.initEmptyPrompt();
 

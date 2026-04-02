@@ -609,6 +609,39 @@ if (dock) {
 }
 ```
 
+### 버그 수정 이력
+
+#### sticky 전환 시 레이아웃 점프 (수정)
+
+**증상**: 타이핑 시작 순간 메시지들이 dock 쪽으로 붙거나, 화면이 위로 살짝 밀리는 현상.
+
+**원인 및 수정**:
+- `dock.offsetHeight`만 보상 → dock 위 gap 포함 안 됨 → `docHeight - dockAbsTop` 전체로 변경
+- sticky 전환이 매 키스트로크마다 실행 → 최초 1회 가드(`!dock.classList.contains('sticky')`) 추가
+- `window.scrollTo` 매 키스트로크 호출 → 제거 (위 두 수정으로 불필요)
+- `bottom: 0` → `bottom: 10px`: `body padding-bottom: 10px`과 불일치로 sticky 전환 시 10px 점프 발생
+
+#### 페이지 로드 즉시 하단 고정 (기능 변경)
+
+이전: 타이핑 시작 시 sticky 전환
+현재: `initEmptyPrompt()` 호출 시점(페이지 로드 & SSE 후)에 즉시 sticky 적용
+
+`input` 핸들러에서 sticky 토글 로직 완전 제거 — textarea 높이 조절만 담당.
+
+#### 메시지 필터로 빈 말풍선이 숨겨지는 버그 (수정)
+
+**증상**: 🔍 필터에서 user 타입을 비활성화하면 `#ccl-live-prompt`도 같이 `filtered-hidden` 처리되어 화면에서 사라짐.
+
+**원인**: `applyFilter()`의 대상 쿼리 `.message:not(.session-header)`에 `#ccl-live-prompt`(.message.user)가 포함됨.
+
+**수정**:
+```javascript
+// 수정 전
+document.querySelectorAll('.message:not(.session-header)')
+// 수정 후
+document.querySelectorAll('.message:not(.session-header):not(#ccl-live-prompt)')
+```
+
 ---
 
 ## 11. 플로팅 버튼 우측 사이드바 고정
@@ -729,7 +762,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `556e3b4` | 빈 말풍선 하단 고정 (sticky) — `#prompt-dock` 래퍼 방식, 최대 16줄, 헤더 ▼/▲ 토글 |
 | `2f0726b` | 플로팅 버튼 우측 사이드바 고정 — `#floating-buttons` 컨테이너, `body padding-right: 70px`, dock `right: 60px` |
 | `cbb193f` | SSE `total` 고정 버그 최종 해결 — HTML 마커 방식 완전 폐기, Python `TemplateMessage` 객체 기반 카운트(`get_template_messages()` + `render_fragment()`). `#sse-live-messages` DOM 순서 수정. 테스트 5개 수정. 상세: [LIVE_SYNC.md Bug 8](LIVE_SYNC.md#bug-8-total-값-고정--마커-오염-재발-최종-해결-마커-방식-완전-폐기) |
-| (pending) | sticky 전환 시 레이아웃 점프 버그 수정 — `paddingBottom` pre-compensation(dock 상단~문서 끝 전체), sticky 전환 1회 가드, `window.scrollTo` 제거. `bottom: 0` → `bottom: 10px` (body padding-bottom 일치) |
+| (pending) | sticky 전환 시 레이아웃 점프 버그 수정, 페이지 로드 즉시 하단 고정, 필터 숨김 버그 수정 — 상세 내용은 아래 참고 |
 
 ---
 
