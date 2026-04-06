@@ -927,10 +927,15 @@
                 console.log('[SSE] initial message count fallback (template length):', msgCount);
             });
 
+        var pendingUpdate = false;  // Track missed events while updating
+
         source.onmessage = function(e) {
             var data = JSON.parse(e.data);
             if (data.type === 'updated') {
-                if (updating) return;
+                if (updating) {
+                    pendingUpdate = true;  // Don't skip — remember for later
+                    return;
+                }
                 updating = true;
                 var atBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150;
 
@@ -1022,11 +1027,23 @@
                             msgCount = serverTotal;
                             updating = false;
                             console.log('[SSE] iframe sandbox: adopted nodes successfully, msgCount=' + msgCount);
+
+                            // Re-fetch if we missed events while processing
+                            if (pendingUpdate) {
+                                pendingUpdate = false;
+                                console.log('[SSE] processing pending update...');
+                                source.onmessage({data: JSON.stringify({type: 'updated'})});
+                            }
                         };
                     })
                     .catch(function(err) {
                         console.error('[SSE] update error:', err);
                         updating = false;
+                        // Also check pending on error
+                        if (pendingUpdate) {
+                            pendingUpdate = false;
+                            source.onmessage({data: JSON.stringify({type: 'updated'})});
+                        }
                     });
             } else if (data.type === 'deleted') {
                 indicator.textContent = 'DELETED';

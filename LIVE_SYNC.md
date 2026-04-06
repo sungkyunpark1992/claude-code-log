@@ -353,6 +353,74 @@ source.onopen = function() {
 
 **참고**: EventSource는 연결 끊김 시 자동으로 재연결을 시도함 (브라우저 내장). 재연결 성공 시 `onopen` 이벤트가 발생하므로 여기서 indicator를 복구.
 
+### Bug 9: SSE `updating` 플래그에 의한 이벤트 누락 — Thinking만 표시되고 Assistant 응답 미표시
+
+**증상**: SSE 콘솔에 `adopted 3 nodes` 성공 로그가 나오지만, Thinking 메시지만 화면에 보이고 Assistant 텍스트 응답이 표시되지 않음. 새탭에서 열기(전체 새로고침)하면 정상 표시.
+
+**원인 분석**:
+
+1. **JSONL 구조**: Claude Code는 Thinking과 Text를 **별도 JSONL 엔트리**로 저장 (같은 엔트리가 아님)
+   ```
+   Line 3472: assistant, types=['thinking']  ts=05:20:13
+   Line 3473: assistant, types=['text']      ts=05:20:17  (4초 후)
+   ```
+
+2. **SSE 서버 타이밍**: 파일 변경 감지 → 디바운스(1초 안정 확인) → `updated` 이벤트 전송. Thinking 작성 시 파일이 일시적으로 안정되면(Text가 아직 안 쓰여짐) Thinking만 포함된 이벤트 발송.
+
+3. **클라이언트 `updating` 플래그**: 
+   ```javascript
+   if (updating) return;  // ← 두 번째 이벤트를 완전히 무시!
+   ```
+   첫 번째 이벤트(Thinking) 처리 중 두 번째 이벤트(Text)가 도착하면 스킵. 3600줄 JSONL 파싱 + iframe 생성 + 노드 adopt에 5초 이상 소요되므로, 4초 간격의 Text 이벤트는 거의 항상 스킵됨.
+
+4. **다음 이벤트 부재**: 첫 처리 완료 후 `updating=false`가 되지만, 스킵된 이벤트는 복구 불가. JSONL에 추가 변경이 없으면 영원히 누락.
+
+**타임라인**:
+```
+05:20:13  Thinking 엔트리 작성
+~05:20:15 SSE 감지 → "updated" 전송 → 클라이언트 fetch 시작 (updating=true)
+05:20:17  Text 엔트리 작성
+~05:20:20 SSE 감지 → "updated" 전송 → 클라이언트: updating=true → 스킵!
+~05:20:22 첫 처리 완료 (updating=false) → 하지만 두 번째 이벤트 이미 유실
+→ 추가 JSONL 변경 없으면 Text 영영 표시 안 됨
+```
+
+**수정** (`transcript.html`):
+
+```javascript
+// 이전: 이벤트 완전 스킵
+if (updating) return;
+
+// 수정: 이벤트를 기억해뒀다가 처리 완료 후 재fetch
+var pendingUpdate = false;
+
+source.onmessage = function(e) {
+    var data = JSON.parse(e.data);
+    if (data.type === 'updated') {
+        if (updating) {
+            pendingUpdate = true;  // 스킵하지 않고 기억
+            return;
+        }
+        updating = true;
+        // ... fetch 처리 ...
+    }
+};
+
+// iframe onload 콜백 끝에:
+updating = false;
+if (pendingUpdate) {
+    pendingUpdate = false;
+    console.log('[SSE] processing pending update...');
+    source.onmessage({data: JSON.stringify({type: 'updated'})});
+}
+
+// .catch() 핸들러에도 동일 로직 추가
+```
+
+**핵심**: `updating` 중 도착한 이벤트를 버리지 않고 `pendingUpdate` 플래그로 기억. 현재 처리 완료(성공/실패) 후 자동으로 `source.onmessage`를 재호출하여 누락된 메시지를 fetch.
+
+**이 버그가 이전에 발견되지 않은 이유**: Bug 8(마커 오염)로 인해 2000+ 메시지 세션에서 `#sse-live-messages` 컨테이너 자체가 DOM 오염에 갇혀 보이지 않았음. HTML 이스케이프 수정 후 DOM이 정상화되면서 SSE가 처음으로 제대로 작동하게 되었고, 그제서야 이 이벤트 누락 문제가 관찰됨.
+
 ---
 
 ## 6. 현재 구현 코드
@@ -620,6 +688,7 @@ def render_messages(session_id: str) -> Response:
 | 15 | 증분 렌더링 | 마커 분할 + 문자열 슬라이싱 | `template_messages[after:]` + `render_fragment()` | 마커 방식 폐기의 연장선 |
 | 16 | `#sse-live-messages` DOM 위치 | `#prompt-dock` 뒤 | `#prompt-dock` 앞 | 새 메시지가 빈 말풍선 아래에 표시되는 레이아웃 버그 수정 |
 | 17 | 마커 파일 | `<!-- @@CCL_MSG_SPLIT@@ -->`, `<!-- @@CCL_END_CONTAINER@@ -->` in `transcript.html` | 마커 완전 제거 | 마커 방식 폐기 |
+| 18 | `updating` 중 이벤트 처리 | `if (updating) return;` — 완전 스킵 | `pendingUpdate` 플래그 + 처리 완료 후 재fetch | Bug 9: Thinking/Text 별도 엔트리 → 두 번째 이벤트 유실 |
 
 ### 관련 커밋
 
