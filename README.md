@@ -1,3 +1,8 @@
+https://github.com/daaain/claude-code-log 사이트
+uv.lock 파일 Release 1.0.0
+ - version = "1.0.0" 기반으로 커스터마이징
+
+
 # Claude Code Log
 
 A Python CLI tool that converts Claude Code transcript JSONL files into readable HTML and Markdown formats.
