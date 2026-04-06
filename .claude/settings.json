@@ -23,7 +23,7 @@
       "Bash(powershell *)"
     ]
   },
-  "hooks": {
+  "_주석처리_hooks": {
     "PostToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit",
