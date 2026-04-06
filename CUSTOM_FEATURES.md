@@ -19,6 +19,7 @@
 10. [빈 말풍선 하단 고정 (Sticky Prompt)](#10-빈-말풍선-하단-고정-sticky-prompt)
 11. [플로팅 버튼 우측 사이드바 고정](#11-플로팅-버튼-우측-사이드바-고정)
 12. [User 메시지 긴 내용 접기](#12-user-메시지-긴-내용-접기)
+13. [2000+ 메시지 세션 DOM 오염 수정](#13-2000-메시지-세션-dom-오염-수정)
 
 ---
 
@@ -738,6 +739,58 @@ def format_user_text_content(text: str) -> str:
 ```
 
 > **부작용**: 기존 `<pre>` (날 텍스트)에서 마크다운 렌더링으로 변경됨. 메시지에 `**굵게**`, 코드블록 등이 있으면 렌더링되어 표시됨.
+
+---
+
+## 13. 2000+ 메시지 세션 DOM 오염 수정
+
+**목적**: 2000개 이상 메시지가 있는 세션에서 `#floating-buttons`(우측 사이드바)와 `#prompt-dock`(하단 빈 말풍선)이 보이지 않는 버그 수정.
+
+### 문제
+
+대화 내용에 코드 블록 바깥에서 등장하는 HTML 태그(예: `<select>`, `<div style="...">`)가 마크다운 렌더링 시 이스케이프 없이 그대로 HTML로 출력됨 → 브라우저가 진짜 HTML 태그로 해석 → DOM 트리 구조가 오염되어 `position: fixed` 요소들이 깨진 DOM 안에 갇혀 보이지 않게 됨.
+
+**콘솔 에러 증거**:
+- `<select>` 태그 중첩 파싱 에러 (kyochon 세션)
+- `TypeError: Cannot read properties of null (reading 'appendChild')` — `#sse-live-messages`가 DOM에서 사라짐 (claude-code-log 세션)
+
+### 수정 파일 (3개)
+
+**`claude_code_log/html/utils.py`** — `render_markdown()`, `render_markdown_collapsible()`:
+
+```python
+# 수정 전 — 대화 내용의 HTML 태그가 이스케이프 없이 DOM에 삽입
+def render_markdown(text: str, escape_html: bool = False) -> str: ...
+def render_markdown_collapsible(..., escape_html: bool = False) -> str: ...
+
+# 수정 후 — HTML 태그를 &lt;select&gt; 형태로 이스케이프하여 텍스트로 표시
+def render_markdown(text: str, escape_html: bool = True) -> str: ...
+def render_markdown_collapsible(..., escape_html: bool = True) -> str: ...
+```
+
+> **주의**: `render_markdown`의 기본값만 바꾸면 효과 없음. 모든 포매터(`assistant_formatters`, `user_formatters`, `tool_formatters`)가 `render_markdown_collapsible`을 통해 렌더링하고, 이 함수가 자체 `escape_html` 기본값을 `render_markdown`에 명시적으로 전달하기 때문. **반드시 양쪽 모두** 변경해야 함.
+
+> **코드 블록은 영향 없음**: mistune은 `` ```code``` `` 블록을 별도로 처리하여 `escape_html` 설정과 무관하게 항상 이스케이프.
+
+**`claude_code_log/html/templates/components/global_styles.css`** — `#floating-buttons`:
+
+```css
+#floating-buttons {
+    /* 기존 속성 생략 */
+    will-change: transform; /* 추가: GPU 컴포지터 레이어 강제 — 보조적 방어 */
+}
+```
+
+**`claude_code_log/html/templates/components/message_styles.css`** — `#prompt-dock.sticky`:
+
+```css
+#prompt-dock.sticky {
+    /* 기존 속성 생략 */
+    will-change: transform; /* 추가: GPU 컴포지터 레이어 강제 — 보조적 방어 */
+}
+```
+
+> `will-change: transform`은 근본 해결(HTML 이스케이프)에 대한 **보조적 방어**. Chrome이 매우 긴 페이지에서 `position: fixed` 요소를 누락시키는 알려진 렌더링 버그를 예방.
 
 ---
 

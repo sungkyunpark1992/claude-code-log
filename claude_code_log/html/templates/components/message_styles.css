@@ -347,6 +347,7 @@
     margin: 0 auto;
     padding: 0 10px;
     border-radius: 8px 8px 0 0;
+    will-change: transform; /* Force GPU compositor layer — prevents Chrome from dropping fixed elements on very tall pages (2000+ messages) */
 }
 .user-input {
     display: block;

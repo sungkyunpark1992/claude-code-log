@@ -281,15 +281,16 @@ def _get_markdown_renderer_escaped() -> mistune.Markdown:
     )
 
 
-def render_markdown(text: str, escape_html: bool = False) -> str:
+def render_markdown(text: str, escape_html: bool = True) -> str:
     """Convert markdown text to HTML using mistune with Pygments syntax highlighting.
 
     Args:
         text: Markdown text to render.
         escape_html: If True, escape raw HTML tags in the source text.
-            Use this for content that may contain user-quoted HTML (e.g. compacted
-            conversation summaries) to prevent unbalanced tags from breaking the
-            page structure.
+            Default is True to prevent conversation content containing literal
+            HTML tags (e.g. <select>, <div style="...">) from corrupting the
+            page DOM structure. Code blocks are not affected — mistune handles
+            them separately with proper escaping regardless of this setting.
     """
     # Track markdown rendering time if enabled
     with timing_stat("_markdown_timings"):
@@ -338,7 +339,7 @@ def render_markdown_collapsible(
     css_class: str,
     line_threshold: int = 20,
     preview_line_count: int = 5,
-    escape_html: bool = False,
+    escape_html: bool = True,
 ) -> str:
     """Render markdown content, making it collapsible if it exceeds a line threshold.
 

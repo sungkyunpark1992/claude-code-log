@@ -199,6 +199,7 @@ pre {
     padding-bottom: 20px;
     gap: 10px;
     z-index: 99;
+    will-change: transform; /* Force GPU compositor layer — prevents Chrome from dropping fixed elements on very tall pages (2000+ messages) */
 }
 
 .floating-btn {
