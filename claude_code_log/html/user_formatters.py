@@ -180,17 +180,16 @@ def format_bash_output_content(
 def format_user_text_content(text: str) -> str:
     """Format plain user text content as HTML.
 
-    User text is displayed as-is in preformatted blocks to preserve
-    formatting and whitespace.
+    User text is rendered as markdown and made collapsible if it exceeds
+    the line threshold, consistent with assistant message formatting.
 
     Args:
         text: The raw user message text
 
     Returns:
-        HTML string with escaped text in a pre tag
+        HTML string with rendered markdown, optionally wrapped in collapsible details
     """
-    escaped_text = escape_html(text)
-    return f"<pre>{escaped_text}</pre>"
+    return render_markdown_collapsible(text, "user-text", line_threshold=20)
 
 
 def format_user_text_model_content(

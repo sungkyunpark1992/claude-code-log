@@ -18,6 +18,7 @@
 9. [인덱스 페이지 새로고침 시 자동 재생성](#9-인덱스-페이지-새로고침-시-자동-재생성)
 10. [빈 말풍선 하단 고정 (Sticky Prompt)](#10-빈-말풍선-하단-고정-sticky-prompt)
 11. [플로팅 버튼 우측 사이드바 고정](#11-플로팅-버튼-우측-사이드바-고정)
+12. [User 메시지 긴 내용 접기](#12-user-메시지-긴-내용-접기)
 
 ---
 
@@ -713,6 +714,33 @@ body {
 
 ---
 
+## 12. User 메시지 긴 내용 접기
+
+**목적**: Assistant 답변과 동일하게, User 메시지도 20줄 초과 시 자동으로 접히도록 변경.
+
+### 배경
+
+기존에 User 메시지는 `<pre>` 태그로 전문 출력했고, Assistant 메시지만 `render_markdown_collapsible()`을 통해 20줄 초과 시 `<details>`로 접혔음. 긴 질문을 입력한 경우 스크롤이 길어지는 문제.
+
+### 수정 파일 (1개)
+
+**`claude_code_log/html/user_formatters.py`** — `format_user_text_content()`:
+
+```python
+# 수정 전
+def format_user_text_content(text: str) -> str:
+    escaped_text = escape_html(text)
+    return f"<pre>{escaped_text}</pre>"
+
+# 수정 후
+def format_user_text_content(text: str) -> str:
+    return render_markdown_collapsible(text, "user-text", line_threshold=20)
+```
+
+> **부작용**: 기존 `<pre>` (날 텍스트)에서 마크다운 렌더링으로 변경됨. 메시지에 `**굵게**`, 코드블록 등이 있으면 렌더링되어 표시됨.
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -763,6 +791,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `2f0726b` | 플로팅 버튼 우측 사이드바 고정 — `#floating-buttons` 컨테이너, `body padding-right: 70px`, dock `right: 60px` |
 | `cbb193f` | SSE `total` 고정 버그 최종 해결 — HTML 마커 방식 완전 폐기, Python `TemplateMessage` 객체 기반 카운트(`get_template_messages()` + `render_fragment()`). `#sse-live-messages` DOM 순서 수정. 테스트 5개 수정. 상세: [LIVE_SYNC.md Bug 8](LIVE_SYNC.md#bug-8-total-값-고정--마커-오염-재발-최종-해결-마커-방식-완전-폐기) |
 | (pending) | sticky 전환 시 레이아웃 점프 버그 수정, 페이지 로드 즉시 하단 고정, 필터 숨김 버그 수정 — 상세 내용은 아래 참고 |
+| (pending) | User 메시지 긴 내용 접기 — `format_user_text_content()` → `render_markdown_collapsible()` 로 변경, 20줄 초과 시 접힘 |
 
 ---
 
