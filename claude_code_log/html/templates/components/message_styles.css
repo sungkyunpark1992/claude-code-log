@@ -348,6 +348,11 @@
     padding: 0 10px;
     border-radius: 8px 8px 0 0;
     will-change: transform; /* Force GPU compositor layer — prevents Chrome from dropping fixed elements on very tall pages (2000+ messages) */
+    pointer-events: none; /* Don't intercept clicks on page content below the dock area */
+}
+/* Restore pointer events on the actual prompt bubble so it remains clickable */
+#prompt-dock.sticky #ccl-live-prompt {
+    pointer-events: auto;
 }
 .user-input {
     display: block;
