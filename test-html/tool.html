@@ -1,0 +1,189 @@
+<div class="message assistant pair_last d-0 d-20" data-message-id="d-44" id="msg-d-44">
+    <div class="header">
+        <span>🤖 Assistant</span>
+        <div class="header-info">
+            <div class="timestamp-row">
+                <span class="timestamp" data-timestamp="2026-04-13T06:46:56.330Z"
+                    title="UTC: 2026. 04. 13. 06:46:56">2026. 04. 13. 15:46:56 <span
+                        style="color: #888; font-size: 0.9em;">(GMT+9)</span></span>
+            </div>
+
+        </div>
+    </div>
+    <div class="content markdown">
+        <div class="assistant-text markdown">
+            <p>두 파일 비교 완료했습니다. 카드 영역을 수정하겠습니다.</p>
+        </div>
+    </div>
+
+    <div class="fold-bar" data-message-id="d-44" data-border-color="assistant">
+
+        <div class="fold-bar-section fold-one-level full-width" data-action="fold-one" data-target="d-44"
+            data-title-unfolded="Fold 1 tool" data-title-folded="Unfold (1st level) 1 tool" title="Fold 1 tool">
+            <span class="fold-icon">▼</span>
+            <span class="fold-label">1 tool</span>
+        </div>
+
+    </div>
+
+</div>
+<!-- tool 부분 -->
+<div class="message tool_use pair_first d-0 d-20 d-44" data-message-id="d-45" id="msg-d-45">
+    <div class="header">
+        <span title="ID: toolu_01UNoBztW65HYym2yQY2UuEU">📝 Edit <span
+                class="tool-summary">c:\Users\User\Desktop\kyochon-prj\fo-komis-fe\src\pages\address\currTab.tsx</span></span>
+        <div class="header-info">
+            <div class="timestamp-row">
+                <span class="timestamp" data-timestamp="2026-04-13T06:47:08.405Z"
+                    title="UTC: 2026. 04. 13. 06:47:08">2026. 04. 13. 15:47:08 <span
+                        style="color: #888; font-size: 0.9em;">(GMT+9)</span></span>
+            </div>
+
+        </div>
+    </div>
+    <div class="content">
+        <div class="edit-tool-content">
+            <div class="edit-diff">
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;div className="in"&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;div className="text"&gt;
+                </div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;p className="tit"&gt;</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> {item.storeNm}</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> <mark
+                        class="diff-char-added">&lt;span&gt;</mark>{item.storeNm}<mark
+                        class="diff-char-added">&lt;/span&gt;</mark></div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;span className="review-num"&gt;
+                </div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Icon icon="ico-comment_16"
+                    /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {/* TODO: 데이터 바인딩 필요 (리뷰 건수) */}
+                </div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> <mark
+                        class="diff-char-removed">&lt;Badge</mark></div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> <mark class="diff-char-added">
+                        245건</mark></div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> txt={item.operYn === 'Y' ? '영업중'
+                    : '영업준비중'}</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> color={item.operYn === 'Y' ? '1'
+                    : '2'}</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> type="outline"</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/span&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/p&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;p
+                    className="txt"&gt;{item.rdnmAddr}&lt;/p&gt;</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> &lt;<mark
+                        class="diff-char-removed">p</mark> className="txt"&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;<mark
+                        class="diff-char-added">div</mark> className="txt<mark
+                        class="diff-char-added">-middle-dot</mark>"&gt;</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> {<mark
+                        class="diff-char-removed">it</mark>e<mark class="diff-char-removed">m.dista</mark>n<mark
+                        class="diff-char-removed">ce</mark>}<mark class="diff-char-removed">km | 배달비
+                        {item.dlvyf?.toLocaleString()}</mark></div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {<mark class="diff-char-added">/*
+                        영업 상태는 op</mark>e<mark class="diff-char-added">rY</mark>n<mark class="diff-char-added">으로 판단
+                        */</mark>}</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;span className="span
+                    text-orange"&gt;{item.operYn === 'Y' ? '영업 중' : '영업준비중'}&lt;/span&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {/* 배달비는 dlvyf 필드 활용 */}</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;span className="span
+                    text-gray"&gt;배달비 {item.dlvyf?.toLocaleString() ?? 0}원&lt;/span&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {/* TODO: 데이터 바인딩 필요 (최소주문금액) */}
+                </div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;span className="span
+                    text-gray"&gt;최소주문 13,900원&lt;/span&gt;</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span> &lt;/<mark
+                        class="diff-char-removed">p</mark>&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/<mark
+                        class="diff-char-added">div</mark>&gt;</div>
+                <div class="diff-line diff-removed"><span class="diff-marker">-</span></div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span><mark class="diff-char-added">
+                        &lt;div className="badge-wrap"&gt;</mark></div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {/* TODO: 데이터 바인딩 필요 (우수가맹점,
+                    위생인증가맹점, 쿠폰 뱃지 노출 여부) */}</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Badge</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> txt={</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Icon
+                    icon="ico-excellent_orange_12" className="start-ico" /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> 우수가맹점</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> }</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> color="5"</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Badge</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> txt={</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Icon
+                    icon="ico-security_blue_12" className="start-ico" /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> 위생인증가맹점</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> }</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> color="7"</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Badge</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> txt={</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;Icon icon="ico-gift_yellow_12"
+                    className="start-ico" /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> 쿠폰</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> }</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> color="3"</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> /&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/div&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;div className="btn-area"&gt;
+                </div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;Button</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> variant="contained"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> size="small"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> className="light-yellow"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span>
+                    disabled={!isAvailableDelivery(item)}</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;Icon</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> icon={</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> isAvailableDelivery(item)</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> ? 'ico-line-delivery_24'</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> : 'ico-line-delivery_off_24'
+                </div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> }</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> width="16"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> height="16"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> className="start-ico"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> /&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> 배달</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/Button&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span></div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;Button</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> variant="contained"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> size="small"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> className="light-yellow"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> disabled={!item.packaging}</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;Icon</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> icon={</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> item.packaging</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> ? 'ico-line-packing_24'</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> : 'ico-line-packing_off_24'</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> }</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> className="start-ico"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> width="16"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> height="16"</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> /&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> 포장</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/Button&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;div className="right"&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> {/* 거리는 distance 필드 활용 */}</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;span
+                    className="feet"&gt;{item.distance}km&lt;/span&gt;</div>
+                <div class="diff-line diff-added"><span class="diff-marker">+</span> &lt;/div&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/div&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/div&gt;</div>
+                <div class="diff-line diff-context"><span class="diff-marker"> </span> &lt;/div&gt;</div>
+            </div>
+        </div>
+    </div>
+
+</div>

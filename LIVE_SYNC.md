@@ -423,6 +423,51 @@ if (pendingUpdate) {
 
 ---
 
+### Bug 10: SSE 동적 메시지의 fold 토글 미작동
+
+**증상**: 페이지 초기 로드 시 이미 존재하던 메시지의 fold-bar는 정상 동작하지만, SSE 실시간 동기화로 새로 추가된 메시지의 fold-bar를 클릭해도 접기/펼치기가 동작하지 않음.
+
+**원인 분석**:
+
+1. **초기 리스너 바인딩 방식**: 페이지 로드 시 `querySelectorAll('.fold-bar-section')`으로 **그 시점에 존재하는 요소만** 탐색하여 각각 `addEventListener('click', ...)` 부착
+   ```javascript
+   // 기존 코드 — 페이지 로드 시점 요소에만 바인딩
+   const foldBarSections = document.querySelectorAll('.fold-bar-section');
+   foldBarSections.forEach(section => {
+       section.addEventListener('click', function(e) { ... });
+   });
+   ```
+
+2. **SSE 동적 추가**: iframe sandbox → `adoptNode()`로 DOM에 추가된 새 메시지 노드는 초기 `querySelectorAll` 실행 이후에 추가되므로, 클릭 이벤트 리스너가 없음
+
+3. **리스너 재바인딩 부재**: SSE `iframe.onload` 콜백에서 `convertTimestamps()`, `initEmptyPrompt()` 등 후처리는 있지만, fold 리스너 재초기화는 호출하지 않음
+
+**수정** (`transcript.html`):
+
+개별 요소 바인딩을 **이벤트 위임(event delegation)** 패턴으로 변경. `document.body`에 한 번만 리스너를 등록하고, 클릭 이벤트가 버블업될 때 `closest('.fold-bar-section')`으로 대상 판별:
+
+```javascript
+// 수정: 이벤트 위임 — 동적 추가 요소에도 자동 적용
+document.body.addEventListener('click', function(e) {
+    var section = e.target.closest('.fold-bar-section');
+    if (!section) return;
+    e.stopPropagation();
+    var action = section.getAttribute('data-action');
+    var targetId = section.getAttribute('data-target');
+    var isFolded = section.classList.contains('folded');
+
+    if (action === 'fold-one') {
+        handleFoldOne(targetId, isFolded, section);
+    } else if (action === 'fold-all') {
+        handleFoldAll(targetId, isFolded, section);
+    }
+});
+```
+
+**핵심**: 이벤트 위임은 부모 요소(body)에 리스너 하나만 등록하므로, 이후 DOM에 추가되는 모든 `.fold-bar-section` 요소가 별도 바인딩 없이 자동으로 fold 기능을 갖게 됨. SSE `iframe.onload`에 별도 초기화 코드 불필요.
+
+---
+
 ## 6. 현재 구현 코드
 
 ### 수정 파일 (2개)
@@ -689,6 +734,7 @@ def render_messages(session_id: str) -> Response:
 | 16 | `#sse-live-messages` DOM 위치 | `#prompt-dock` 뒤 | `#prompt-dock` 앞 | 새 메시지가 빈 말풍선 아래에 표시되는 레이아웃 버그 수정 |
 | 17 | 마커 파일 | `<!-- @@CCL_MSG_SPLIT@@ -->`, `<!-- @@CCL_END_CONTAINER@@ -->` in `transcript.html` | 마커 완전 제거 | 마커 방식 폐기 |
 | 18 | `updating` 중 이벤트 처리 | `if (updating) return;` — 완전 스킵 | `pendingUpdate` 플래그 + 처리 완료 후 재fetch | Bug 9: Thinking/Text 별도 엔트리 → 두 번째 이벤트 유실 |
+| 19 | fold-bar 이벤트 바인딩 | `querySelectorAll().forEach(addEventListener)` — 초기 요소만 | `document.body` 이벤트 위임 (`closest()`) | Bug 10: SSE 동적 메시지에 리스너 없음 |
 
 ### 관련 커밋
 

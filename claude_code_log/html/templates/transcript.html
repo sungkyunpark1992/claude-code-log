@@ -535,23 +535,20 @@
             applyFilter();
 
             // Fold/unfold functionality with horizontal fold bars
-            const foldBarSections = document.querySelectorAll('.fold-bar-section');
+            // Use event delegation so dynamically added messages (SSE live sync) also work
+            document.body.addEventListener('click', function(e) {
+                var section = e.target.closest('.fold-bar-section');
+                if (!section) return;
+                e.stopPropagation();
+                var action = section.getAttribute('data-action');
+                var targetId = section.getAttribute('data-target');
+                var isFolded = section.classList.contains('folded');
 
-            foldBarSections.forEach(section => {
-                section.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const action = this.getAttribute('data-action');
-                    const targetId = this.getAttribute('data-target');
-                    const isFolded = this.classList.contains('folded');
-
-                    if (action === 'fold-one') {
-                        // Fold/unfold immediate children only
-                        handleFoldOne(targetId, isFolded, this);
-                    } else if (action === 'fold-all') {
-                        // Fold/unfold all descendants recursively
-                        handleFoldAll(targetId, isFolded, this);
-                    }
-                });
+                if (action === 'fold-one') {
+                    handleFoldOne(targetId, isFolded, section);
+                } else if (action === 'fold-all') {
+                    handleFoldAll(targetId, isFolded, section);
+                }
             });
 
             // Update tooltip based on fold state
