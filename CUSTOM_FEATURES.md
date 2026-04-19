@@ -21,6 +21,7 @@
 12. [User 메시지 긴 내용 접기](#12-user-메시지-긴-내용-접기)
 13. [2000+ 메시지 세션 DOM 오염 수정](#13-2000-메시지-세션-dom-오염-수정)
 14. [세션 페이지 홈 버튼](#14-세션-페이지-홈-버튼)
+15. [인덱스 페이지 로딩 속도 최적화 (cache_only 모드)](#15-인덱스-페이지-로딩-속도-최적화-cache_only-모드)
 
 ---
 
@@ -827,6 +828,49 @@ def render_markdown_collapsible(..., escape_html: bool = True) -> str: ...
 
 ---
 
+## 15. 인덱스 페이지 로딩 속도 최적화 (cache_only 모드)
+
+**목적**: `/` (메인 대시보드) 요청 시 인덱스 페이지 로딩 속도를 20초 → 5~7초로 단축.
+
+### 문제
+
+`/` 요청마다 `process_projects_hierarchy()`가 전체 프로젝트의 JSONL 파싱 + combined HTML + 개별 세션 HTML을 모두 재생성. 인덱스 페이지에 필요한 건 세션 메타데이터(요약, 타임스탬프, 토큰)뿐인데, 불필요한 HTML 생성이 대부분의 시간을 차지.
+
+| 프로젝트 | 이전 (full) | 원인 |
+|----------|------------|------|
+| claude-code-log | 10.2s | 활성 JSONL 18.9MB 전체 파싱 + HTML 생성 |
+| komis-fe | 9.9s | JSONL 변경 없지만 `combined_stale=True` → 25.6MB 재생성 |
+| **합계** | **20.8s** | |
+
+### 수정 파일 (2개)
+
+**`claude_code_log/converter.py`** — `process_projects_hierarchy()`에 `cache_only` 파라미터 추가:
+
+```python
+def process_projects_hierarchy(..., cache_only: bool = False) -> Path:
+```
+
+`cache_only=True` 시:
+- `needs_work` 조건에서 `combined_stale`, `stale_sessions` 제외 → 변경된 JSONL만 체크
+- slow path에서 `convert_jsonl_to()` 대신 `ensure_fresh_cache()`만 호출 → 캐시 메타데이터만 갱신, HTML 생성 스킵
+
+**`claude_code_log/server.py`** — `index()` 라우트:
+
+```python
+process_projects_hierarchy(projects_dir, use_cache=True, silent=True, cache_only=True)
+```
+
+> 제목 변경(`update_title`)과 세션 삭제(`delete_session`)의 호출은 기존 full 모드 유지 — 이들은 인덱스 HTML 재생성이 필요.
+
+### 성능 측정 결과
+
+| 시나리오 | 이전 | cache_only | 개선 |
+|----------|------|-----------|------|
+| 활성 대화 중 | 20.8s | 6.8s | **3배** |
+| 2회차 호출 | 20.8s | 5.0s | **4배** |
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -882,6 +926,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | SSE 이벤트 누락 수정 — `pendingUpdate` 플래그 추가, Thinking만 표시되고 Text 누락되는 문제 해결. 상세: [LIVE_SYNC.md Bug 9](LIVE_SYNC.md#bug-9-sse-updating-플래그에-의한-이벤트-누락--thinking만-표시되고-assistant-응답-미표시) |
 | (pending) | SSE 동적 메시지 fold 토글 수정 — fold-bar 이벤트 리스너를 개별 바인딩에서 이벤트 위임으로 변경. 상세: [LIVE_SYNC.md Bug 10](LIVE_SYNC.md#bug-10-sse-동적-메시지의-fold-토글-미작동) |
 | (pending) | 세션 페이지 홈 버튼 — `<h1>` 왼쪽에 🏠 아이콘 추가, 클릭 시 메인 대시보드(`/`)로 이동 |
+| (pending) | 인덱스 로딩 속도 최적화 — `process_projects_hierarchy(cache_only=True)` 추가, `/` 라우트에서 HTML 생성 스킵. 20.8s → 5~7s |
 
 ---
 

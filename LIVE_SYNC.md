@@ -774,7 +774,7 @@ def render_messages(session_id: str) -> Response:
 def index() -> Response:
     from .converter import process_projects_hierarchy
 
-    process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+    process_projects_hierarchy(projects_dir, use_cache=True, silent=True, cache_only=True)
     index_file = projects_dir / "index.html"
     if index_file.exists():
         response = send_file(index_file)
@@ -783,4 +783,4 @@ def index() -> Response:
     return Response(LOADING_HTML, mimetype="text/html")
 ```
 
-> **핵심**: `use_cache=True`로 호출하므로 변경된 파일만 처리. 캐시 덕분에 대부분의 경우 빠르게 완료. index.html이 없으면(삭제된 경우) 로딩 화면 표시 후 재생성 완료 시 자동 전환 (섹션 6 참조).
+> **핵심**: `cache_only=True`로 호출하여 캐시 메타데이터만 갱신하고 HTML 생성을 스킵. 인덱스 페이지에 필요한 세션 목록/요약 정보는 캐시에서 조회. 이 최적화로 20.8s → 5~7s로 단축. index.html이 없으면(삭제된 경우) 로딩 화면 표시 후 재생성 완료 시 자동 전환 (섹션 6 참조).

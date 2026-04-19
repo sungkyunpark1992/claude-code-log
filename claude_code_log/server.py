@@ -107,7 +107,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
     def index() -> Response:
         from .converter import process_projects_hierarchy
 
-        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True, cache_only=True)
         index_file = projects_dir / "index.html"
         if index_file.exists():
             response = send_file(index_file)

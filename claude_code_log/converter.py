@@ -1687,6 +1687,7 @@ def process_projects_hierarchy(
     image_export_mode: Optional[str] = None,
     silent: bool = True,
     page_size: int = 2000,
+    cache_only: bool = False,
 ) -> Path:
     """Process the entire ~/.claude/projects/ hierarchy and create linked output files.
 
@@ -1700,6 +1701,8 @@ def process_projects_hierarchy(
         image_export_mode: Image export mode for markdown
         silent: If True, suppress verbose per-file logging (show summary only)
         page_size: Maximum messages per page for combined transcript pagination
+        cache_only: If True, only update cache metadata (skip HTML generation).
+            Much faster — used by the index route where only session metadata is needed.
     """
     import time
 
@@ -1800,12 +1803,16 @@ def process_projects_hierarchy(
                 combined_stale = True
 
             # Determine if we need to do any work
-            needs_work = (
-                bool(modified_files)
-                or bool(stale_sessions)
-                or combined_stale
-                or not output_path.exists()
-            )
+            if cache_only:
+                # cache_only mode: only care about modified JSONL files
+                needs_work = bool(modified_files)
+            else:
+                needs_work = (
+                    bool(modified_files)
+                    or bool(stale_sessions)
+                    or combined_stale
+                    or not output_path.exists()
+                )
 
             # Build archived suffix for output (shown on both cached and work paths)
             archived_suffix = (
@@ -1831,19 +1838,29 @@ def process_projects_hierarchy(
                     any_cache_updated = True
                     projects_with_updates += 1
 
-                # Generate output for this project (handles cache updates internally)
-                output_path = convert_jsonl_to(
-                    output_format,
-                    project_dir,
-                    None,
-                    from_date,
-                    to_date,
-                    generate_individual_sessions,
-                    use_cache,
-                    silent=silent,
-                    image_export_mode=image_export_mode,
-                    page_size=page_size,
-                )
+                if cache_only:
+                    # Cache-only mode: update cache metadata without HTML generation
+                    ensure_fresh_cache(
+                        project_dir,
+                        cache_manager,
+                        from_date,
+                        to_date,
+                        silent,
+                    )
+                else:
+                    # Full mode: generate HTML output (handles cache updates internally)
+                    output_path = convert_jsonl_to(
+                        output_format,
+                        project_dir,
+                        None,
+                        from_date,
+                        to_date,
+                        generate_individual_sessions,
+                        use_cache,
+                        silent=silent,
+                        image_export_mode=image_export_mode,
+                        page_size=page_size,
+                    )
 
                 # Track timing
                 stats.total_time = time.time() - project_start_time
@@ -1851,9 +1868,9 @@ def process_projects_hierarchy(
                 progress_parts: List[str] = []
                 if stats.files_updated > 0:
                     progress_parts.append(f"{stats.files_updated} files updated")
-                if stats.sessions_regenerated > 0:
+                if stats.sessions_regenerated > 0 and not cache_only:
                     progress_parts.append(f"{stats.sessions_regenerated} sessions")
-                detail = ", ".join(progress_parts) if progress_parts else "regenerated"
+                detail = ", ".join(progress_parts) if progress_parts else ("cache updated" if cache_only else "regenerated")
                 print(
                     f"  {project_dir.name}: {detail}{archived_suffix} ({stats.total_time:.1f}s)"
                 )
