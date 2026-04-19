@@ -20,6 +20,7 @@
 11. [플로팅 버튼 우측 사이드바 고정](#11-플로팅-버튼-우측-사이드바-고정)
 12. [User 메시지 긴 내용 접기](#12-user-메시지-긴-내용-접기)
 13. [2000+ 메시지 세션 DOM 오염 수정](#13-2000-메시지-세션-dom-오염-수정)
+14. [세션 페이지 홈 버튼](#14-세션-페이지-홈-버튼)
 
 ---
 
@@ -794,6 +795,38 @@ def render_markdown_collapsible(..., escape_html: bool = True) -> str: ...
 
 ---
 
+## 14. 세션 페이지 홈 버튼
+
+**목적**: 세션 페이지에서 메인 대시보드(`/`)로 바로 이동할 수 있는 홈 아이콘 제공.
+
+### 수정 파일 (2개)
+
+**`claude_code_log/html/templates/transcript.html`** — `<h1>` 태그 내 홈 링크 추가:
+
+```html
+<h1 id="title"><a href="/" class="home-btn" title="메인 대시보드">🏠</a>{{ title }}</h1>
+```
+
+**`claude_code_log/html/templates/components/global_styles.css`** — `.home-btn` 스타일:
+
+```css
+.home-btn {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-decoration: none;
+    font-size: 0.7em;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+.home-btn:hover { opacity: 1.0; }
+```
+
+> `h1`에 `position: relative` 추가하여 `.home-btn`의 `absolute` 기준점으로 사용. 평소 반투명, hover 시 선명해지는 방식으로 제목 가독성에 방해되지 않게 처리.
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -848,6 +881,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 2000+ 메시지 세션 DOM 오염 수정 — `render_markdown`/`render_markdown_collapsible` `escape_html` 기본값 `True`로 변경, `will-change: transform` 추가 |
 | (pending) | SSE 이벤트 누락 수정 — `pendingUpdate` 플래그 추가, Thinking만 표시되고 Text 누락되는 문제 해결. 상세: [LIVE_SYNC.md Bug 9](LIVE_SYNC.md#bug-9-sse-updating-플래그에-의한-이벤트-누락--thinking만-표시되고-assistant-응답-미표시) |
 | (pending) | SSE 동적 메시지 fold 토글 수정 — fold-bar 이벤트 리스너를 개별 바인딩에서 이벤트 위임으로 변경. 상세: [LIVE_SYNC.md Bug 10](LIVE_SYNC.md#bug-10-sse-동적-메시지의-fold-토글-미작동) |
+| (pending) | 세션 페이지 홈 버튼 — `<h1>` 왼쪽에 🏠 아이콘 추가, 클릭 시 메인 대시보드(`/`)로 이동 |
 
 ---
 

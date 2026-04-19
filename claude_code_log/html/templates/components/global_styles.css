@@ -103,6 +103,22 @@ h1 {
     color: #2c3e50;
     margin-bottom: 20px;
     font-size: 1.8em;
+    position: relative;
+}
+
+.home-btn {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-decoration: none;
+    font-size: 0.7em;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.home-btn:hover {
+    opacity: 1.0;
 }
 
 /* Common typography */
