@@ -247,12 +247,14 @@ pre {
     color: var(--text-muted);
 }
 
-/* Floating buttons order (top→bottom in container = 📆 🔍 📋 ⬆️ ⬇️) */
+/* Floating buttons order (top→bottom in container = 📆 🔍 📋 ▲ ▼ ⬆️ ⬇️) */
 .timeline-toggle.floating-btn  { order: 1; }
 .filter-messages.floating-btn  { order: 2; }
 .toggle-details.floating-btn   { order: 3; }
-.scroll-top.floating-btn       { order: 4; }
-.scroll-bottom.floating-btn    { order: 5; }
+.prev-user-msg.floating-btn    { order: 4; }
+.next-user-msg.floating-btn    { order: 5; }
+.scroll-top.floating-btn       { order: 6; }
+.scroll-bottom.floating-btn    { order: 7; }
 
 @media (max-width: 1280px) {
     .header > span:first-child {

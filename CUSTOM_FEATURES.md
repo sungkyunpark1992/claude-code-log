@@ -26,6 +26,7 @@
 17. [빈 프롬프트 실시간 모델 배지 (SSE)](#17-빈-프롬프트-실시간-모델-배지-sse)
 18. [watchdog 파일 감시 (폴링 → OS 네이티브)](#18-watchdog-파일-감시-폴링--os-네이티브)
 19. [미인식 엔트리 타입 경고 제거](#19-미인식-엔트리-타입-경고-제거)
+20. [User 말풍선 간 이동 버튼 (▲▼)](#20-user-말풍선-간-이동-버튼-)
 
 ---
 
@@ -1228,6 +1229,81 @@ elif entry_type in {
 
 ---
 
+## 20. User 말풍선 간 이동 버튼 (▲▼)
+
+**목적**: 세션 페이지 우측 사이드바에 ▲▼ 버튼을 추가해 User 말풍선 사이를 순서대로 이동.
+
+### 동작
+
+- **▲**: 현재 뷰포트 상단 기준 50px 이상 위에 있는 마지막 User 말풍선으로 이동
+- **▼**: 현재 뷰포트 상단 기준 50px 아래에 있는 첫 번째 User 말풍선으로 이동
+- 클릭 없이 현재 스크롤 위치 기준으로 자동 탐색
+- `.empty-prompt`, `.session-header`, `.filtered-hidden` 제외
+
+### 핵심 설계: ±50px 임계값
+
+`scrollIntoView({ block: 'start' })` 후 해당 요소의 `getBoundingClientRect().top`이 정확히 0이 아니라 `-1~-3px`로 미세하게 음수로 남는 브라우저 특성이 있음. 임계값 없이 `top < 0`으로 탐지하면 같은 말풍선이 재탐지되어 ▲가 연속으로 작동하지 않는 버그 발생.
+
+▼는 `top > 50`, ▲는 `top < -50`으로 대칭 설계하여 이 문제를 방지.
+
+### 수정 파일 (2개)
+
+#### 20-1. `claude_code_log/html/templates/transcript.html`
+
+**HTML**: `#floating-buttons` 안에 버튼 추가 (📋 다음, ⬆️ 앞):
+```html
+<button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
+<button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
+```
+
+**JS**: DOMContentLoaded 블록 안에 IIFE로 추가:
+```javascript
+(function() {
+    function getUserMsgs() {
+        return Array.from(document.querySelectorAll(
+            '.message.user:not(.empty-prompt):not(.session-header):not(.filtered-hidden)'
+        ));
+    }
+
+    document.getElementById('prevUserMsg').addEventListener('click', function() {
+        var msgs = getUserMsgs();
+        if (!msgs.length) return;
+        for (var i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].getBoundingClientRect().top < -50) {
+                msgs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+        }
+        msgs[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    document.getElementById('nextUserMsg').addEventListener('click', function() {
+        var msgs = getUserMsgs();
+        if (!msgs.length) return;
+        for (var i = 0; i < msgs.length; i++) {
+            if (msgs[i].getBoundingClientRect().top > 50) {
+                msgs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+        }
+        msgs[msgs.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+})();
+```
+
+#### 20-2. `claude_code_log/html/templates/components/global_styles.css`
+
+버튼 순서 추가 (📋 다음, ⬆️⬇️ 앞):
+```css
+/* Floating buttons order (top→bottom: 📆 🔍 📋 ▲ ▼ ⬆️ ⬇️) */
+.prev-user-msg.floating-btn    { order: 4; }
+.next-user-msg.floating-btn    { order: 5; }
+.scroll-top.floating-btn       { order: 6; }
+.scroll-bottom.floating-btn    { order: 7; }
+```
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1286,6 +1362,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `0757d84` | 인덱스 로딩 속도 최적화 — `process_projects_hierarchy(cache_only=True)` 추가, `/` 라우트에서 HTML 생성 스킵. 20.8s → 5~7s |
 | (pending) | 모델 배지 — Assistant 메시지 헤더에 모델명 배지 표시 (`Sonnet 4.6`, `Opus 4.7` 등) |
 | (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog + JSONL-first 모델 우선순위 수정 + 미인식 타입 경고 제거 |
+| (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
 
 ---
 

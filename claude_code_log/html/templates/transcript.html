@@ -188,6 +188,8 @@
         <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
         <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+        <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
+        <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
         <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
     </div>
@@ -890,6 +892,44 @@
 
 
             {% include 'components/session_edit_script.js' %}
+
+            // User message navigation (▲▼)
+            (function() {
+                function getUserMsgs() {
+                    return Array.from(document.querySelectorAll(
+                        '.message.user:not(.empty-prompt):not(.session-header):not(.filtered-hidden)'
+                    ));
+                }
+
+                document.getElementById('prevUserMsg').addEventListener('click', function() {
+                    var msgs = getUserMsgs();
+                    if (!msgs.length) return;
+                    // ▼의 top > 50과 대칭: 뷰포트 상단보다 50px 이상 위에 있는 마지막 말풍선으로 이동
+                    // (threshold 없이 top < 0으로 하면 scrollIntoView 후 top이 -1~-3px로 남아
+                    //  같은 말풍선이 재탐지되는 버그 발생)
+                    for (var i = msgs.length - 1; i >= 0; i--) {
+                        if (msgs[i].getBoundingClientRect().top < -50) {
+                            msgs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            return;
+                        }
+                    }
+                    msgs[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+
+                document.getElementById('nextUserMsg').addEventListener('click', function() {
+                    var msgs = getUserMsgs();
+                    if (!msgs.length) return;
+                    // 뷰포트 상단 기준 50px 아래에 있는 첫 번째 말풍선으로 이동
+                    for (var i = 0; i < msgs.length; i++) {
+                        if (msgs[i].getBoundingClientRect().top > 50) {
+                            msgs[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            return;
+                        }
+                    }
+                    // 모두 위에 있으면 마지막으로
+                    msgs[msgs.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            })();
         });
     </script>
     <!-- Search functionality script -->
