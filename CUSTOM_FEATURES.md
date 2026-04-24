@@ -72,6 +72,23 @@ window.initEmptyPrompt();
 
 > **주의**: `window.initEmptyPrompt`로 전역 함수 선언 필수. SSE DOM 교체 후 재바인딩에 사용됨 (`ccl-live-prompt` 재생성 후 호출).
 
+> **변경 이력 (blur 복원)**: 클릭 후 내용을 지우고 외부를 클릭하면 `empty-prompt` 상태로 복원되도록 `blur` 리스너 추가. 이에 따라 `{ once: true }` 제거 — 복원 후 재클릭이 가능하도록 클릭 핸들러를 반복 실행 가능하게 변경. `input`/`blur`/`minimize` 리스너는 클릭 핸들러 밖으로 이동하여 한 번만 등록되도록 구조 변경.
+> ```javascript
+> // blur: 내용이 없으면 empty-prompt 복원
+> textarea.addEventListener('blur', function () {
+>     if (!this.value.trim()) {
+>         ep.classList.add('empty-prompt');
+>         this.style.height = '';
+>     }
+> });
+> // 클릭: empty-prompt 상태일 때만 활성화 (once 제거)
+> ep.addEventListener('click', function () {
+>     if (!ep.classList.contains('empty-prompt')) return;
+>     ep.classList.remove('empty-prompt');
+>     textarea.focus();
+> });
+> ```
+
 ---
 
 ## 2. 세션 제목 수정
@@ -1363,6 +1380,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 모델 배지 — Assistant 메시지 헤더에 모델명 배지 표시 (`Sonnet 4.6`, `Opus 4.7` 등) |
 | (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog + JSONL-first 모델 우선순위 수정 + 미인식 타입 경고 제거 |
 | (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
+| (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
 
 ---
 

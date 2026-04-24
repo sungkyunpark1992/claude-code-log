@@ -173,6 +173,7 @@
     <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
     <div id="sse-live-messages"></div>
 <div id="prompt-dock">
+    <!-- 빈 말풍선 -->
     <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'>
             <span>🤷 User</span>
@@ -857,23 +858,28 @@
                     dock.classList.add('sticky');
                 }
 
-                ep.addEventListener('click', function () {
-                    this.classList.remove('empty-prompt');
-                    var textarea = this.querySelector('.user-input');
-                    textarea.addEventListener('input', function () {
-                        this.style.height = 'auto';
-                        var maxH = parseFloat(getComputedStyle(this).maxHeight);
-                        if (this.scrollHeight > maxH) {
-                            this.style.height = maxH + 'px';
-                            this.style.overflowY = 'auto';
-                        } else {
-                            this.style.height = this.scrollHeight + 'px';
-                            this.style.overflowY = 'hidden';
-                        }
-                        // Dock is always sticky — no sticky toggle needed here
-                    });
-                    // Minimize/maximize toggle
-                    var minimizeBtn = this.querySelector('.prompt-minimize-btn');
+                var textarea = ep.querySelector('.user-input');
+                // input/blur/minimize 리스너는 한 번만 등록
+                textarea.addEventListener('input', function () {
+                    this.style.height = 'auto';
+                    var maxH = parseFloat(getComputedStyle(this).maxHeight);
+                    if (this.scrollHeight > maxH) {
+                        this.style.height = maxH + 'px';
+                        this.style.overflowY = 'auto';
+                    } else {
+                        this.style.height = this.scrollHeight + 'px';
+                        this.style.overflowY = 'hidden';
+                    }
+                });
+                // 외부 클릭 시 내용이 비어있으면 empty-prompt 상태로 복원
+                textarea.addEventListener('blur', function () {
+                    if (!this.value.trim()) {
+                        ep.classList.add('empty-prompt');
+                        this.style.height = '';
+                    }
+                });
+                // Minimize/maximize toggle
+                var minimizeBtn = ep.querySelector('.prompt-minimize-btn');
                     if (minimizeBtn) {
                         minimizeBtn.addEventListener('click', function (e) {
                             e.stopPropagation();
@@ -885,8 +891,12 @@
                             }
                         });
                     }
+                // 클릭 시 empty-prompt 상태일 때만 활성화 (once 제거 → blur 복원 후 재클릭 가능)
+                ep.addEventListener('click', function () {
+                    if (!ep.classList.contains('empty-prompt')) return;
+                    ep.classList.remove('empty-prompt');
                     textarea.focus();
-                }, { once: true });
+                });
             };
             window.initEmptyPrompt();
 
