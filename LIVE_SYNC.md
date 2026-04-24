@@ -33,7 +33,7 @@
 
 | 컴포넌트 | 위치 | 역할 |
 |---------|------|------|
-| SSE 스트림 서버 | `server.py` → `stream_session()` | JSONL 파일 폴링, 변경 시 이벤트 전송 |
+| SSE 스트림 서버 | `server.py` → `stream_session()` | watchdog으로 JSONL/settings.json 감시, 변경 시 이벤트 전송 |
 | 메시지 증분 API | `server.py` → `render_messages()` | Python 객체(`TemplateMessage`) 리스트 기반 카운트, `after=N` 이후만 `render_fragment()`로 렌더링 |
 | 동적 세션 렌더링 | `server.py` → `serve_file()` | 세션 페이지 요청 시 JSONL에서 최신 HTML 동적 생성 |
 | EventSource 클라이언트 | `transcript.html` → `<script>` | SSE 수신, iframe sandbox 파싱, DOM 증분 추가 |
@@ -46,11 +46,11 @@
 ```
 1. Claude Code가 JSONL 파일에 새 줄 기록
        ↓
-2. SSE 서버가 2초 폴링으로 파일 크기/수정시간 변경 감지
+2. watchdog Observer가 OS 네이티브 이벤트로 즉각 감지 (ms 단위)
        ↓
-3. 디바운스: 1초간 추가 변경 없을 때까지 대기 (최대 5회)
+3. 버스트 드레인 + 0.3s settle: 연속 쓰기를 묶어 처리, JSONL 안정 확보
        ↓
-4. SSE로 {"type": "updated"} 이벤트 전송
+4. SSE로 {"type": "updated", "model": "..."} 이벤트 전송
        ↓
 5. 브라우저 EventSource가 수신
        ↓
@@ -71,14 +71,14 @@
 |------|------|------|
 | **서버 프레임워크** | Flask (Python) | HTTP/SSE 서빙, API 엔드포인트 |
 | **실시간 통신** | SSE (Server-Sent Events) | 서버→브라우저 단방향 이벤트 스트림 |
-| **파일 변경 감지** | `os.stat()` 폴링 | JSONL 파일 크기/수정시간 비교 (2초 간격) |
-| **데이터 소스** | JSONL 파일 | Claude Code가 기록하는 대화 로그 |
-| **API 응답** | JSON | `{"total": N, "html": "..."}` 형식 |
+| **파일 변경 감지** | `watchdog` (`Observer` + `_SSEFileWatcher`) | OS 네이티브 이벤트 (Windows: ReadDirectoryChangesW, macOS: FSEvents, Linux: inotify). JSONL + settings.json 동시 감시. |
+| **데이터 소스** | JSONL 파일 + `~/.claude/settings.json` | Claude Code 대화 로그 + 전역 모델 설정 |
+| **API 응답** | JSON | `{"total": N, "html": "...", "model": "..."}` 형식 |
 | **HTML 렌더링** | Jinja2 + mistune + Pygments | JSONL → 메시지 파싱 → HTML 생성 |
 | **DOM 조작** | iframe sandbox + `document.adoptNode()` | 격리 환경에서 HTML 파싱 후 안전한 DOM 이동 |
 | **메시지 카운트/분할** | Python `TemplateMessage` 객체 리스트 | `get_template_messages()` → `len()` / `[after:]` 슬라이스 → `render_fragment()` |
 
-추가된 외부 의존성 **없음**. 모두 기존 의존성(Flask, Jinja2 등)만 사용.
+추가된 외부 의존성: `watchdog>=4.0.0` (OS 네이티브 파일 감시). 나머지는 기존 의존성(Flask, Jinja2 등)만 사용.
 
 ---
 
@@ -140,17 +140,22 @@ DOM 삽입 방식의 진화 과정:
 | 빈 프롬프트 ID | `id="sse-empty-prompt"` | `id="ccl-live-prompt"` |
 | 문자열 검색 | `find()` (첫 번째 매칭) | `rfind()` (마지막 매칭, 이중 안전장치) |
 
-### 4-4. 왜 폴링인가? (파일시스템 이벤트 아닌 이유)
+### 4-4. 왜 폴링에서 watchdog으로 전환했나? (역사적 기록)
 
-- `watchdog` 같은 라이브러리 없이 순수 `os.stat()`로 단순 구현
-- 크로스 플랫폼 호환 (Windows/macOS/Linux)
-- 2초 간격으로 CPU 부하 최소
+**초기 선택 이유 (폴링)**: 외부 의존성 없이 순수 `os.stat()`로 단순 구현. 2초 간격으로 CPU 부하 최소.
 
-### 4-5. 디바운스가 필요한 이유
+**전환 이유 (watchdog)**:
+- 2초 폴링 + 5초 디바운스 → 최소 7초 지연. 실시간 동기화와 어울리지 않음.
+- `settings.json`도 함께 감시해야 모델 변경을 즉각 감지할 수 있는데, 폴링으로 두 파일을 함께 감시하면 더 복잡해짐.
+- `watchdog`은 크로스 플랫폼 호환 (Windows: ReadDirectoryChangesW, macOS: FSEvents, Linux: inotify) + 이미 PyPI의 일반적인 패키지.
+- 결과: 즉각 감지 (ms 단위), idle 상태에서 CPU 사용 0.
+
+### 4-5. 버스트 드레인 + settle이 필요한 이유
 
 - Claude Code는 한 번의 응답에서 JSONL에 여러 항목(assistant, tool_use, tool_result, file-history-snapshot 등)을 순차 기록
-- 파일 변경 즉시 읽으면 **쓰다 만 JSONL**을 파싱하게 됨
-- 1초간 추가 변경 없을 때까지 대기 (최대 5회 = 5초)하여 완전한 데이터만 처리
+- 첫 이벤트 즉시 읽으면 **쓰다 만 JSONL**을 파싱하게 됨
+- watchdog은 각 쓰기마다 이벤트를 발생시키므로, 버스트(연속 이벤트)를 Queue에서 드레인 후 0.3s 대기
+- 0.3s 후 다시 드레인하여 짧은 burst 전체를 하나의 이벤트로 처리 (이전 방식: 최대 5초 디바운스)
 
 ### 4-6. empty-prompt 관리
 
@@ -498,38 +503,77 @@ def serve_file(filepath: str) -> Response:
 
 > **핵심**: 세션 페이지를 정적 파일에서 서빙하면 템플릿 변경이 반영되지 않고 내용도 구식임. 동적 렌더링으로 항상 최신.
 
-**SSE 엔드포인트** (폴링 + 디바운스):
+**SSE 엔드포인트** (watchdog + 버스트 드레인):
 ```python
 @app.route("/api/sessions/<session_id>/stream")
 def stream_session(session_id: str) -> Response:
     jsonl_file = _find_session_jsonl(projects_dir, session_id)
 
     def generate():
-        last_size = jsonl_file.stat().st_size
-        last_mtime = jsonl_file.stat().st_mtime
-        while True:
-            time_module.sleep(2)  # 2초 간격 폴링
-            try:
-                stat = jsonl_file.stat()
-            except FileNotFoundError:
-                yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
-                break
-            if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                # Debounce: 파일이 안정될 때까지 대기 (최대 5초)
-                for _ in range(5):
-                    time_module.sleep(1)
+        event_queue: Queue[str] = Queue()
+        handler = _SSEFileWatcher(
+            {jsonl_file: "jsonl", _CLAUDE_SETTINGS_PATH: "settings"},
+            event_queue,
+        )
+        observer = Observer()
+        scheduled_dirs: set[Path] = set()
+        for target in (jsonl_file, _CLAUDE_SETTINGS_PATH):
+            parent = target.parent
+            if parent.exists() and parent not in scheduled_dirs:
+                observer.schedule(handler, str(parent), recursive=False)
+                scheduled_dirs.add(parent)
+        observer.start()
+
+        last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
+        last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
+        last_model = _get_latest_model(jsonl_file)
+
+        try:
+            # 연결 즉시 현재 모델 전송 → 배지 즉시 표시
+            if last_model:
+                yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
+
+            while True:
+                try:
+                    tag = event_queue.get(timeout=15.0)  # idle 시 keepalive
+                except Empty:
+                    yield ":\n\n"
+                    continue
+
+                # 버스트 드레인
+                tags = {tag}
+                try:
+                    while True: tags.add(event_queue.get_nowait())
+                except Empty:
+                    pass
+                time_module.sleep(0.3)
+                try:
+                    while True: tags.add(event_queue.get_nowait())
+                except Empty:
+                    pass
+
+                if "jsonl" in tags:
                     try:
-                        new_stat = jsonl_file.stat()
+                        stat = jsonl_file.stat()
                     except FileNotFoundError:
+                        yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                         break
-                    if new_stat.st_size == stat.st_size and new_stat.st_mtime == stat.st_mtime:
-                        break  # 파일 안정됨
-                    stat = new_stat
-                last_size = stat.st_size
-                last_mtime = stat.st_mtime
-                yield f"data: {json.dumps({'type': 'updated'})}\n\n"
-            else:
-                yield ":\n\n"  # SSE keepalive
+                    if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                        last_size = stat.st_size
+                        last_mtime = stat.st_mtime
+                        model = _get_latest_model(jsonl_file)
+                        last_model = model
+                        yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+                        continue
+
+                # settings.json 변경 → 모델만 갱신
+                current_model = _get_latest_model(jsonl_file)
+                if current_model != last_model:
+                    last_model = current_model
+                    yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+        finally:
+            observer.stop()
+            observer.join(timeout=2)
 
     return Response(generate(), mimetype="text/event-stream",
                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -704,9 +748,8 @@ def render_messages(session_id: str) -> Response:
 ## 7. 현재 한계점
 
 1. **매 요청마다 전체 JSONL 파싱**: 새 메시지 1개를 위해 JSONL 전체를 파싱하고 `TemplateMessage` 리스트를 생성. 단, `render_fragment()`는 `after:` 슬라이스만 렌더링하므로 HTML 생성은 증분으로 이루어짐.
-2. **폴링 기반 감지**: 최소 2초 + 디바운스 1초 = 최소 3초 지연 (파일시스템 이벤트 방식으로 개선 가능)
-3. **Flask 내장 서버 제한**: SSE 연결이 스레드 하나를 점유, 동시 연결 수 제한
-4. **메시지 카운트 기반 동기화**: 메시지 수정/삭제는 감지하지 못함 (추가만 감지)
+2. **Flask 내장 서버 제한**: SSE 연결이 스레드 하나를 점유, 동시 연결 수 제한
+3. **메시지 카운트 기반 동기화**: 메시지 수정/삭제는 감지하지 못함 (추가만 감지)
 
 ---
 
@@ -735,6 +778,10 @@ def render_messages(session_id: str) -> Response:
 | 17 | 마커 파일 | `<!-- @@CCL_MSG_SPLIT@@ -->`, `<!-- @@CCL_END_CONTAINER@@ -->` in `transcript.html` | 마커 완전 제거 | 마커 방식 폐기 |
 | 18 | `updating` 중 이벤트 처리 | `if (updating) return;` — 완전 스킵 | `pendingUpdate` 플래그 + 처리 완료 후 재fetch | Bug 9: Thinking/Text 별도 엔트리 → 두 번째 이벤트 유실 |
 | 19 | fold-bar 이벤트 바인딩 | `querySelectorAll().forEach(addEventListener)` — 초기 요소만 | `document.body` 이벤트 위임 (`closest()`) | Bug 10: SSE 동적 메시지에 리스너 없음 |
+| 20 | 파일 변경 감지 | `time.sleep(2)` + `os.stat()` 폴링 | `watchdog` Observer + `Queue` 브리지 | 즉각 감지 (ms), idle CPU 0, settings.json 동시 감시 |
+| 21 | 모델 배지 | 없음 | SSE `{type:'model'}` 이벤트, JSONL-first 우선순위 | 빈 프롬프트에 현재 모델 실시간 표시, 세션-로컬 정확도 |
+| 22 | settings.json 감시 | 없음 | watchdog이 settings.json도 함께 감시 | `/model` 전환 즉시 모델 배지 갱신 |
+| 23 | 모델 우선순위 | settings.json 전역 우선 | JSONL 마지막 assistant → settings.json 폴백 | 다른 프로젝트 /model 전환이 현재 세션에 영향 주던 버그 수정 |
 
 ### 관련 커밋
 

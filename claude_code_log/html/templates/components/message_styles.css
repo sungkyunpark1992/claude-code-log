@@ -255,6 +255,18 @@
     color: #888;
 }
 
+.model-badge {
+    font-size: 0.72em;
+    font-weight: normal;
+    color: #888;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
 /* Paired message styling */
 .message.pair_first {
     margin-bottom: 0;

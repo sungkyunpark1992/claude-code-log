@@ -911,6 +911,38 @@
         indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;';
         document.body.appendChild(indicator);
 
+        // Model name shortening helper (mirrors Python _shorten_model_name)
+        function shortenModel(model) {
+            if (!model) return null;
+            // Full form: claude-opus-4-7, claude-sonnet-4-6, etc.
+            var m = model.match(/(opus|sonnet|haiku)-(\d+)-(\d+)/i);
+            if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + ' ' + m[2] + '.' + m[3];
+            // Bare form from settings.json: "opus", "sonnet", "haiku" (user ran /model opus)
+            var b = model.match(/^(opus|sonnet|haiku)(?:plan)?$/i);
+            if (b) return b[1].charAt(0).toUpperCase() + b[1].slice(1).toLowerCase();
+            return model;
+        }
+
+        // Update model badge inside the empty prompt bubble
+        function updatePromptModel(model) {
+            var ep = document.getElementById('ccl-live-prompt');
+            if (!ep) return;
+            var span = ep.querySelector('.header > span');
+            if (!span) return;
+            var badge = ep.querySelector('.prompt-model-badge');
+            var label = shortenModel(model);
+            if (label) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'prompt-model-badge model-badge';
+                    span.appendChild(badge);
+                }
+                badge.textContent = label;
+            } else if (badge) {
+                badge.remove();
+            }
+        }
+
         // Authoritative message count from server (marker-based, matches render_messages counting)
         // Fetches with after=999999 → server returns {total: N, html: ""} cheaply (no HTML body)
         var msgCount = {{ messages|length }}; // fallback until async fetch completes
@@ -918,6 +950,7 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 msgCount = data.total;
+                if (data.model) updatePromptModel(data.model);
                 console.log('[SSE] initial message count (server marker count):', msgCount);
             })
             .catch(function() {
@@ -928,7 +961,15 @@
 
         source.onmessage = function(e) {
             var data = JSON.parse(e.data);
+            // Model-only event: user ran /model (no new JSONL entries yet).
+            // Update the empty-prompt badge without refetching messages.
+            if (data.type === 'model') {
+                updatePromptModel(data.model);
+                return;
+            }
             if (data.type === 'updated') {
+                // Show model immediately from SSE event (before fetch completes)
+                if (data.model) updatePromptModel(data.model);
                 if (updating) {
                     pendingUpdate = true;  // Don't skip — remember for later
                     return;
@@ -948,6 +989,7 @@
 
                         var serverTotal = resp.total;
                         var newHtml = resp.html;
+                        if (resp.model) updatePromptModel(resp.model);
 
                         console.log('[SSE] server total:', serverTotal, 'local count:', msgCount, 'new html length:', newHtml ? newHtml.length : 0);
 
@@ -1004,6 +1046,8 @@
                                     '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
                                     '</div>';
                                 dock.appendChild(promptDiv);
+                                // Restore model badge after re-create
+                                if (resp.model) updatePromptModel(resp.model);
                             }
 
                             // Cleanup iframe

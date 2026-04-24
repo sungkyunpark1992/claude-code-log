@@ -22,6 +22,10 @@
 13. [2000+ 메시지 세션 DOM 오염 수정](#13-2000-메시지-세션-dom-오염-수정)
 14. [세션 페이지 홈 버튼](#14-세션-페이지-홈-버튼)
 15. [인덱스 페이지 로딩 속도 최적화 (cache_only 모드)](#15-인덱스-페이지-로딩-속도-최적화-cache_only-모드)
+16. [모델 배지 (Assistant 메시지)](#16-모델-배지-assistant-메시지)
+17. [빈 프롬프트 실시간 모델 배지 (SSE)](#17-빈-프롬프트-실시간-모델-배지-sse)
+18. [watchdog 파일 감시 (폴링 → OS 네이티브)](#18-watchdog-파일-감시-폴링--os-네이티브)
+19. [미인식 엔트리 타입 경고 제거](#19-미인식-엔트리-타입-경고-제거)
 
 ---
 
@@ -871,6 +875,359 @@ process_projects_hierarchy(projects_dir, use_cache=True, silent=True, cache_only
 
 ---
 
+## 16. 모델 배지 (Assistant 메시지)
+
+**목적**: Assistant 메시지 헤더에 어떤 모델이 응답했는지 표시. `claude-sonnet-4-6` → `Sonnet 4.6`.
+
+### 수정 파일 (4개)
+
+#### 16-1. `claude_code_log/models.py` — `MessageMeta.model` 필드 추가
+
+```python
+@dataclass
+class MessageMeta:
+    ...
+    model: Optional[str] = None  # ← 추가
+```
+
+#### 16-2. `claude_code_log/factories/meta_factory.py` — model 필드 채우기
+
+```python
+def create_meta(transcript: BaseTranscriptEntry) -> MessageMeta:
+    model = None
+    if isinstance(transcript, AssistantTranscriptEntry):
+        model = getattr(transcript.message, "model", None)
+    return MessageMeta(
+        ...
+        model=model,
+    )
+```
+
+#### 16-3. `claude_code_log/renderer.py` — `_shorten_model_name()` + 배지 렌더링
+
+```python
+def _shorten_model_name(model: str) -> str:
+    """Convert full model ID to short display label.
+    Examples:
+        "claude-sonnet-4-6"        -> "Sonnet 4.6"
+        "claude-opus-4-7"          -> "Opus 4.7"
+        "claude-haiku-4-5-20251001" -> "Haiku 4.5"
+        "opus"                     -> "Opus"  (from ~/.claude/settings.json)
+    """
+    import re
+    m = re.search(r"(opus|sonnet|haiku)-(\d+)-(\d+)", model, re.IGNORECASE)
+    if m:
+        return f"{m.group(1).capitalize()} {m.group(2)}.{m.group(3)}"
+    b = re.match(r"^(opus|sonnet|haiku)(?:plan)?$", model, re.IGNORECASE)
+    if b:
+        return b.group(1).capitalize()
+    return model
+
+# title_AssistantTextMessage() 내부:
+def title_AssistantTextMessage(self, message: AssistantTextMessage) -> str:
+    if message.meta.is_sidechain:
+        return "Sub-assistant"
+    if message.meta.model:
+        short = _shorten_model_name(message.meta.model)
+        return f'Assistant <span class="model-badge">{short}</span>'
+    return "Assistant"
+```
+
+#### 16-4. `claude_code_log/html/templates/components/message_styles.css` — `.model-badge` 스타일
+
+```css
+.model-badge {
+    font-size: 0.72em;
+    font-weight: normal;
+    color: #888;
+    background: rgba(128, 128, 128, 0.12);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+```
+
+---
+
+## 17. 빈 프롬프트 실시간 모델 배지 (SSE)
+
+**목적**: `🤷 User` 빈 말풍선 옆에 현재 선택된 모델을 실시간으로 표시. `/model opus`로 전환 시 즉시 반영.
+
+### 동작
+
+- SSE 연결 시 서버가 즉시 `{type: 'model', model: 'claude-sonnet-4-6'}` 이벤트 전송
+- 사용자가 `/model opus` 실행 → `settings.json` 변경 → watchdog 감지 → `{type: 'model', model: 'opus'}` 이벤트
+- 빈 말풍선 헤더에 `.prompt-model-badge` 배지 추가/갱신
+
+### 모델 우선순위 (JSONL-first)
+
+**문제**: `~/.claude/settings.json`은 **전역** 파일. A 프로젝트에서 opus로 바꾸면 B 프로젝트 세션 페이지에도 "Opus"가 표시됨.
+
+**해결**: JSONL의 마지막 assistant 엔트리 모델을 우선, settings.json은 폴백(새 세션처럼 아직 assistant 엔트리가 없을 때만)으로 사용.
+
+```python
+def _get_latest_model(jsonl_file: Path) -> Optional[str]:
+    """Priority:
+    1. 마지막 assistant 엔트리의 model (세션-로컬, 다른 VSCode 인스턴스 무영향)
+    2. ~/.claude/settings.json model (폴백: 새 세션에서 아직 응답 없을 때)
+    """
+    return _get_latest_model_from_jsonl(jsonl_file) or _get_current_model_from_settings()
+```
+
+### 수정 파일 (2개)
+
+#### 17-1. `claude_code_log/server.py`
+
+```python
+_CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
+
+def _get_current_model_from_settings() -> Optional[str]:
+    """~/.claude/settings.json에서 현재 선택 모델 반환."""
+    try:
+        data = json.loads(_CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    model = data.get("model")
+    return str(model) if model else None
+
+def _get_latest_model_from_jsonl(jsonl_file: Path) -> Optional[str]:
+    """JSONL에서 마지막 assistant 엔트리의 model 반환."""
+    for line in reversed(jsonl_file.read_text(...).splitlines()):
+        data = json.loads(line)
+        if data.get("type") == "assistant":
+            model = data.get("message", {}).get("model")
+            if model:
+                return str(model)
+    return None
+```
+
+SSE `generate()` 내부:
+```python
+# 연결 즉시 현재 모델 전송
+last_model = _get_latest_model(jsonl_file)
+if last_model:
+    yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
+
+# JSONL 변경 이벤트 전송 시 model 포함
+yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+
+# settings.json 변경 → 모델만 변경
+current_model = _get_latest_model(jsonl_file)
+if current_model != last_model:
+    last_model = current_model
+    yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+```
+
+#### 17-2. `claude_code_log/html/templates/transcript.html`
+
+```javascript
+// 모델명 단축 (Python _shorten_model_name 미러)
+function shortenModel(model) {
+    if (!model) return null;
+    var m = model.match(/(opus|sonnet|haiku)-(\d+)-(\d+)/i);
+    if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase()
+                   + ' ' + m[2] + '.' + m[3];
+    var b = model.match(/^(opus|sonnet|haiku)(?:plan)?$/i);
+    if (b) return b[1].charAt(0).toUpperCase() + b[1].slice(1).toLowerCase();
+    return model;
+}
+
+// 빈 말풍선 배지 업데이트
+function updatePromptModel(model) {
+    var ep = document.getElementById('ccl-live-prompt');
+    if (!ep) return;
+    var span = ep.querySelector('.header > span');
+    if (!span) return;
+    var badge = ep.querySelector('.prompt-model-badge');
+    var label = shortenModel(model);
+    if (label) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'prompt-model-badge model-badge';
+            span.appendChild(badge);
+        }
+        badge.textContent = label;
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+// SSE onmessage에서 처리
+source.onmessage = function(e) {
+    var data = JSON.parse(e.data);
+    if (data.type === 'model') {
+        updatePromptModel(data.model);
+        return;
+    }
+    if (data.type === 'updated') {
+        // ... 기존 처리 ...
+        // 메시지 재생성 후 모델 배지 복원
+        if (resp.model) updatePromptModel(resp.model);
+    }
+};
+```
+
+---
+
+## 18. watchdog 파일 감시 (폴링 → OS 네이티브)
+
+**목적**: SSE 파일 변경 감지를 2초 폴링에서 OS 네이티브 파일시스템 이벤트로 교체. 즉각 반응, 대기 중 CPU 사용 없음.
+
+### 동작
+
+- 이전: `time.sleep(2)` 루프에서 `os.stat()`로 파일 크기/mtime 비교 (2초 지연)
+- 현재: watchdog `Observer`가 OS 이벤트로 즉각 감지, `Queue`로 SSE 루프에 전달
+
+### 수정 파일 (2개)
+
+#### 18-1. `claude_code_log/server.py`
+
+새 import:
+```python
+from queue import Empty, Queue
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+```
+
+`_SSEFileWatcher` 클래스 (모듈 레벨):
+```python
+class _SSEFileWatcher(FileSystemEventHandler):
+    """watchdog 이벤트를 SSE Queue로 브리지."""
+
+    def __init__(self, watched: dict[Path, str], queue: Queue[str]) -> None:
+        super().__init__()
+        self._watched = {p.resolve(): tag for p, tag in watched.items()}
+        self._queue = queue
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def on_created(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def on_moved(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def _notify(self, event: FileSystemEvent) -> None:
+        if event.is_directory:
+            return
+        try:
+            src = Path(str(event.src_path)).resolve()
+        except OSError:
+            return
+        tag = self._watched.get(src)
+        if tag is not None:
+            self._queue.put(tag)
+```
+
+`generate()` 내 watchdog 설정:
+```python
+def generate():
+    event_queue: Queue[str] = Queue()
+    handler = _SSEFileWatcher(
+        {jsonl_file: "jsonl", _CLAUDE_SETTINGS_PATH: "settings"},
+        event_queue,
+    )
+    observer = Observer()
+    scheduled_dirs: set[Path] = set()
+    for target in (jsonl_file, _CLAUDE_SETTINGS_PATH):
+        parent = target.parent
+        if parent.exists() and parent not in scheduled_dirs:
+            observer.schedule(handler, str(parent), recursive=False)
+            scheduled_dirs.add(parent)
+    observer.start()
+
+    try:
+        while True:
+            try:
+                tag = event_queue.get(timeout=15.0)  # 15s keepalive
+            except Empty:
+                yield ":\n\n"  # SSE keepalive
+                continue
+
+            # 버스트 드레인: 연속 쓰기를 묶음 처리
+            tags = {tag}
+            try:
+                while True: tags.add(event_queue.get_nowait())
+            except Empty:
+                pass
+            time_module.sleep(0.3)  # JSONL 쓰기 안정 대기
+            try:
+                while True: tags.add(event_queue.get_nowait())
+            except Empty:
+                pass
+
+            if "jsonl" in tags:
+                # ... updated 이벤트 전송 ...
+            # settings.json 변경 또는 JSONL touch → 모델 재확인
+            current_model = _get_latest_model(jsonl_file)
+            if current_model != last_model:
+                last_model = current_model
+                yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+    finally:
+        observer.stop()
+        observer.join(timeout=2)
+```
+
+> **핵심 설계 결정**:
+> - watchdog은 **디렉토리** 단위로 감시. `jsonl_file.parent`와 `_CLAUDE_SETTINGS_PATH.parent` 각각 schedule.
+> - 같은 부모 디렉토리면 한 번만 schedule (`scheduled_dirs` 세트로 중복 방지).
+> - 15s keepalive: watchdog이 즉각 이벤트를 보내므로 timeout은 순수 idle 시에만 발생.
+> - 0.3s settle: Claude Code가 한 응답에서 JSONL을 여러 번 기록하므로 첫 이벤트 후 짧게 대기 후 재드레인.
+
+#### 18-2. `pyproject.toml`
+
+```toml
+dependencies = [
+    ...
+    "watchdog>=4.0.0",
+    ...
+]
+```
+
+### 이전 방식과 비교
+
+| 항목 | 이전 (폴링) | 현재 (watchdog) |
+|------|------------|----------------|
+| 감지 방식 | `time.sleep(2)` + `os.stat()` 비교 | OS 네이티브 이벤트 (`ReadDirectoryChangesW` / `FSEvents` / `inotify`) |
+| 대기 시간 | 최대 2초 + 디바운스 5초 | 즉각 (ms 단위) + 0.3s settle |
+| idle CPU | 2초마다 stat() 호출 | 이벤트 없으면 Queue.get으로 완전 블록 |
+| keepalive | 2초 sleep 내에서 `:` 전송 | 15s timeout 후 `:` 전송 |
+| settings.json 감시 | 없음 (모델 변경 미감지) | 동일 Observer로 함께 감시 |
+
+---
+
+## 19. 미인식 엔트리 타입 경고 제거
+
+**목적**: 서버 터미널에 반복 출력되던 `not a recognised message type` 경고 제거.
+
+### 배경
+
+Claude Code는 대화 중 내부적으로 여러 타입의 JSONL 엔트리를 기록하는데, 그 중 일부가 기존 silent skip 목록에 없어 경고를 출력함.
+
+**경고 유발 타입**:
+- `last-prompt`: Claude Code가 내부적으로 기록하는 마지막 프롬프트 스냅샷
+- `attachment`: 훅 컨텍스트, TODO 리마인더, 파일 참조 등 부가 정보 (subtypes: `hook_additional_context`, `todo_reminder`, `edited_text_file`, `file`, `compact_file_reference`, `deferred_tools_delta`, `skill_listing`, `date_change`)
+- `ai-title`: Claude Code가 자동 생성하는 세션 제목 후보
+
+### 수정 파일 (1개)
+
+**`claude_code_log/converter.py`** — silent skip 집합에 추가:
+
+```python
+elif entry_type in {
+    "file-history-snapshot",
+    "progress",
+    "last-prompt",   # ← 추가
+    "attachment",    # ← 추가
+    "ai-title",      # ← 추가
+}:
+    pass  # Silently skip internal message types we don't render
+```
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -920,16 +1277,24 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `556e3b4` | 빈 말풍선 하단 고정 (sticky) — `#prompt-dock` 래퍼 방식, 최대 16줄, 헤더 ▼/▲ 토글 |
 | `2f0726b` | 플로팅 버튼 우측 사이드바 고정 — `#floating-buttons` 컨테이너, `body padding-right: 70px`, dock `right: 60px` |
 | `cbb193f` | SSE `total` 고정 버그 최종 해결 — HTML 마커 방식 완전 폐기, Python `TemplateMessage` 객체 기반 카운트(`get_template_messages()` + `render_fragment()`). `#sse-live-messages` DOM 순서 수정. 테스트 5개 수정. 상세: [LIVE_SYNC.md Bug 8](LIVE_SYNC.md#bug-8-total-값-고정--마커-오염-재발-최종-해결-마커-방식-완전-폐기) |
-| (pending) | sticky 전환 시 레이아웃 점프 버그 수정, 페이지 로드 즉시 하단 고정, 필터 숨김 버그 수정 — 상세 내용은 아래 참고 |
-| (pending) | User 메시지 긴 내용 접기 — `format_user_text_content()` → `render_markdown_collapsible()` 로 변경, 20줄 초과 시 접힘 |
-| (pending) | 2000+ 메시지 세션 DOM 오염 수정 — `render_markdown`/`render_markdown_collapsible` `escape_html` 기본값 `True`로 변경, `will-change: transform` 추가 |
-| (pending) | SSE 이벤트 누락 수정 — `pendingUpdate` 플래그 추가, Thinking만 표시되고 Text 누락되는 문제 해결. 상세: [LIVE_SYNC.md Bug 9](LIVE_SYNC.md#bug-9-sse-updating-플래그에-의한-이벤트-누락--thinking만-표시되고-assistant-응답-미표시) |
-| (pending) | SSE 동적 메시지 fold 토글 수정 — fold-bar 이벤트 리스너를 개별 바인딩에서 이벤트 위임으로 변경. 상세: [LIVE_SYNC.md Bug 10](LIVE_SYNC.md#bug-10-sse-동적-메시지의-fold-토글-미작동) |
-| (pending) | 세션 페이지 홈 버튼 — `<h1>` 왼쪽에 🏠 아이콘 추가, 클릭 시 메인 대시보드(`/`)로 이동 |
-| (pending) | 인덱스 로딩 속도 최적화 — `process_projects_hierarchy(cache_only=True)` 추가, `/` 라우트에서 HTML 생성 스킵. 20.8s → 5~7s |
+| `3a110cf` + `6177635` | sticky 전환 시 레이아웃 점프 버그 수정, 페이지 로드 즉시 dock 하단 고정, 필터 숨김 버그 수정 |
+| `36084a4` | User 메시지 긴 내용 접기 — `format_user_text_content()` → `render_markdown_collapsible()` 로 변경, 20줄 초과 시 접힘 |
+| `73b0fb3` | 2000+ 메시지 세션 DOM 오염 수정 — `render_markdown`/`render_markdown_collapsible` `escape_html` 기본값 `True`로 변경, `will-change: transform` 추가 |
+| `12eeb26` | SSE 이벤트 누락 수정 — `pendingUpdate` 플래그 추가, Thinking만 표시되고 Text 누락되는 문제 해결. 상세: [LIVE_SYNC.md Bug 9](LIVE_SYNC.md#bug-9-sse-updating-플래그에-의한-이벤트-누락--thinking만-표시되고-assistant-응답-미표시) |
+| `d1b0236` | SSE 동적 메시지 fold 토글 수정 — fold-bar 이벤트 리스너를 개별 바인딩에서 이벤트 위임으로 변경. 상세: [LIVE_SYNC.md Bug 10](LIVE_SYNC.md#bug-10-sse-동적-메시지의-fold-토글-미작동) |
+| `6d5c034` | 세션 페이지 홈 버튼 — `<h1>` 왼쪽에 🏠 아이콘 추가, 클릭 시 메인 대시보드(`/`)로 이동 |
+| `0757d84` | 인덱스 로딩 속도 최적화 — `process_projects_hierarchy(cache_only=True)` 추가, `/` 라우트에서 HTML 생성 스킵. 20.8s → 5~7s |
+| (pending) | 모델 배지 — Assistant 메시지 헤더에 모델명 배지 표시 (`Sonnet 4.6`, `Opus 4.7` 등) |
+| (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog + JSONL-first 모델 우선순위 수정 + 미인식 타입 경고 제거 |
 
 ---
 
 ## 의존성
 
-추가된 외부 의존성 **없음**. 모두 기존 의존성(Flask, Jinja2 등)만 사용.
+추가된 외부 의존성:
+
+| 패키지 | 버전 | 용도 |
+|--------|------|------|
+| `watchdog` | `>=4.0.0` | OS 네이티브 파일 변경 감지 (Windows: ReadDirectoryChangesW, macOS: FSEvents, Linux: inotify). SSE 폴링 2초 → 즉각 반응으로 교체. |
+
+나머지 기능은 모두 기존 의존성(Flask, Jinja2 등)만 사용.

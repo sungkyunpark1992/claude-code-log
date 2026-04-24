@@ -264,6 +264,7 @@ class MessageMeta:
     agent_id: Optional[str] = None
     cwd: str = ""
     git_branch: Optional[str] = None
+    model: Optional[str] = None  # e.g. "claude-sonnet-4-6"
 
     @classmethod
     def empty(cls, uuid: str = "") -> "MessageMeta":

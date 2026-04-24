@@ -4,7 +4,7 @@ This module handles extraction of common metadata from transcript entries
 that is shared across all message types.
 """
 
-from ..models import BaseTranscriptEntry, MessageMeta
+from ..models import AssistantTranscriptEntry, BaseTranscriptEntry, MessageMeta
 
 
 def create_meta(transcript: BaseTranscriptEntry) -> MessageMeta:
@@ -18,6 +18,10 @@ def create_meta(transcript: BaseTranscriptEntry) -> MessageMeta:
     Returns:
         MessageMeta with identity and context fields
     """
+    model = None
+    if isinstance(transcript, AssistantTranscriptEntry):
+        model = getattr(transcript.message, "model", None)
+
     return MessageMeta(
         # Identity fields
         session_id=transcript.sessionId,
@@ -30,4 +34,5 @@ def create_meta(transcript: BaseTranscriptEntry) -> MessageMeta:
         agent_id=transcript.agentId,
         cwd=transcript.cwd,
         git_branch=transcript.gitBranch,
+        model=model,
     )

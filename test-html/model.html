@@ -1,0 +1,23 @@
+<div class="message assistant d-0 d-571" data-message-id="d-576" id="msg-d-576">
+    <div class="header">
+        <span>🤖 Assistant</span>
+        <div class="header-info">
+            <div class="timestamp-row">
+                <span class="timestamp" data-timestamp="2026-04-22T01:14:50.980Z" title="UTC: 2026. 04. 22. 01:14:50">2026. 04. 22. 10:14:50 <span style="color: #888; font-size: 0.9em;">(GMT+9)</span></span>
+            </div>
+            
+            <span class="token-usage">Input: 1 | Output: 264 | Cache Creation: 2203 | Cache Read: 138472</span>
+            
+        </div>
+    </div>
+    <div class="content markdown"><div class="assistant-text markdown"><p>이제 퍼블리셔 구조와 동일합니다.</p>
+<p><strong>변경 요약:</strong></p>
+<ul>
+<li><code>QueryClientProvider</code>, <code>QueryClient</code>, <code>useQuery</code>, <code>@tanstack/react-query</code> 전부 제거</li>
+<li><code>useState + useEffect + Promise.all</code>로 3개 API 병렬 호출</li>
+<li><code>GiftVoucherContent</code> / <code>GiftVoucher</code> 두 함수를 하나의 <code>export default function GiftVoucher()</code>로 통합</li>
+</ul>
+<p>퍼블리셔와의 유일한 차이는 API 데이터 상태(<code>bestList</code>, <code>menuList</code>, <code>amountList</code>)와 <code>useEffect</code>뿐입니다. 자식 컴포넌트(<code>MobileVoucher</code>, <code>PaperVoucher</code>)는 수정 불필요합니다.</p>
+</div></div>
+    
+</div>

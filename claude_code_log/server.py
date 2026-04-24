@@ -6,9 +6,49 @@ import threading
 import time as time_module
 import webbrowser
 from pathlib import Path
+from queue import Empty, Queue
 from typing import Optional
 
 from flask import Flask, Response, abort, jsonify, request, send_file
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+
+
+class _SSEFileWatcher(FileSystemEventHandler):
+    """Pushes a tag into a queue when a watched file is modified.
+
+    watchdog watches directories, not files — so we filter events by
+    resolved path and only forward those for paths we care about.
+    """
+
+    def __init__(
+        self,
+        watched: "dict[Path, str]",
+        queue: "Queue[str]",
+    ) -> None:
+        super().__init__()
+        self._watched = {p.resolve(): tag for p, tag in watched.items()}
+        self._queue = queue
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def on_created(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def on_moved(self, event: FileSystemEvent) -> None:
+        self._notify(event)
+
+    def _notify(self, event: FileSystemEvent) -> None:
+        if event.is_directory:
+            return
+        try:
+            src = Path(str(event.src_path)).resolve()
+        except OSError:
+            return
+        tag = self._watched.get(src)
+        if tag is not None:
+            self._queue.put(tag)
 
 
 def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
@@ -27,6 +67,61 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
             return jsonl_file
 
     return None
+
+
+_CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
+
+
+def _get_current_model_from_settings() -> Optional[str]:
+    """Return the currently selected model from ~/.claude/settings.json.
+
+    Claude Code writes the active model here when the user runs /model.
+    This reflects the PENDING prompt's model, not the last response's.
+    """
+    try:
+        data = json.loads(_CLAUDE_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    model = data.get("model")
+    return str(model) if model else None
+
+
+def _get_latest_model_from_jsonl(jsonl_file: Path) -> Optional[str]:
+    """Return the model name from the last assistant entry in the JSONL file."""
+    try:
+        lines = jsonl_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            data = json.loads(stripped)
+            if data.get("type") == "assistant":
+                model = data.get("message", {}).get("model")
+                if model:
+                    return str(model)
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return None
+
+
+def _get_latest_model(jsonl_file: Path) -> Optional[str]:
+    """Return the model to display in this session's empty-prompt badge.
+
+    Priority:
+      1. Last assistant entry in THIS session's JSONL (what this session
+         has actually been using — session-local, not affected by /model
+         switches in other VSCode instances)
+      2. ~/.claude/settings.json `model` (fallback for brand-new sessions
+         with no assistant messages yet)
+
+    Rationale: settings.json is GLOBAL across all VSCode instances. Using
+    it as the primary source makes unrelated session pages display the
+    wrong model after a /model switch in another project's instance.
+    """
+    return _get_latest_model_from_jsonl(jsonl_file) or _get_current_model_from_settings()
 
 
 def _get_custom_title(jsonl_file: Path, session_id: str) -> Optional[str]:
@@ -226,34 +321,84 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
             return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
 
         def generate():  # type: ignore[no-untyped-def]
+            event_queue: "Queue[str]" = Queue()
+            handler = _SSEFileWatcher(
+                {jsonl_file: "jsonl", _CLAUDE_SETTINGS_PATH: "settings"},
+                event_queue,
+            )
+            observer = Observer()
+            # watchdog watches directories; one schedule per unique parent.
+            scheduled_dirs: set[Path] = set()
+            for target in (jsonl_file, _CLAUDE_SETTINGS_PATH):
+                parent = target.parent
+                if parent.exists() and parent not in scheduled_dirs:
+                    observer.schedule(handler, str(parent), recursive=False)
+                    scheduled_dirs.add(parent)
+            observer.start()
+
             last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
             last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
-            print(f"[SSE] watching {jsonl_file.name}, size={last_size}, mtime={last_mtime}")
-            while True:
-                time_module.sleep(2)
-                try:
-                    stat = jsonl_file.stat()
-                except FileNotFoundError:
-                    yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
-                    break
-                if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                    # Debounce: wait until file is stable (no changes for 1 second)
-                    # to avoid reading a partially-written JSONL
-                    for _ in range(5):  # max 5 retries (5 seconds total)
-                        time_module.sleep(1)
+            last_model = _get_latest_model(jsonl_file)
+
+            try:
+                # Initial model so the badge is correct immediately on connect
+                if last_model:
+                    yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
+                print(f"[SSE] watchdog watching {jsonl_file.name} + settings.json")
+
+                while True:
+                    try:
+                        # 15s keepalive — watchdog pushes events immediately,
+                        # so this timeout only fires during true idle.
+                        tag = event_queue.get(timeout=15.0)
+                    except Empty:
+                        yield ":\n\n"  # SSE keepalive
+                        continue
+
+                    # Drain any burst of events (assistant streaming writes
+                    # the JSONL many times in quick succession).
+                    tags = {tag}
+                    try:
+                        while True:
+                            tags.add(event_queue.get_nowait())
+                    except Empty:
+                        pass
+
+                    # Small settle delay so we don't read a half-written JSONL
+                    time_module.sleep(0.3)
+                    # Drain again in case more writes arrived during the sleep
+                    try:
+                        while True:
+                            tags.add(event_queue.get_nowait())
+                    except Empty:
+                        pass
+
+                    # JSONL change → send `updated` so client re-fetches messages
+                    if "jsonl" in tags:
                         try:
-                            new_stat = jsonl_file.stat()
+                            stat = jsonl_file.stat()
                         except FileNotFoundError:
+                            yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                             break
-                        if new_stat.st_size == stat.st_size and new_stat.st_mtime == stat.st_mtime:
-                            break  # file is stable
-                        stat = new_stat
-                    print(f"[SSE] change detected: size {last_size}->{stat.st_size}, sending updated")
-                    last_size = stat.st_size
-                    last_mtime = stat.st_mtime
-                    yield f"data: {json.dumps({'type': 'updated'})}\n\n"
-                else:
-                    yield ":\n\n"  # SSE keepalive
+                        if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                            print(f"[SSE] jsonl changed: size {last_size}->{stat.st_size}")
+                            last_size = stat.st_size
+                            last_mtime = stat.st_mtime
+                            model = _get_latest_model(jsonl_file)
+                            last_model = model
+                            yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+                            continue
+
+                    # settings.json change (or JSONL touch with no real growth)
+                    # → re-evaluate the displayed model
+                    current_model = _get_latest_model(jsonl_file)
+                    if current_model != last_model:
+                        last_model = current_model
+                        print(f"[SSE] model changed -> {current_model}")
+                        yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+            finally:
+                observer.stop()
+                observer.join(timeout=2)
 
         return Response(
             generate(),
@@ -297,12 +442,14 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         template_messages = renderer.get_template_messages(messages, session_id=session_id)
         total_msgs = len(template_messages)
 
+        model = _get_latest_model(jsonl_file)
+
         after = request.args.get('after', type=int)
         if after is not None:
             if after >= total_msgs:
                 print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, up-to-date")
                 return Response(
-                    json.dumps({"total": total_msgs, "html": ""}),
+                    json.dumps({"total": total_msgs, "html": "", "model": model}),
                     mimetype="application/json",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
                 )
@@ -310,7 +457,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
             new_html = renderer.render_fragment(new_tmpl)
             print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, new={len(new_tmpl)}")
             return Response(  # type: ignore[return-value]
-                json.dumps({"total": total_msgs, "html": new_html}),
+                json.dumps({"total": total_msgs, "html": new_html, "model": model}),
                 mimetype="application/json",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
@@ -319,7 +466,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         full_html = renderer.render_fragment(template_messages)
         print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, fragment_len={len(full_html)}")
         return Response(  # type: ignore[return-value]
-            json.dumps({"total": total_msgs, "html": full_html}),
+            json.dumps({"total": total_msgs, "html": full_html, "model": model}),
             mimetype="application/json",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )

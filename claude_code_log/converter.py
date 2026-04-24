@@ -214,13 +214,13 @@ def load_transcript(
                         # Parse using Pydantic models
                         entry = create_transcript_entry(entry_dict)
                         messages.append(entry)
-                    elif (
-                        entry_type
-                        in [
-                            "file-history-snapshot",  # Internal Claude Code file backup metadata
-                            "progress",  # Real-time progress updates (hook_progress, bash_progress)
-                        ]
-                    ):
+                    elif entry_type in {
+                        "file-history-snapshot",  # Internal Claude Code file backup metadata
+                        "progress",  # Real-time progress updates (hook_progress, bash_progress)
+                        "last-prompt",  # Stores the last prompt text for UI display
+                        "attachment",  # IDE diagnostics, todo reminders, edited file snapshots, etc.
+                        "ai-title",  # Auto-generated session title by Claude
+                    }:
                         # Silently skip internal message types we don't render
                         pass
                     else:

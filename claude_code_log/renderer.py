@@ -293,6 +293,29 @@ class TemplateMessage:
         return _format_type_counts(self.total_descendants_by_type)
 
 
+def _shorten_model_name(model: str) -> str:
+    """Convert full model ID to short display label.
+
+    Examples:
+        "claude-sonnet-4-6" -> "Sonnet 4.6"
+        "claude-opus-4-7"   -> "Opus 4.7"
+        "claude-haiku-4-5-20251001" -> "Haiku 4.5"
+        "opus"              -> "Opus"  (from ~/.claude/settings.json)
+    """
+    import re
+    m = re.search(r"(opus|sonnet|haiku)-(\d+)-(\d+)", model, re.IGNORECASE)
+    if m:
+        family = m.group(1).capitalize()
+        major = m.group(2)
+        minor = m.group(3)
+        return f"{family} {major}.{minor}"
+    # Bare alias from settings.json (e.g., "opus", "sonnet", "haiku", "opusplan")
+    b = re.match(r"^(opus|sonnet|haiku)(?:plan)?$", model, re.IGNORECASE)
+    if b:
+        return b.group(1).capitalize()
+    return model
+
+
 def _format_type_counts(type_counts: dict[str, int]) -> str:
     """Format type counts into human-readable label.
 
@@ -2141,6 +2164,9 @@ class Renderer:
         # Sidechain assistant messages get special title
         if message.meta.is_sidechain:
             return "Sub-assistant"
+        if message.meta.model:
+            short = _shorten_model_name(message.meta.model)
+            return f'Assistant <span class="model-badge">{short}</span>'
         return "Assistant"
 
     def title_ThinkingMessage(
