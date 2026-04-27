@@ -365,11 +365,6 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
             last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
             last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
-            last_settings_mtime = (
-                _CLAUDE_SETTINGS_PATH.stat().st_mtime
-                if _CLAUDE_SETTINGS_PATH.exists()
-                else 0.0
-            )
             last_model = _get_latest_model(jsonl_file)
 
             try:
@@ -378,82 +373,50 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                     yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
                 print(f"[SSE] watchdog watching {jsonl_file.name} + settings.json")
 
-                last_keepalive = time_module.time()
-
                 while True:
-                    # 2s timeout: watchdog fires instantly when it works, but on
-                    # Windows ReadDirectoryChangesW can miss writes to files held
-                    # open by VSCode. Polling the stat() every 2s guarantees we
-                    # catch changes (especially settings.json for /model switches)
-                    # within 2s regardless of watchdog reliability.
                     try:
-                        tag = event_queue.get(timeout=2.0)
-                        tags = {tag}
-                        got_event = True
+                        tag = event_queue.get(timeout=15.0)
                     except Empty:
-                        tags = set()
-                        got_event = False
+                        yield ":\n\n"  # SSE keepalive
+                        continue
 
-                    # Drain any burst of events (assistant streaming writes
-                    # the JSONL many times in quick succession).
+                    # Burst drain + settle
+                    tags = {tag}
+                    try:
+                        while True:
+                            tags.add(event_queue.get_nowait())
+                    except Empty:
+                        pass
+                    time_module.sleep(0.3)
                     try:
                         while True:
                             tags.add(event_queue.get_nowait())
                     except Empty:
                         pass
 
-                    if got_event:
-                        # Small settle delay so we don't read a half-written JSONL
-                        time_module.sleep(0.3)
+                    if "jsonl" in tags:
                         try:
-                            while True:
-                                tags.add(event_queue.get_nowait())
-                        except Empty:
-                            pass
-
-                    # Always stat JSONL directly — don't rely on watchdog alone
-                    try:
-                        stat = jsonl_file.stat()
-                    except FileNotFoundError:
-                        yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
-                        break
-
-                    if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                        print(f"[SSE] jsonl changed: size {last_size}->{stat.st_size}")
-                        last_size = stat.st_size
-                        last_mtime = stat.st_mtime
-                        model = _get_latest_model(jsonl_file)
-                        last_model = model
-                        yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
-                        last_keepalive = time_module.time()
-                        continue
-
-                    # Check settings.json mtime — /model writes here IMMEDIATELY
-                    # but only flushes the JSONL entry at message-send time.
-                    # Polling mtime catches the switch within 2s.
-                    try:
-                        settings_mtime = _CLAUDE_SETTINGS_PATH.stat().st_mtime
-                    except OSError:
-                        settings_mtime = last_settings_mtime
-
-                    if settings_mtime != last_settings_mtime:
-                        last_settings_mtime = settings_mtime
-                        # None → /model default picked; map to the known default model.
-                        current_model = (
-                            _get_current_model_from_settings() or _DEFAULT_MODEL
-                        )
-                        if current_model != last_model:
-                            last_model = current_model
-                            print(f"[SSE] settings.json model -> {current_model}")
-                            yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
-                            last_keepalive = time_module.time()
+                            stat = jsonl_file.stat()
+                        except FileNotFoundError:
+                            yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
+                            break
+                        if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                            print(f"[SSE] jsonl changed: size {last_size}->{stat.st_size}")
+                            last_size = stat.st_size
+                            last_mtime = stat.st_mtime
+                            model = _get_latest_model(jsonl_file)
+                            last_model = model
+                            yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
                             continue
 
-                    # Nothing changed — send SSE keepalive every 15s
-                    now = time_module.time()
-                    if now - last_keepalive >= 15.0:
-                        yield ":\n\n"
-                        last_keepalive = now
+                    # settings.json watchdog event → read directly from settings.json.
+                    # Must NOT use _get_latest_model() here: it prioritises JSONL which
+                    # hasn't been flushed yet (/model only writes to JSONL at message-send).
+                    current_model = _get_current_model_from_settings() or _DEFAULT_MODEL
+                    if current_model != last_model:
+                        last_model = current_model
+                        print(f"[SSE] settings.json model -> {current_model}")
+                        yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
 
             finally:
                 observer.stop()
