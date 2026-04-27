@@ -46,7 +46,7 @@
 ```
 1. Claude Code가 JSONL 파일에 새 줄 기록
        ↓
-2. watchdog Observer가 OS 네이티브 이벤트로 즉각 감지 (ms 단위)
+2. watchdog Observer가 OS 네이티브 이벤트로 즉각 감지 (ms 단위) + 2초 stat() 폴링으로 Windows VSCode 미감지 보완
        ↓
 3. 버스트 드레인 + 0.3s settle: 연속 쓰기를 묶어 처리, JSONL 안정 확보
        ↓
@@ -71,7 +71,7 @@
 |------|------|------|
 | **서버 프레임워크** | Flask (Python) | HTTP/SSE 서빙, API 엔드포인트 |
 | **실시간 통신** | SSE (Server-Sent Events) | 서버→브라우저 단방향 이벤트 스트림 |
-| **파일 변경 감지** | `watchdog` (`Observer` + `_SSEFileWatcher`) | OS 네이티브 이벤트 (Windows: ReadDirectoryChangesW, macOS: FSEvents, Linux: inotify). JSONL + settings.json 동시 감시. |
+| **파일 변경 감지** | `watchdog` (`Observer` + `_SSEFileWatcher`) + 2초 `stat()` 폴링 | watchdog: OS 네이티브 이벤트 즉각 감지. stat() 폴링: Windows VSCode가 파일 열어두는 경우 watchdog 미감지 보완. JSONL + settings.json 동시 감시. |
 | **데이터 소스** | JSONL 파일 + `~/.claude/settings.json` | Claude Code 대화 로그 + 전역 모델 설정 |
 | **API 응답** | JSON | `{"total": N, "html": "...", "model": "..."}` 형식 |
 | **HTML 렌더링** | Jinja2 + mistune + Pygments | JSONL → 메시지 파싱 → HTML 생성 |
@@ -503,7 +503,7 @@ def serve_file(filepath: str) -> Response:
 
 > **핵심**: 세션 페이지를 정적 파일에서 서빙하면 템플릿 변경이 반영되지 않고 내용도 구식임. 동적 렌더링으로 항상 최신.
 
-**SSE 엔드포인트** (watchdog + 버스트 드레인):
+**SSE 엔드포인트** (watchdog + 2초 stat() 하이브리드 폴링):
 ```python
 @app.route("/api/sessions/<session_id>/stream")
 def stream_session(session_id: str) -> Response:
@@ -526,6 +526,10 @@ def stream_session(session_id: str) -> Response:
 
         last_size = jsonl_file.stat().st_size if jsonl_file.exists() else 0
         last_mtime = jsonl_file.stat().st_mtime if jsonl_file.exists() else 0.0
+        last_settings_mtime = (
+            _CLAUDE_SETTINGS_PATH.stat().st_mtime
+            if _CLAUDE_SETTINGS_PATH.exists() else 0.0
+        )
         last_model = _get_latest_model(jsonl_file)
 
         try:
@@ -533,44 +537,69 @@ def stream_session(session_id: str) -> Response:
             if last_model:
                 yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
 
+            last_keepalive = time_module.time()
+
             while True:
+                # 2s timeout: watchdog 즉각 감지 + Windows VSCode 열린 파일 미감지 보완
                 try:
-                    tag = event_queue.get(timeout=15.0)  # idle 시 keepalive
+                    tag = event_queue.get(timeout=2.0)
+                    tags = {tag}
+                    got_event = True
                 except Empty:
-                    yield ":\n\n"
-                    continue
+                    tags = set()
+                    got_event = False
 
                 # 버스트 드레인
-                tags = {tag}
                 try:
                     while True: tags.add(event_queue.get_nowait())
                 except Empty:
                     pass
-                time_module.sleep(0.3)
-                try:
-                    while True: tags.add(event_queue.get_nowait())
-                except Empty:
-                    pass
-
-                if "jsonl" in tags:
+                if got_event:
+                    time_module.sleep(0.3)  # JSONL 쓰기 안정 대기
                     try:
-                        stat = jsonl_file.stat()
-                    except FileNotFoundError:
-                        yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
-                        break
-                    if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                        last_size = stat.st_size
-                        last_mtime = stat.st_mtime
-                        model = _get_latest_model(jsonl_file)
-                        last_model = model
-                        yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+                        while True: tags.add(event_queue.get_nowait())
+                    except Empty:
+                        pass
+
+                # JSONL stat() 직접 폴링 — watchdog에만 의존하지 않음
+                try:
+                    stat = jsonl_file.stat()
+                except FileNotFoundError:
+                    yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
+                    break
+                if stat.st_size != last_size or stat.st_mtime != last_mtime:
+                    last_size = stat.st_size
+                    last_mtime = stat.st_mtime
+                    model = _get_latest_model(jsonl_file)
+                    last_model = model
+                    yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+                    last_keepalive = time_module.time()
+                    continue
+
+                # settings.json mtime 폴링: /model 실행 즉시 반영
+                # (JSONL은 다음 메시지 전송 시에야 기록됨)
+                try:
+                    settings_mtime = _CLAUDE_SETTINGS_PATH.stat().st_mtime
+                except OSError:
+                    settings_mtime = last_settings_mtime
+
+                if settings_mtime != last_settings_mtime:
+                    last_settings_mtime = settings_mtime
+                    # /model default → "model" 키 삭제 → None → _DEFAULT_MODEL 매핑
+                    current_model = (
+                        _get_current_model_from_settings() or _DEFAULT_MODEL
+                    )
+                    if current_model != last_model:
+                        last_model = current_model
+                        yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+                        last_keepalive = time_module.time()
                         continue
 
-                # settings.json 변경 → 모델만 갱신
-                current_model = _get_latest_model(jsonl_file)
-                if current_model != last_model:
-                    last_model = current_model
-                    yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+                # 변경 없음 — 15초마다 SSE keepalive 전송
+                now = time_module.time()
+                if now - last_keepalive >= 15.0:
+                    yield ":\n\n"
+                    last_keepalive = now
         finally:
             observer.stop()
             observer.join(timeout=2)
@@ -778,10 +807,12 @@ def render_messages(session_id: str) -> Response:
 | 17 | 마커 파일 | `<!-- @@CCL_MSG_SPLIT@@ -->`, `<!-- @@CCL_END_CONTAINER@@ -->` in `transcript.html` | 마커 완전 제거 | 마커 방식 폐기 |
 | 18 | `updating` 중 이벤트 처리 | `if (updating) return;` — 완전 스킵 | `pendingUpdate` 플래그 + 처리 완료 후 재fetch | Bug 9: Thinking/Text 별도 엔트리 → 두 번째 이벤트 유실 |
 | 19 | fold-bar 이벤트 바인딩 | `querySelectorAll().forEach(addEventListener)` — 초기 요소만 | `document.body` 이벤트 위임 (`closest()`) | Bug 10: SSE 동적 메시지에 리스너 없음 |
-| 20 | 파일 변경 감지 | `time.sleep(2)` + `os.stat()` 폴링 | `watchdog` Observer + `Queue` 브리지 | 즉각 감지 (ms), idle CPU 0, settings.json 동시 감시 |
+| 20 | 파일 변경 감지 | `time.sleep(2)` + `os.stat()` 폴링 | `watchdog` Observer + `Queue` 브리지 + 2초 stat() 폴링 하이브리드 | watchdog 즉각 감지 + Windows VSCode 열린 파일 미감지 보완 |
 | 21 | 모델 배지 | 없음 | SSE `{type:'model'}` 이벤트, JSONL-first 우선순위 | 빈 프롬프트에 현재 모델 실시간 표시, 세션-로컬 정확도 |
-| 22 | settings.json 감시 | 없음 | watchdog이 settings.json도 함께 감시 | `/model` 전환 즉시 모델 배지 갱신 |
+| 22 | settings.json 감시 | 없음 | watchdog + mtime 2초 폴링 이중 감시 | `/model` 전환 즉시 모델 배지 갱신 |
 | 23 | 모델 우선순위 | settings.json 전역 우선 | JSONL 마지막 assistant → settings.json 폴백 | 다른 프로젝트 /model 전환이 현재 세션에 영향 주던 버그 수정 |
+| 24 | `/model default` 처리 | 없음 (None 반환 → 배지 갱신 안 됨) | `_DEFAULT_MODEL = "claude-sonnet-4-6"` 상수 + `or _DEFAULT_MODEL` 매핑 | `/model default` 시 settings.json에서 `"model"` 키 삭제됨 → None → 기본 모델로 배지 갱신 |
+| 25 | JSONL user 엔트리 스캔 | assistant 엔트리만 스캔 | `_MODEL_CMD_RE.search()` + user 엔트리 `"Set model to X"` 패턴 스캔 | 응답 전에도 `/model` 명령이 JSONL에 기록된 경우 모델 반영 가능 |
 
 ### 관련 커밋
 

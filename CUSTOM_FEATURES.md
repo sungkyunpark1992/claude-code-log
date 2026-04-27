@@ -975,8 +975,11 @@ def title_AssistantTextMessage(self, message: AssistantTextMessage) -> str:
 ### 동작
 
 - SSE 연결 시 서버가 즉시 `{type: 'model', model: 'claude-sonnet-4-6'}` 이벤트 전송
-- 사용자가 `/model opus` 실행 → `settings.json` 변경 → watchdog 감지 → `{type: 'model', model: 'opus'}` 이벤트
+- 사용자가 `/model opus` 실행 → `settings.json` **즉시** 변경 → 2초 이내 mtime 폴링 감지 → `{type: 'model', model: 'opus'}` 이벤트
+- `/model default` 실행 → `settings.json`에서 `"model"` 키 **삭제** → `None` 반환 → `_DEFAULT_MODEL`("claude-sonnet-4-6") 매핑 → `{type: 'model', model: 'claude-sonnet-4-6'}` 이벤트
 - 빈 말풍선 헤더에 `.prompt-model-badge` 배지 추가/갱신
+
+> **핵심 설계**: JSONL은 `/model` 실행 즉시 기록되지 않고 **다음 메시지를 보낼 때** 기록됨. 따라서 JSONL-first 방식(세션-로컬 정확도)은 유지하되, `/model` 즉시 반영은 `settings.json` mtime 2초 폴링으로 처리.
 
 ### 모델 우선순위 (JSONL-first)
 
@@ -999,6 +1002,10 @@ def _get_latest_model(jsonl_file: Path) -> Optional[str]:
 
 ```python
 _CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
+# /model default 선택 시 settings.json에서 "model" 키가 사라짐 → None 반환 → 이 값으로 매핑
+_DEFAULT_MODEL = "claude-sonnet-4-6"
+# JSONL user 엔트리의 <local-command-stdout> 내 "Set model to X" 패턴 스캔
+_MODEL_CMD_RE = re.compile(r"Set model to (\S+)")
 
 def _get_current_model_from_settings() -> Optional[str]:
     """~/.claude/settings.json에서 현재 선택 모델 반환."""
@@ -1010,31 +1017,85 @@ def _get_current_model_from_settings() -> Optional[str]:
     return str(model) if model else None
 
 def _get_latest_model_from_jsonl(jsonl_file: Path) -> Optional[str]:
-    """JSONL에서 마지막 assistant 엔트리의 model 반환."""
+    """JSONL 역순 스캔, 두 가지 소스에서 모델 반환.
+
+    1. assistant 엔트리의 message.model (응답 모델, 세션-로컬)
+    2. user 엔트리의 'Set model to X' 패턴 (응답 전에도 /model 명령 반영)
+    """
     for line in reversed(jsonl_file.read_text(...).splitlines()):
         data = json.loads(line)
-        if data.get("type") == "assistant":
+        entry_type = data.get("type")
+        if entry_type == "assistant":
             model = data.get("message", {}).get("model")
             if model:
                 return str(model)
+        if entry_type == "user":
+            content = data.get("message", {}).get("content", "")
+            if isinstance(content, str):
+                m = _MODEL_CMD_RE.search(content)
+                if m:
+                    return m.group(1)
     return None
 ```
 
-SSE `generate()` 내부:
+SSE `generate()` 내부 (하이브리드 폴링 루프):
 ```python
-# 연결 즉시 현재 모델 전송
+last_settings_mtime = (
+    _CLAUDE_SETTINGS_PATH.stat().st_mtime if _CLAUDE_SETTINGS_PATH.exists() else 0.0
+)
 last_model = _get_latest_model(jsonl_file)
+
+# 연결 즉시 현재 모델 전송
 if last_model:
     yield f"data: {json.dumps({'type': 'model', 'model': last_model})}\n\n"
 
-# JSONL 변경 이벤트 전송 시 model 포함
-yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+last_keepalive = time_module.time()
 
-# settings.json 변경 → 모델만 변경
-current_model = _get_latest_model(jsonl_file)
-if current_model != last_model:
-    last_model = current_model
-    yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+while True:
+    # 2s timeout: watchdog 즉각 감지 + Windows VSCode 열린 파일 미감지 보완
+    try:
+        tag = event_queue.get(timeout=2.0)
+        tags = {tag}
+        got_event = True
+    except Empty:
+        tags = set()
+        got_event = False
+
+    # 버스트 드레인 + settle
+    ...
+
+    # JSONL stat() 직접 폴링 (watchdog에만 의존하지 않음)
+    stat = jsonl_file.stat()
+    if stat.st_size != last_size or stat.st_mtime != last_mtime:
+        last_size = stat.st_size
+        last_mtime = stat.st_mtime
+        model = _get_latest_model(jsonl_file)
+        last_model = model
+        yield f"data: {json.dumps({'type': 'updated', 'model': model})}\n\n"
+        last_keepalive = time_module.time()
+        continue
+
+    # settings.json mtime 폴링: /model 실행 즉시 반영 (JSONL은 메시지 전송 후 기록)
+    try:
+        settings_mtime = _CLAUDE_SETTINGS_PATH.stat().st_mtime
+    except OSError:
+        settings_mtime = last_settings_mtime
+
+    if settings_mtime != last_settings_mtime:
+        last_settings_mtime = settings_mtime
+        # /model default → settings.json의 "model" 키 삭제됨 → None → _DEFAULT_MODEL 매핑
+        current_model = _get_current_model_from_settings() or _DEFAULT_MODEL
+        if current_model != last_model:
+            last_model = current_model
+            yield f"data: {json.dumps({'type': 'model', 'model': current_model})}\n\n"
+            last_keepalive = time_module.time()
+            continue
+
+    # 변경 없음 — 15초마다 SSE keepalive 전송
+    now = time_module.time()
+    if now - last_keepalive >= 15.0:
+        yield ":\n\n"
+        last_keepalive = now
 ```
 
 #### 17-2. `claude_code_log/html/templates/transcript.html`
@@ -1088,14 +1149,16 @@ source.onmessage = function(e) {
 
 ---
 
-## 18. watchdog 파일 감시 (폴링 → OS 네이티브)
+## 18. watchdog 파일 감시 (하이브리드: OS 네이티브 + 2초 stat() 폴링)
 
-**목적**: SSE 파일 변경 감지를 2초 폴링에서 OS 네이티브 파일시스템 이벤트로 교체. 즉각 반응, 대기 중 CPU 사용 없음.
+**목적**: SSE 파일 변경 감지에 watchdog OS 이벤트를 사용하면서, Windows에서 VSCode가 파일을 열어두는 경우 watchdog이 이벤트를 놓치는 문제를 2초 stat() 폴링으로 보완.
 
 ### 동작
 
 - 이전: `time.sleep(2)` 루프에서 `os.stat()`로 파일 크기/mtime 비교 (2초 지연)
-- 현재: watchdog `Observer`가 OS 이벤트로 즉각 감지, `Queue`로 SSE 루프에 전달
+- 현재: watchdog `Observer`가 OS 이벤트로 즉각 감지 + 2초 `timeout`으로 `stat()` 직접 폴링. watchdog이 즉각 반응하고, 이벤트 미감지 시 최대 2초 이내에 stat()로 보완.
+
+> **하이브리드 설계 이유**: Windows의 `ReadDirectoryChangesW`는 VSCode가 파일을 열어두면 이벤트를 보내지 않는 경우가 있음. `settings.json`은 `/model` 명령 실행 시 **즉시** 수정되는데, 이를 watchdog만으로 감지하면 누락 가능. 2초 stat() 폴링이 이를 보완하여 최대 2초 이내 반영 보장.
 
 ### 수정 파일 (2개)
 
@@ -1206,13 +1269,13 @@ dependencies = [
 
 ### 이전 방식과 비교
 
-| 항목 | 이전 (폴링) | 현재 (watchdog) |
+| 항목 | 이전 (폴링) | 현재 (하이브리드) |
 |------|------------|----------------|
-| 감지 방식 | `time.sleep(2)` + `os.stat()` 비교 | OS 네이티브 이벤트 (`ReadDirectoryChangesW` / `FSEvents` / `inotify`) |
-| 대기 시간 | 최대 2초 + 디바운스 5초 | 즉각 (ms 단위) + 0.3s settle |
-| idle CPU | 2초마다 stat() 호출 | 이벤트 없으면 Queue.get으로 완전 블록 |
-| keepalive | 2초 sleep 내에서 `:` 전송 | 15s timeout 후 `:` 전송 |
-| settings.json 감시 | 없음 (모델 변경 미감지) | 동일 Observer로 함께 감시 |
+| 감지 방식 | `time.sleep(2)` + `os.stat()` 비교 | watchdog 이벤트(즉각) + 2초마다 `stat()` 폴백 |
+| 대기 시간 | 최대 2초 + 디바운스 5초 | watchdog: 즉각 (ms 단위) / stat() 폴백: 최대 2초 |
+| idle CPU | 2초마다 stat() 호출 | 2초마다 stat() 호출 (보완 폴링 유지) |
+| keepalive | 2초 sleep 내에서 `:` 전송 | 2s timeout 루프 내, 15s 경과 시 `:` 전송 |
+| settings.json 감시 | 없음 (모델 변경 미감지) | watchdog + mtime 직접 폴링으로 이중 감시 |
 
 ---
 
@@ -1378,7 +1441,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | `6d5c034` | 세션 페이지 홈 버튼 — `<h1>` 왼쪽에 🏠 아이콘 추가, 클릭 시 메인 대시보드(`/`)로 이동 |
 | `0757d84` | 인덱스 로딩 속도 최적화 — `process_projects_hierarchy(cache_only=True)` 추가, `/` 라우트에서 HTML 생성 스킵. 20.8s → 5~7s |
 | (pending) | 모델 배지 — Assistant 메시지 헤더에 모델명 배지 표시 (`Sonnet 4.6`, `Opus 4.7` 등) |
-| (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog + JSONL-first 모델 우선순위 수정 + 미인식 타입 경고 제거 |
+| (pending) | 빈 프롬프트 실시간 모델 배지 + 하이브리드 폴링(watchdog + 2초 stat()) + `_DEFAULT_MODEL`(/model default 지원) + settings.json mtime 폴링 + JSONL user 엔트리 /model 스캔(`_MODEL_CMD_RE`) + JSONL-first 우선순위 + 미인식 타입 경고 제거 |
 | (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
 
