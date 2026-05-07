@@ -255,6 +255,40 @@
     color: #888;
 }
 
+.msg-number {
+    font-size: 0.72em;
+    font-weight: normal;
+    color: #888;
+    margin-left: 20px;
+    margin-right: 6px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.bookmark-pin {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    margin-left: 12px;
+    font-size: 0.85em;
+    line-height: 1;
+    opacity: 0.4;
+    transform: rotate(0deg);
+    transition: transform 0.2s ease, opacity 0.15s ease;
+    user-select: none;
+    flex-shrink: 0;
+    display: inline-block;
+}
+.bookmark-pin:hover {
+    opacity: 0.85;
+}
+.bookmark-pin.bookmarked {
+    opacity: 1;
+    transform: rotate(-30deg);
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+
 .model-badge {
     font-size: 0.72em;
     font-weight: normal;

@@ -27,6 +27,8 @@
 18. [watchdog 파일 감시 (폴링 → OS 네이티브)](#18-watchdog-파일-감시-폴링--os-네이티브)
 19. [미인식 엔트리 타입 경고 제거](#19-미인식-엔트리-타입-경고-제거)
 20. [User 말풍선 간 이동 버튼 (▲▼)](#20-user-말풍선-간-이동-버튼-)
+21. [질문 말풍선 순차 번호 (#1, #2, #3...)](#21-질문-말풍선-순차-번호-1-2-3)
+22. [질문 북마크 기능 (📌 핀 + 🔖 패널)](#22-질문-북마크-기능--핀---패널)
 
 ---
 
@@ -1382,6 +1384,259 @@ elif entry_type in {
 
 ---
 
+## 21. 질문 말풍선 순차 번호 (#1, #2, #3...)
+
+**목적**: 각 User 질문 말풍선 헤더에 순차 번호를 표시. 북마크 기능의 시각적 식별자로 사용.
+
+### 동작
+
+- `🤷 User #3` 형태로 표시 (번호는 "User" 텍스트 오른쪽)
+- 페이지 로드 시 + SSE로 메시지 추가 시 모두 자동 재계산
+- `.empty-prompt`, `.session-header` 제외하고 DOM 순서대로 1부터 부여
+- 필터 적용 후 숨겨진 메시지도 번호 유지 (북마크 안정성을 위해 `:not(.filtered-hidden)` 미사용)
+
+### 수정 파일 (2개)
+
+#### 21-1. `claude_code_log/html/templates/transcript.html`
+
+```javascript
+window.numberUserMessages = function() {
+    document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
+    document.querySelectorAll(
+        '.message.user:not(.empty-prompt):not(.session-header)'
+    ).forEach(function(msg, i) {
+        var header = msg.querySelector('.header');
+        if (!header) return;
+        var span = header.querySelector('span');
+        if (!span) return;
+        var n = i + 1;
+        msg.dataset.userMsgNumber = String(n);
+        // (북마크 핀도 함께 삽입 — 섹션 22 참고)
+        var badge = document.createElement('span');
+        badge.className = 'msg-number';
+        badge.textContent = '#' + n;
+        span.appendChild(badge);
+    });
+    if (typeof window.applyBookmarkState === 'function') window.applyBookmarkState();
+};
+window.numberUserMessages();
+```
+
+SSE 업데이트 후 재호출:
+```javascript
+if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
+```
+
+#### 21-2. `claude_code_log/html/templates/components/message_styles.css`
+
+```css
+.msg-number {
+    font-size: 0.72em;
+    font-weight: normal;
+    color: #888;
+    margin-left: 20px;
+    margin-right: 6px;
+    user-select: none;
+    flex-shrink: 0;
+}
+```
+
+> **설계 결정**:
+> - 번호는 DOM 순서 기반 (위치 순서) — 필터링 후에도 변하지 않음. 북마크는 별도로 UUID 기반(섹션 22)으로 저장하므로 이 번호는 UI 표시용으로만 사용.
+> - 페이지 단위 카운트 (combined transcripts에서는 모든 세션 메시지에 걸쳐 1, 2, 3...). 세션별 리셋이 필요하면 별도 작업 필요.
+
+---
+
+## 22. 질문 북마크 기능 (📌 핀 + 🔖 패널)
+
+**목적**: 질문 말풍선마다 북마크를 토글하고, 우측 슬라이드 패널에서 북마크 목록을 확인 + 클릭으로 해당 질문으로 이동.
+
+### 동작
+
+- 각 질문 말풍선 헤더에 `📌` 핀 버튼 (번호 왼쪽에 위치)
+  - **사선** (rotate 0deg, opacity 0.4) = 비활성
+  - **직각** (rotate -30deg, opacity 1.0 + drop-shadow) = 활성 (북마크됨)
+- 클릭 시 `localStorage`에 UUID 저장/제거 + 핀 클래스 토글
+- 우측 사이드바 `🔖` 버튼 → 우측 패널 슬라이드 인/아웃 (280px 너비)
+- 패널 항목 클릭 → 해당 메시지로 스무스 스크롤 + 1.4초간 노란 펄스 강조
+- 항목 호버 시 우측에 `✕` 표시 → 클릭으로 북마크 해제
+
+### 데이터 저장
+
+- localStorage 키: `ccl:bookmarks:{sessionId}` → `[uuid1, uuid2, ...]`
+- 세션별 분리 저장 (combined_transcripts에서도 메시지의 sessionId로 분리)
+- 메시지의 sessionId는 DOM에서 `data-session-id` 없는 user 메시지에 대해 가장 가까운 이전 `.session-header[data-session-id]`를 walk-up하여 결정
+
+### 패널 항목 표시 (두 줄)
+
+- **Line 1**: `#3 · 2025-12-04 14:30` (번호 + 표시되는 타임스탬프)
+- **Line 2**: 질문 미리보기 (60자, ellipsis)
+- **미리보기 추출**: `.content .user-text` 내부 텍스트만 사용
+  - `.ide-notification` (IDE 자동 컨텍스트), tool 결과 등 자동 주입 컨텐츠 제외
+  - `Array.prototype.map.call(userTexts, ...)` 으로 NodeList 처리
+
+### 수정 파일 (3개)
+
+#### 22-1. `claude_code_log/html/templates/transcript.html`
+
+**HTML**: `#floating-buttons`에 북마크 버튼 + 패널:
+```html
+<button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+
+<div id="bookmark-panel" aria-hidden="true">
+    <div class="bookmark-panel-header">
+        <span>🔖 북마크 <span id="bookmark-count">0</span></span>
+        <button class="bookmark-panel-close" title="닫기">✕</button>
+    </div>
+    <div class="bookmark-panel-list" id="bookmark-list">
+        <div class="bookmark-empty">아직 북마크가 없습니다...</div>
+    </div>
+</div>
+```
+
+**JS** (핵심 로직 IIFE):
+```javascript
+(function() {
+    var STORAGE_PREFIX = 'ccl:bookmarks:';
+
+    function getMsgSessionId(msg) {
+        var node = msg;
+        while (node && node.previousElementSibling) {
+            node = node.previousElementSibling;
+            if (node.classList && node.classList.contains('session-header')) {
+                return node.dataset.sessionId || null;
+            }
+        }
+        var hdr = document.querySelector('.message.session-header[data-session-id]');
+        return hdr ? hdr.dataset.sessionId : null;
+    }
+
+    function loadBookmarks(sessionId) { /* JSON.parse(localStorage[...]) */ }
+    function saveBookmarks(sessionId, uuids) { /* JSON.stringify → setItem */ }
+
+    function toggleBookmark(sessionId, uuid) {
+        var arr = loadBookmarks(sessionId);
+        var idx = arr.indexOf(uuid);
+        if (idx >= 0) arr.splice(idx, 1); else arr.push(uuid);
+        saveBookmarks(sessionId, arr);
+        return idx < 0;
+    }
+
+    // numberUserMessages가 호출 → 모든 핀의 .bookmarked 클래스 갱신 + 패널 새로고침
+    window.applyBookmarkState = function() { /* ... */ };
+
+    // 이벤트 위임 (SSE 추가 메시지에도 적용됨)
+    document.body.addEventListener('click', function(e) {
+        var pin = e.target.closest('.bookmark-pin');
+        if (!pin) return;
+        // ... toggle + classList + refreshPanel
+    });
+
+    // 패널 항목 클릭 → 스크롤 + 펄스 / ✕ → 해제
+    panelList.addEventListener('click', function(e) {
+        var rm = e.target.closest('.bookmark-item-remove');
+        var row = e.target.closest('.bookmark-item');
+        if (rm) { toggleBookmark(...); window.applyBookmarkState(); return; }
+        scrollToMessage(row.dataset.uuid);
+    });
+
+    // 미리보기 추출: .user-text만 사용 (IDE notification 등 제외)
+    var userTexts = msg.querySelectorAll('.content .user-text');
+    var preview = Array.prototype.map.call(userTexts, function(el) {
+        return el.textContent;
+    }).join(' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+})();
+```
+
+**핀 삽입** (`numberUserMessages` 안에서, 번호보다 먼저 추가):
+```javascript
+var pin = document.createElement('button');
+pin.className = 'bookmark-pin';
+pin.type = 'button';
+pin.title = '북마크 토글';
+pin.textContent = '📌';
+span.appendChild(pin);
+```
+
+#### 22-2. `claude_code_log/html/templates/components/message_styles.css`
+
+```css
+.bookmark-pin {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    margin-left: 12px;
+    font-size: 0.85em;
+    line-height: 1;
+    opacity: 0.4;
+    transform: rotate(0deg);
+    transition: transform 0.2s ease, opacity 0.15s ease;
+}
+.bookmark-pin:hover { opacity: 0.85; }
+.bookmark-pin.bookmarked {
+    opacity: 1;
+    transform: rotate(-30deg);
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+```
+
+#### 22-3. `claude_code_log/html/templates/components/global_styles.css`
+
+플로팅 버튼 순서에 북마크 추가 (order 3):
+```css
+.bookmark-toggle.floating-btn  { order: 3; }
+.bookmark-toggle.floating-btn.active {
+    background: rgba(255, 200, 100, 0.25);
+}
+```
+
+패널 슬라이드:
+```css
+#bookmark-panel {
+    position: fixed;
+    top: 0;
+    right: -300px;        /* 닫힌 상태: 오프스크린 */
+    bottom: 0;
+    width: 280px;
+    background: #fff;
+    border-left: 1px solid #ddd;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+    transition: right 0.25s ease;
+    z-index: 98;
+    display: flex;
+    flex-direction: column;
+}
+#bookmark-panel.open { right: 60px; }   /* 열린 상태: 사이드바 옆 */
+
+.bookmark-item { position: relative; padding: 8px 28px 8px 10px; ... }
+.bookmark-item-line1 { font-size: 0.78em; color: #888; font-weight: 600; }
+.bookmark-item-line2 { font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 호버 시에만 ✕ 표시 */
+.bookmark-item-remove { opacity: 0; transition: opacity 0.15s; ... }
+.bookmark-item:hover .bookmark-item-remove { opacity: 1; }
+
+/* 클릭 후 노란 펄스 */
+.message.bookmark-highlight {
+    animation: bookmarkPulse 1.4s ease-out;
+}
+@keyframes bookmarkPulse {
+    0%   { box-shadow: 0 0 0 4px rgba(255, 180, 60, 0.6); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 180, 60, 0); }
+}
+```
+
+### 핵심 설계 결정
+
+- **UUID로 저장, 번호로 표시**: 번호(섹션 21)는 위치 기반이므로 메시지 추가/삭제 시 변할 수 있음. 영구 식별자는 UUID(`data-message-id`) 사용. 북마크가 안정적으로 유지됨.
+- **이벤트 위임**: 핀 클릭과 패널 항목 클릭 모두 `document.body` / `panelList`에 위임 — SSE로 추가되는 신규 메시지의 핀도 별도 바인딩 없이 동작.
+- **미리보기는 `.user-text`만**: 자동 주입되는 `.ide-notification`, 도구 훅 결과 등을 제외하여 실제 사용자 입력만 미리보기로 표시.
+- **세션 ID 추론**: 단일 세션 페이지에서는 첫 `.session-header[data-session-id]`, combined transcripts에서는 메시지 직전 `.session-header`를 walk-up.
+- **패널 위치**: `right: -300px` ↔ `right: 60px`(사이드바 너비) 슬라이드 — 평소 오프스크린이라 레이아웃 영향 없음.
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1442,6 +1697,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog settings.json 감시 + `_DEFAULT_MODEL`(/model default 지원) + JSONL user 엔트리 /model 스캔(`_MODEL_CMD_RE`) + JSONL-first 우선순위 + 미인식 타입 경고 제거 |
 | (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
+| (pending) | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
 
 ---
 

@@ -188,11 +188,23 @@
     <div id="floating-buttons">
         <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
         <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
+        <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
         <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
         <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
         <button class="scroll-bottom floating-btn" title="Scroll to bottom" onclick="window.scrollTo(0, document.body.scrollHeight)">⬇️</button>
+    </div>
+
+    <div id="bookmark-panel" aria-hidden="true">
+        <div class="bookmark-panel-resize-handle" title="드래그하여 너비 조절"></div>
+        <div class="bookmark-panel-header">
+            <span>🔖 북마크 <span id="bookmark-count">0</span></span>
+            <button class="bookmark-panel-close" title="닫기">✕</button>
+        </div>
+        <div class="bookmark-panel-list" id="bookmark-list">
+            <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+        </div>
     </div>
 
     <script>
@@ -900,6 +912,260 @@
             };
             window.initEmptyPrompt();
 
+            // Sequential numbering for user message bubbles + bookmark pins
+            window.numberUserMessages = function() {
+                document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
+                document.querySelectorAll(
+                    '.message.user:not(.empty-prompt):not(.session-header)'
+                ).forEach(function(msg, i) {
+                    var header = msg.querySelector('.header');
+                    if (!header) return;
+                    var span = header.querySelector('span');
+                    if (!span) return;
+                    var n = i + 1;
+                    msg.dataset.userMsgNumber = String(n);
+                    // Pin button (left of #N)
+                    var pin = document.createElement('button');
+                    pin.className = 'bookmark-pin';
+                    pin.type = 'button';
+                    pin.title = '북마크 토글';
+                    pin.textContent = '📌';
+                    span.appendChild(pin);
+                    // Number badge
+                    var badge = document.createElement('span');
+                    badge.className = 'msg-number';
+                    badge.textContent = '#' + n;
+                    span.appendChild(badge);
+                });
+                if (typeof window.applyBookmarkState === 'function') window.applyBookmarkState();
+            };
+            window.numberUserMessages();
+
+            // ============ Bookmark feature ============
+            (function() {
+                var STORAGE_PREFIX = 'ccl:bookmarks:';
+
+                function getMsgSessionId(msg) {
+                    var node = msg;
+                    while (node && node.previousElementSibling) {
+                        node = node.previousElementSibling;
+                        if (node.classList && node.classList.contains('session-header')) {
+                            return node.dataset.sessionId || null;
+                        }
+                    }
+                    var hdr = document.querySelector('.message.session-header[data-session-id]');
+                    return hdr ? hdr.dataset.sessionId : null;
+                }
+
+                function loadBookmarks(sessionId) {
+                    if (!sessionId) return [];
+                    try {
+                        var raw = localStorage.getItem(STORAGE_PREFIX + sessionId);
+                        return raw ? JSON.parse(raw) : [];
+                    } catch (e) { return []; }
+                }
+                function saveBookmarks(sessionId, uuids) {
+                    if (!sessionId) return;
+                    try { localStorage.setItem(STORAGE_PREFIX + sessionId, JSON.stringify(uuids)); }
+                    catch (e) {}
+                }
+                function toggleBookmark(sessionId, uuid) {
+                    var arr = loadBookmarks(sessionId);
+                    var idx = arr.indexOf(uuid);
+                    if (idx >= 0) arr.splice(idx, 1); else arr.push(uuid);
+                    saveBookmarks(sessionId, arr);
+                    return idx < 0;
+                }
+
+                // Apply bookmark visual state to all pins (called after numbering)
+                window.applyBookmarkState = function() {
+                    document.querySelectorAll(
+                        '.message.user:not(.empty-prompt):not(.session-header)'
+                    ).forEach(function(msg) {
+                        var pin = msg.querySelector('.bookmark-pin');
+                        if (!pin) return;
+                        var sid = getMsgSessionId(msg);
+                        var uuid = msg.dataset.messageId;
+                        var bookmarked = loadBookmarks(sid).indexOf(uuid) >= 0;
+                        pin.classList.toggle('bookmarked', bookmarked);
+                    });
+                    refreshPanel();
+                };
+
+                // Pin click → toggle (event delegation, works with SSE-added messages)
+                document.body.addEventListener('click', function(e) {
+                    var pin = e.target.closest('.bookmark-pin');
+                    if (!pin) return;
+                    e.stopPropagation();
+                    var msg = pin.closest('.message.user');
+                    if (!msg) return;
+                    var sid = getMsgSessionId(msg);
+                    var uuid = msg.dataset.messageId;
+                    if (!sid || !uuid) return;
+                    var nowOn = toggleBookmark(sid, uuid);
+                    pin.classList.toggle('bookmarked', nowOn);
+                    refreshPanel();
+                });
+
+                // ===== Panel =====
+                var panel = document.getElementById('bookmark-panel');
+                var panelList = document.getElementById('bookmark-list');
+                var bookmarkBtn = document.getElementById('toggleBookmarks');
+                var closeBtn = panel ? panel.querySelector('.bookmark-panel-close') : null;
+                var countEl = document.getElementById('bookmark-count');
+
+                function gatherBookmarksOnPage() {
+                    var items = [];
+                    document.querySelectorAll(
+                        '.message.user:not(.empty-prompt):not(.session-header)'
+                    ).forEach(function(msg) {
+                        var sid = getMsgSessionId(msg);
+                        var uuid = msg.dataset.messageId;
+                        if (!sid || !uuid) return;
+                        if (loadBookmarks(sid).indexOf(uuid) < 0) return;
+                        var n = msg.dataset.userMsgNumber || '?';
+                        var ts = msg.querySelector('.timestamp');
+                        var tsText = ts ? ts.textContent.trim() : '';
+                        var userTexts = msg.querySelectorAll('.content .user-text');
+                        var preview = Array.prototype.map.call(userTexts, function(el) {
+                            return el.textContent;
+                        }).join(' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+                        items.push({ sid: sid, uuid: uuid, n: n, ts: tsText, preview: preview });
+                    });
+                    return items;
+                }
+
+                function refreshPanel() {
+                    if (!panelList) return;
+                    var items = gatherBookmarksOnPage();
+                    if (countEl) countEl.textContent = '(' + items.length + ')';
+                    if (items.length === 0) {
+                        panelList.innerHTML = '<div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>';
+                        return;
+                    }
+                    panelList.innerHTML = '';
+                    items.forEach(function(item) {
+                        var row = document.createElement('div');
+                        row.className = 'bookmark-item';
+                        row.dataset.uuid = item.uuid;
+                        row.dataset.sid = item.sid;
+                        var l1 = document.createElement('div');
+                        l1.className = 'bookmark-item-line1';
+                        l1.textContent = '#' + item.n + (item.ts ? ' · ' + item.ts : '');
+                        var l2 = document.createElement('div');
+                        l2.className = 'bookmark-item-line2';
+                        l2.textContent = item.preview || '(내용 없음)';
+                        var rm = document.createElement('button');
+                        rm.className = 'bookmark-item-remove';
+                        rm.type = 'button';
+                        rm.title = '북마크 해제';
+                        rm.textContent = '✕';
+                        row.appendChild(l1);
+                        row.appendChild(l2);
+                        row.appendChild(rm);
+                        panelList.appendChild(row);
+                    });
+                }
+
+                function scrollToMessage(uuid) {
+                    var target = document.getElementById('msg-' + uuid);
+                    if (!target) return;
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.classList.remove('bookmark-highlight');
+                    void target.offsetWidth;
+                    target.classList.add('bookmark-highlight');
+                    setTimeout(function() { target.classList.remove('bookmark-highlight'); }, 1500);
+                }
+
+                if (panelList) {
+                    panelList.addEventListener('click', function(e) {
+                        var rm = e.target.closest('.bookmark-item-remove');
+                        var row = e.target.closest('.bookmark-item');
+                        if (!row) return;
+                        if (rm) {
+                            e.stopPropagation();
+                            toggleBookmark(row.dataset.sid, row.dataset.uuid);
+                            window.applyBookmarkState();
+                            return;
+                        }
+                        scrollToMessage(row.dataset.uuid);
+                    });
+                }
+
+                function closePanel() {
+                    if (!panel) return;
+                    panel.classList.remove('open');
+                    if (bookmarkBtn) bookmarkBtn.classList.remove('active');
+                    panel.setAttribute('aria-hidden', 'true');
+                }
+
+                if (bookmarkBtn && panel) {
+                    bookmarkBtn.addEventListener('click', function() {
+                        var open = panel.classList.toggle('open');
+                        bookmarkBtn.classList.toggle('active', open);
+                        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+                        if (open) refreshPanel();
+                    });
+                }
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', closePanel);
+                }
+
+                // Close panel when clicking outside (excluding panel itself,
+                // toggle button, and pin buttons — pins toggle bookmarks while
+                // panel is open and shouldn't dismiss it)
+                document.addEventListener('click', function(e) {
+                    if (!panel || !panel.classList.contains('open')) return;
+                    if (panel.contains(e.target)) return;
+                    if (bookmarkBtn && bookmarkBtn.contains(e.target)) return;
+                    if (e.target.closest('.bookmark-pin')) return;
+                    closePanel();
+                });
+
+                // Resizable left edge — drag to adjust width (min = 280px = default)
+                var resizeHandle = panel ? panel.querySelector('.bookmark-panel-resize-handle') : null;
+                if (resizeHandle && panel) {
+                    var MIN_WIDTH = 280;
+                    var WIDTH_KEY = 'ccl:bookmarks:panel-width';
+                    try {
+                        var saved = parseInt(localStorage.getItem(WIDTH_KEY), 10);
+                        if (saved && saved >= MIN_WIDTH) panel.style.width = saved + 'px';
+                    } catch (e) {}
+
+                    var resizing = false, startX = 0, startW = 0;
+                    resizeHandle.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        resizing = true;
+                        startX = e.clientX;
+                        startW = panel.getBoundingClientRect().width;
+                        resizeHandle.classList.add('dragging');
+                        document.body.classList.add('bookmark-resizing');
+                    });
+                    document.addEventListener('mousemove', function(e) {
+                        if (!resizing) return;
+                        var dx = startX - e.clientX;  // drag left → wider
+                        var w = startW + dx;
+                        if (w < MIN_WIDTH) w = MIN_WIDTH;
+                        var maxW = window.innerWidth - 100;
+                        if (w > maxW) w = maxW;
+                        panel.style.width = w + 'px';
+                    });
+                    document.addEventListener('mouseup', function() {
+                        if (!resizing) return;
+                        resizing = false;
+                        resizeHandle.classList.remove('dragging');
+                        document.body.classList.remove('bookmark-resizing');
+                        try {
+                            var w = parseInt(panel.style.width, 10);
+                            if (w) localStorage.setItem(WIDTH_KEY, String(w));
+                        } catch (e) {}
+                    });
+                }
+
+                // Initial state apply (numberUserMessages already called above)
+                window.applyBookmarkState();
+            })();
+
 
             {% include 'components/session_edit_script.js' %}
 
@@ -1106,6 +1372,7 @@
                             // Post-processing on new content
                             if (typeof convertTimestamps === 'function') convertTimestamps();
                             if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
+                            if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
 
                             if (atBottom) {
                                 window.scrollTo(0, document.body.scrollHeight);
