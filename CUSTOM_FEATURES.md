@@ -29,6 +29,7 @@
 20. [User 말풍선 간 이동 버튼 (▲▼)](#20-user-말풍선-간-이동-버튼-)
 21. [질문 말풍선 순차 번호 (#1, #2, #3...)](#21-질문-말풍선-순차-번호-1-2-3)
 22. [질문 북마크 기능 (📌 핀 + 🔖 패널)](#22-질문-북마크-기능--핀---패널)
+23. [Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)
 
 ---
 
@@ -1637,6 +1638,78 @@ span.appendChild(pin);
 
 ---
 
+## 23. Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회
+
+**목적**: Claude Code의 `cleanupPeriodDays`(기본 30일) 자동 삭제로 JSONL은 없어졌지만 HTML 파일이 남아있는 세션을 대시보드에서 조회.
+
+### 배경
+
+- JSONL 삭제 → 캐시 DB에서도 제거 → 인덱스에서 사라짐
+- HTML 파일은 `session-{id}.html`로 프로젝트 디렉토리에 남아있어 직접 서빙 가능
+- 관련 분석: [missing-old-sessions.md](../missing-old-sessions.md)
+
+### 동작
+
+1. 대시보드 프로젝트 카드의 **Sessions** 토글 아래 **Old Sessions (N)** 토글 표시 (JSONL 없는 HTML이 있을 때만)
+2. 목록 클릭 → 정적 HTML 파일 서빙 (JSONL 없어도 브라우저에서 열람 가능)
+3. 각 항목: HTML `<title>` 태그에서 요약 추출 + 파일 mtime을 타임스탬프로 표시
+
+### 수정 파일 (5개)
+
+#### 23-1. `claude_code_log/converter.py`
+
+`_scan_old_sessions(project_dir, valid_session_ids)` 헬퍼 추가:
+- `project_dir.glob("session-*.html")` 파일 목록에서 `valid_session_ids`(현재 JSONL 목록)에 없는 것만 추출
+- HTML `<title>` 파싱으로 요약 추출, 파일 mtime을 timestamp로 사용
+- `first_timestamp` desc 정렬
+
+`process_projects_hierarchy()` 수정:
+- `project_summaries` 딕셔너리에 `"old_sessions"` 필드 추가
+- 인덱스 재생성 조건에 `or cache_only` 추가 → `/` 요청마다 old_sessions 변화 즉시 반영
+
+#### 23-2. `claude_code_log/renderer.py`
+
+`TemplateProject.__init__`에 `old_sessions` 필드 추가:
+```python
+self.old_sessions = project_data.get("old_sessions", [])
+```
+
+#### 23-3. `claude_code_log/html/templates/index.html`
+
+Sessions `<details>` 아래 Old Sessions `<details>` 추가:
+```html
+{% if project.old_sessions and project.old_sessions|length > 0 %}
+<details class='old-sessions'>
+    <summary>Old Sessions ({{ project.old_sessions|length }})
+        <span class='old-sessions-hint'>JSONL 삭제됨, HTML만 잔존</span>
+    </summary>
+    {{ render_session_nav(project.old_sessions, "expandable", project.name + "/") }}
+</details>
+{% endif %}
+```
+
+#### 23-4. `claude_code_log/html/templates/components/project_card_styles.css`
+
+Old Sessions 스타일 추가 (회색, opacity 0.7, 점선 구분선, hover 시 opacity 1.0):
+```css
+.project-sessions details.old-sessions summary { color: #999; border-top: 1px dashed #ddd; }
+.project-sessions details.old-sessions .old-sessions-hint { font-size: 0.75em; color: #b0b0b0; }
+.project-sessions details.old-sessions .session-link { opacity: 0.7; }
+```
+
+#### 23-5. `claude_code_log/server.py`
+
+`serve_file`에서 content-only JSONL 매치 시 동적 렌더링 스킵:
+```python
+# 파일명이 session_id와 일치할 때만 동적 렌더링
+# 내용에서만 발견된 경우(다른 파일이 이 ID를 언급) → 정적 HTML 서빙으로 fallthrough
+if jsonl_file is not None and jsonl_file.stem == session_id:
+```
+
+> 이 조건이 없으면 `_find_session_jsonl`의 2차 content 검색이 다른 파일을 반환해 빈 세션 페이지가 동적으로 생성됨.
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1698,6 +1771,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
 | (pending) | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
+| (pending) | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
 
 ---
 

@@ -410,6 +410,7 @@ class TemplateProject:
         self.latest_timestamp = project_data.get("latest_timestamp", "")
         self.earliest_timestamp = project_data.get("earliest_timestamp", "")
         self.sessions = project_data.get("sessions", [])
+        self.old_sessions = project_data.get("old_sessions", [])
         self.working_directories = project_data.get("working_directories", [])
 
         # Format display name using shared logic

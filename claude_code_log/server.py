@@ -246,7 +246,10 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         if session_match:
             session_id = session_match.group(1)
             jsonl_file = _find_session_jsonl(projects_dir, session_id)
-            if jsonl_file is not None:
+            # Only render dynamically when the JSONL filename matches the session_id.
+            # Content-only matches (another JSONL that mentions this ID) must not be used
+            # because they produce empty pages — fall through to serve the static HTML instead.
+            if jsonl_file is not None and jsonl_file.stem == session_id:
                 from .converter import load_transcript
                 from .html.renderer import HtmlRenderer
 

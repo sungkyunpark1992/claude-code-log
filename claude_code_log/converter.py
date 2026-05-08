@@ -1656,6 +1656,60 @@ def _get_cleanup_period_days() -> Optional[int]:
         return None
 
 
+def _scan_old_sessions(project_dir: Path, valid_session_ids: set[str]) -> List[Dict[str, Any]]:
+    """Scan project directory for session HTML files whose JSONL has been deleted.
+
+    These "old sessions" are visible only because their static HTML still exists;
+    metadata is read from the HTML title and file mtime since the cache no longer
+    has them.
+    """
+    import datetime as _dt
+
+    pattern = re.compile(r"^session-([0-9a-f-]+)\.html$")
+    old_sessions: List[Dict[str, Any]] = []
+
+    for html_file in project_dir.glob("session-*.html"):
+        m = pattern.match(html_file.name)
+        if not m:
+            continue
+        session_id = m.group(1)
+        if session_id in valid_session_ids:
+            continue  # JSONL still exists — not an "old" session
+
+        try:
+            head = html_file.read_text(encoding="utf-8", errors="replace")[:4000]
+        except OSError:
+            continue
+
+        title_match = re.search(r"<title>(.*?)</title>", head, re.DOTALL)
+        raw_title = title_match.group(1).strip() if title_match else ""
+        # Title format is "{display_name}: {summary}" or just "{display_name}"
+        summary = raw_title.split(": ", 1)[1] if ": " in raw_title else ""
+
+        mtime = html_file.stat().st_mtime
+        ts_iso = (
+            _dt.datetime.fromtimestamp(mtime, tz=_dt.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+
+        old_sessions.append(
+            {
+                "id": session_id,
+                "summary": summary or None,
+                "custom_title": None,
+                "timestamp_range": format_timestamp_range(ts_iso, ts_iso),
+                "first_timestamp": ts_iso,
+                "last_timestamp": ts_iso,
+                "message_count": 0,
+                "first_user_message": summary or "[JSONL 삭제됨 — HTML만 남아있음]",
+            }
+        )
+
+    old_sessions.sort(key=lambda s: s["first_timestamp"] or "", reverse=True)
+    return old_sessions
+
+
 def _print_archived_sessions_note(total_archived: int) -> None:
     """Print a note about archived sessions and how to restore them.
 
@@ -1931,6 +1985,11 @@ def process_projects_hierarchy(
                                 and session_data.first_user_message != "Warmup"
                                 and session_data.session_id in valid_session_ids
                             ],
+                            # Old sessions: HTML file exists but JSONL deleted (not in cache either).
+                            # Scanned from filesystem since cache only tracks live JSONL.
+                            "old_sessions": _scan_old_sessions(
+                                project_dir, valid_session_ids
+                            ),
                         }
                     )
                     # Add project stats
@@ -2023,6 +2082,7 @@ def process_projects_hierarchy(
                     else [],
                     "is_archived": False,
                     "sessions": sessions_data,
+                    "old_sessions": [],
                 }
             )
             # Track session count in stats for fallback path
@@ -2066,7 +2126,16 @@ def process_projects_hierarchy(
     index_path = projects_path / f"index.{ext}"
     renderer = get_renderer(output_format, image_export_mode)
     index_regenerated = False
-    if renderer.is_outdated(index_path) or from_date or to_date or any_cache_updated:
+    # cache_only mode is the index route — always regenerate to reflect filesystem
+    # changes (e.g. JSONL deletions affecting Old Sessions count) that don't trigger
+    # any_cache_updated. Index render itself is cheap.
+    if (
+        renderer.is_outdated(index_path)
+        or from_date
+        or to_date
+        or any_cache_updated
+        or cache_only
+    ):
         index_content = renderer.generate_projects_index(
             project_summaries, from_date, to_date
         )

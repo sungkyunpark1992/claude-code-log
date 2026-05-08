@@ -88,6 +88,12 @@
                     <summary>Sessions ({{ project.sessions|length }})</summary>
                     {{ render_session_nav(project.sessions, "expandable", project.name + "/") }}
                 </details>
+                {% if project.old_sessions and project.old_sessions|length > 0 %}
+                <details class='old-sessions'>
+                    <summary>Old Sessions ({{ project.old_sessions|length }}) <span class='old-sessions-hint'>JSONL 삭제됨, HTML만 잔존</span></summary>
+                    {{ render_session_nav(project.old_sessions, "expandable", project.name + "/") }}
+                </details>
+                {% endif %}
             </div>
             {% endif %}
         </div>

@@ -115,6 +115,34 @@
     margin-bottom: 10px;
 }
 
+/* Old Sessions: JSONL deleted, HTML still exists */
+.project-sessions details.old-sessions summary {
+    color: #999;
+    font-size: 1em;
+    border-top: 1px dashed #ddd;
+    margin-top: 4px;
+    padding-top: 10px;
+}
+
+.project-sessions details.old-sessions summary:hover {
+    color: var(--system-warning-color);
+}
+
+.project-sessions details.old-sessions .old-sessions-hint {
+    font-size: 0.75em;
+    font-weight: normal;
+    color: #b0b0b0;
+    margin-left: 6px;
+}
+
+.project-sessions details.old-sessions .session-link {
+    opacity: 0.7;
+}
+
+.project-sessions details.old-sessions .session-link:hover {
+    opacity: 1;
+}
+
 /* Archived project styling */
 .project-card.archived {
     opacity: 0.6;
