@@ -253,11 +253,23 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                 from .converter import load_transcript
                 from .html.renderer import HtmlRenderer
 
+                # ?page=N (1-based) 또는 ?page=last → 페이지 슬라이스.
+                # 파라미터 없거나 last → renderer가 마지막 페이지로 기본 처리.
+                page_param = request.args.get("page", "").strip().lower()
+                page_num: Optional[int] = None
+                if page_param and page_param != "last":
+                    try:
+                        page_num = int(page_param)
+                    except ValueError:
+                        page_num = None
+
                 messages = load_transcript(jsonl_file, silent=True)
                 renderer = HtmlRenderer()
                 custom_title = _get_custom_title(jsonl_file, session_id)
-                html = renderer.generate_session(messages, session_id, title=custom_title)
-                print(f"[serve_file] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
+                html = renderer.generate_session(
+                    messages, session_id, title=custom_title, page=page_num,
+                )
+                print(f"[serve_file] session={session_id[:8]}, page={page_num or 'last'}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
                 return Response(
                     html,
                     mimetype="text/html",
