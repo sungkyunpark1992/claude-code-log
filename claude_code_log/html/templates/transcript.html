@@ -1418,14 +1418,13 @@
                             return;
                         }
 
-                        // Remove old prompt and reset dock sticky state
-                        var oldPrompt = document.getElementById('ccl-live-prompt');
-                        if (oldPrompt) oldPrompt.remove();
-                        var dock = document.getElementById('prompt-dock');
-                        if (dock) {
-                            dock.classList.remove('sticky');
-                            document.body.style.paddingBottom = '';
-                        }
+                        // 프롬프트(#ccl-live-prompt)는 그대로 둠 — 새 메시지는 그 위쪽의
+                        // #sse-live-messages 컨테이너로 들어가므로 프롬프트를 지울 이유 없음.
+                        // 사용자가 textarea에 입력 중이던 텍스트/커서/포커스/minimized 상태가
+                        // 자연스럽게 보존되며 이벤트 리스너도 그대로 유지됨.
+                        //
+                        // 단, 메시지 삽입 후 문서 높이가 늘어나면 sticky-bottom 도크의
+                        // padding-bottom을 다시 계산해야 함 → iframe.onload 안에서 처리.
 
                         // Use #sse-live-messages — a CLEAN container outside the broken
                         // messages-container DOM. It's placed in the template right before
@@ -1453,29 +1452,29 @@
                                 console.log('[SSE] adopted', nodeCount, 'nodes into #sse-live-messages');
                             }
 
-                            // Re-create prompt inside #prompt-dock (always at page bottom)
-                            var dock = document.getElementById('prompt-dock');
-                            if (dock) {
-                                var promptDiv = document.createElement('div');
-                                promptDiv.id = 'ccl-live-prompt';
-                                promptDiv.className = 'message user empty-prompt';
-                                promptDiv.innerHTML = '<div class="header"><span>\uD83E\uDD37 User</span>' +
-                                    '<button class="prompt-minimize-btn" title="\uCD5C\uC18C\uD654">\u25BC</button></div>' +
-                                    '<div class="content">' +
-                                    '<textarea class="user-input" placeholder="\uBA54\uC2DC\uC9C0\uB97C \uC785\uB825\uD558\uC138\uC694..."></textarea>' +
-                                    '</div>';
-                                dock.appendChild(promptDiv);
-                                // Restore model badge after re-create
-                                if (resp.model) updatePromptModel(resp.model);
-                            }
+                            // Only update model badge; the prompt element stays in place.
+                            // New messages go into #sse-live-messages above the prompt,
+                            // so the prompt's textarea content/focus/cursor are preserved.
+                            if (resp.model) updatePromptModel(resp.model);
 
                             // Cleanup iframe
                             document.body.removeChild(iframe);
 
                             // Post-processing on new content
                             if (typeof convertTimestamps === 'function') convertTimestamps();
-                            if (typeof window.initEmptyPrompt === 'function') window.initEmptyPrompt();
                             if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
+
+                            // sticky-bottom 도크 padding 재계산 — 새 메시지로 문서 높이가
+                            // 늘어났으므로 body.padding-bottom을 다시 계산해야 함.
+                            // initEmptyPrompt는 호출하지 않음 (textarea/click 리스너가 중복으로
+                            // 또 붙어 동작이 이상해질 수 있음)
+                            var dock = document.getElementById('prompt-dock');
+                            if (dock && dock.classList.contains('sticky')) {
+                                document.body.style.paddingBottom = '';
+                                var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
+                                var docHeight = document.documentElement.scrollHeight;
+                                document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+                            }
 
                             if (atBottom) {
                                 window.scrollTo(0, document.body.scrollHeight);

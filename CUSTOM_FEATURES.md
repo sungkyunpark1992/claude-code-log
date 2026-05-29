@@ -30,6 +30,7 @@
 21. [질문 말풍선 순차 번호 (#1, #2, #3...)](#21-질문-말풍선-순차-번호-1-2-3)
 22. [질문 북마크 기능 (📌 핀 + 🔖 패널)](#22-질문-북마크-기능--핀---패널)
 23. [Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)
+24. [SSE 업데이트 시 입력 중인 textarea 내용 보존](#24-sse-업데이트-시-입력-중인-textarea-내용-보존)
 
 ---
 
@@ -1710,6 +1711,82 @@ if jsonl_file is not None and jsonl_file.stem == session_id:
 
 ---
 
+## 24. SSE 업데이트 시 입력 중인 textarea 내용 보존
+
+**목적**: 빈 프롬프트(`#ccl-live-prompt`)의 textarea에 입력 중일 때 SSE 라이브 업데이트가 와도 입력 내용/포커스/커서가 사라지지 않도록.
+
+### 증상
+
+세션 페이지에서 textarea(`<textarea class='user-input'>`)에 메시지를 타이핑하고 있는 동안 Claude Code 측에서 새 응답이 도착하면, 입력 중이던 텍스트가 흔적도 없이 날아갔음.
+
+### 원인
+
+기존 SSE update 핸들러는 새 메시지 삽입 후 **프롬프트 element를 통째로 삭제하고 재생성**하는 구조였음:
+
+```javascript
+// (원래 코드)
+var oldPrompt = document.getElementById('ccl-live-prompt');
+if (oldPrompt) oldPrompt.remove();        // ← textarea가 통째로 소멸
+// ... 새 메시지 삽입 ...
+// 새 promptDiv 생성 → dock.appendChild(promptDiv);
+window.initEmptyPrompt();                  // 리스너 재바인딩
+```
+
+근본 이유는 **`initEmptyPrompt()` 함수가 idempotent하지 않았기 때문**:
+- 도크의 sticky-bottom `padding-bottom` 재계산 로직 (필요)
+- textarea의 `input` / `blur` / 부모 `click` / minimize 버튼 `click` 리스너 등록 (재호출 시 중복 누적)
+
+위 두 가지가 한 함수에 묶여 있어서, padding을 다시 계산하려면 `initEmptyPrompt()`를 다시 불러야 했고, 다시 부르면 리스너가 중복되므로 element를 새로 만들어야 했음. **그 부작용으로 textarea 내용이 날아가는 게 비의도적이지만 불가피한 결과**가 됨.
+
+### 수정
+
+`SSE updated 이벤트` 핸들러에서 프롬프트 element를 건드리지 않고, sticky-padding 재계산만 inline으로 수행하도록 변경.
+
+#### 수정 파일 (1개)
+
+**`claude_code_log/html/templates/transcript.html`** — SSE `onmessage` → `data.type === 'updated'` 분기 안의 `iframe.onload` 콜백
+
+**제거**: 옛 프롬프트 `remove()` + 새 `promptDiv` 생성 + `dock.appendChild()` + `initEmptyPrompt()` 재호출
+
+**추가**: 메시지 삽입 후 도크 padding만 inline으로 재계산
+```javascript
+// 모델 배지만 갱신 (프롬프트 element는 그대로)
+if (resp.model) updatePromptModel(resp.model);
+
+// ... convertTimestamps / numberUserMessages ...
+
+// sticky-bottom 도크 padding 재계산 (문서 높이가 새 메시지로 늘어남)
+// initEmptyPrompt는 호출하지 않음 — 이미 붙은 input/blur/click 리스너가 중복으로 또 붙어 동작이 이상해질 수 있음
+var dock = document.getElementById('prompt-dock');
+if (dock && dock.classList.contains('sticky')) {
+    document.body.style.paddingBottom = '';
+    var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
+    var docHeight = document.documentElement.scrollHeight;
+    document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+}
+```
+
+### 결과
+
+| 항목 | 수정 전 | 수정 후 |
+|---|---|---|
+| textarea 입력 텍스트 | 사라짐 | 그대로 보존 |
+| 포커스 / 커서 위치 | 잃음 | 그대로 |
+| 입력창 auto-grow 높이 | 리셋 | 그대로 |
+| minimized 상태 (▲) | 리셋 | 그대로 |
+| empty-prompt 활성화 여부 | 리셋 | 그대로 |
+| 이벤트 리스너 | 매번 재바인딩 | 한 번만 (DOMContentLoaded 시) |
+| 모델 배지 갱신 | OK | OK (`updatePromptModel`만 호출) |
+| 도크 sticky padding 재계산 | OK (initEmptyPrompt 부수효과) | OK (inline) |
+
+DOM 구조상 새 메시지는 `#sse-live-messages` 컨테이너로 들어가고 프롬프트는 그 아래의 `#prompt-dock` 안에 별도로 있으므로, 프롬프트를 지우지 않아도 새 메시지가 프롬프트 위쪽에 자연스럽게 표시됨.
+
+### 설계 메모
+
+상태 초기화(side-effect-free)와 이벤트 바인딩(side-effect-heavy)이 같은 함수에 묶이면, 부분 호출이 불가능해져 element 재생성 같은 우회 수단을 쓰게 되고 부작용이 따라옴. 두 책임을 분리해 inline 호출 가능하게 만든 사례.
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1772,6 +1849,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
 | (pending) | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
 | (pending) | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
+| (pending) | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
 
 ---
 
