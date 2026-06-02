@@ -921,15 +921,29 @@
                     }
                 });
                 // Clear textarea content (header trash button)
+                // 직접 `textarea.value = ''` 으로 비우면 native undo stack에 안 들어가서
+                // Ctrl+Z 복원이 안 됨. execCommand(selectAll/delete)는 textarea의 undo
+                // stack에 정상 등록되므로 사용자가 Ctrl+Z 로 지운 내용을 되돌릴 수 있음.
                 var clearBtn = ep.querySelector('.prompt-clear-btn');
                 if (clearBtn) {
                     clearBtn.addEventListener('click', function (e) {
                         e.stopPropagation();  // .empty-prompt 부모 click 핸들러로 버블링 방지
                         if (!textarea.value) return;
-                        textarea.value = '';
-                        // input 이벤트로 height 재계산 트리거 (붙어있는 input 리스너가 0으로 리셋)
-                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                        textarea.focus();  // 바로 다시 타이핑할 수 있게 포커스 유지
+                        textarea.focus();  // execCommand는 포커스된 element 대상
+                        // 1) 전체 선택 → 2) 삭제 (이 두 명령은 native undo stack에 기록됨)
+                        try {
+                            document.execCommand('selectAll', false);
+                            document.execCommand('delete', false);
+                        } catch (err) {
+                            // execCommand 미지원 환경 fallback (Ctrl+Z 안 됨)
+                            textarea.value = '';
+                            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        // execCommand('delete')는 input 이벤트를 자동 발화하지만,
+                        // 일부 브라우저는 빈 textarea에선 안 쏘기도 함 → 수동 보강
+                        if (textarea.value === '') {
+                            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
                     });
                 }
                 // Minimize/maximize toggle

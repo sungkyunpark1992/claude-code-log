@@ -1795,10 +1795,10 @@ DOM 구조상 새 메시지는 `#sse-live-messages` 컨테이너로 들어가고
 ### 동작
 
 1. 빈 프롬프트 헤더에 `🤷 User | 🗑️ | ▼` 순서로 버튼 배치 (지우기 버튼은 minimize 왼쪽)
-2. 🗑️ 클릭 시 textarea `value = ''` → input 이벤트 발화 → height auto-grow가 한 줄로 리셋 → textarea에 포커스 유지 (바로 다시 타이핑 가능)
-3. textarea가 이미 비어있으면 클릭해도 아무 일 없음
-4. 빈 프롬프트 비활성 상태(empty-prompt 클래스)에선 `.user.empty-prompt *` 의 `pointer-events: none` 으로 자동 비활성 → 별도 가시성 토글 불필요
-5. 실수로 지웠을 때는 브라우저 기본 Ctrl+Z 로 복원 (별도 undo 구현 불필요)
+2. 🗑️ 클릭 시 textarea 내용 비우기 → height auto-grow가 한 줄로 리셋 → textarea에 포커스 유지 (바로 다시 타이핑 가능)
+3. **Ctrl+Z 로 복원 가능** — `document.execCommand('selectAll' → 'delete')` 사용으로 native undo stack에 정상 등록됨 (`textarea.value = ''` 직접 할당은 undo stack에 안 들어가므로 사용 안 함)
+4. textarea가 이미 비어있으면 클릭해도 아무 일 없음
+5. 빈 프롬프트 비활성 상태(empty-prompt 클래스)에선 `.user.empty-prompt *` 의 `pointer-events: none` 으로 자동 비활성 → 별도 가시성 토글 불필요
 
 ### 설계 결정
 
@@ -1807,8 +1807,20 @@ DOM 구조상 새 메시지는 `#sse-live-messages` 컨테이너로 들어가고
 | 아이콘 | 🗑️ | 직관적 (✕는 닫기 의미와 혼동) |
 | 위치 | minimize(▼) 왼쪽 | 헤더 좌측 액션 영역에 자연스럽게 배치 |
 | 클릭 후 포커스 | 유지 | 실수로 지웠을 때 바로 다시 타이핑 가능 |
-| 확인 다이얼로그 | 없음 | UX 거추장, 브라우저 Ctrl+Z 로 복원 가능 |
+| 비우기 방식 | `execCommand('selectAll'/'delete')` | native undo stack 등록 → Ctrl+Z 복원 가능 |
+| 확인 다이얼로그 | 없음 | UX 거추장, Ctrl+Z 로 충분 |
 | 표시 조건 | 항상 | `pointer-events: none` 으로 빈 상태에선 자동 비활성 |
+
+### Ctrl+Z 복원 원리
+
+`textarea.value = ''` 같은 직접 프로퍼티 할당은 브라우저 native undo stack에 기록되지 않음 → 사용자가 Ctrl+Z를 눌러도 복원 안 됨. 반면 `document.execCommand('delete')`는 "사용자 편집 명령"으로 간주되어 undo stack에 정상 등록됨. `execCommand`는 명세상 "deprecated" 표기되어 있지만, 이는 contenteditable의 서식 명령(`bold`/`italic` 등) 때문이며 textarea의 `selectAll`/`delete`는 여전히 안정적이고 모든 주요 브라우저에서 native undo와 정상 연동됨.
+
+```
+사용자가 "안녕" 입력 → undo stack: [insert "안녕"]
+🗑️ 클릭 (selectAll + delete) → undo stack: [insert "안녕", selectAll, delete]
+Ctrl+Z (delete 취소) → "안녕" 복원
+Ctrl+Z (selectAll 취소) → 선택 해제
+```
 
 ### 수정 파일 (2개)
 
@@ -1830,10 +1842,21 @@ if (clearBtn) {
     clearBtn.addEventListener('click', function (e) {
         e.stopPropagation();  // .empty-prompt 부모 click 핸들러로 버블링 방지
         if (!textarea.value) return;
-        textarea.value = '';
-        // 붙어있는 input 리스너가 height를 0으로 리셋
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        textarea.focus();
+        textarea.focus();  // execCommand는 포커스된 element 대상
+        // 1) 전체 선택 → 2) 삭제 (두 명령 모두 native undo stack에 기록됨 → Ctrl+Z 복원 가능)
+        try {
+            document.execCommand('selectAll', false);
+            document.execCommand('delete', false);
+        } catch (err) {
+            // execCommand 미지원 환경 fallback (Ctrl+Z 안 됨)
+            textarea.value = '';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        // execCommand('delete')는 input 이벤트를 자동 발화하지만 일부 브라우저는
+        // 빈 textarea에선 안 쏘기도 함 → 수동 보강으로 height auto-grow 트리거
+        if (textarea.value === '') {
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     });
 }
 ```
@@ -1936,6 +1959,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
 | (pending) | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
 | (pending) | 빈 프롬프트 입력 지우기 버튼 — 헤더에 🗑️ 추가 (minimize 왼쪽), 클릭 시 textarea 비우기 + height 리셋 + 포커스 유지. CSS는 `.prompt-minimize-btn` 셀렉터 그룹화로 공유 |
+| (pending) | 🗑️ 지우기 버튼 Ctrl+Z 복원 지원 — `textarea.value = ''` 대신 `document.execCommand('selectAll' → 'delete')` 사용으로 native undo stack에 등록 → 키보드 Ctrl+Z 로 지운 내용 복원 가능. execCommand 실패 시 직접 비우기 fallback |
 
 ---
 
