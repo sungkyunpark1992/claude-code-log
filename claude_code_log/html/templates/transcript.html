@@ -206,6 +206,7 @@
     <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'>
             <span>🤷 User</span>
+            <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
             <button class='prompt-minimize-btn' title='최소화'>▼</button>
         </div>
         <div class='content'>
@@ -919,6 +920,18 @@
                         this.style.height = '';
                     }
                 });
+                // Clear textarea content (header trash button)
+                var clearBtn = ep.querySelector('.prompt-clear-btn');
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', function (e) {
+                        e.stopPropagation();  // .empty-prompt 부모 click 핸들러로 버블링 방지
+                        if (!textarea.value) return;
+                        textarea.value = '';
+                        // input 이벤트로 height 재계산 트리거 (붙어있는 input 리스너가 0으로 리셋)
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        textarea.focus();  // 바로 다시 타이핑할 수 있게 포커스 유지
+                    });
+                }
                 // Minimize/maximize toggle
                 var minimizeBtn = ep.querySelector('.prompt-minimize-btn');
                     if (minimizeBtn) {

@@ -31,6 +31,7 @@
 22. [질문 북마크 기능 (📌 핀 + 🔖 패널)](#22-질문-북마크-기능--핀---패널)
 23. [Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)
 24. [SSE 업데이트 시 입력 중인 textarea 내용 보존](#24-sse-업데이트-시-입력-중인-textarea-내용-보존)
+25. [빈 프롬프트 입력 지우기 버튼 (🗑️)](#25-빈-프롬프트-입력-지우기-버튼-)
 
 ---
 
@@ -1787,6 +1788,90 @@ DOM 구조상 새 메시지는 `#sse-live-messages` 컨테이너로 들어가고
 
 ---
 
+## 25. 빈 프롬프트 입력 지우기 버튼 (🗑️)
+
+**목적**: 빈 프롬프트의 헤더에 🗑️ 휴지통 버튼을 추가해 클릭 한 번으로 입력 중이던 textarea 내용을 비울 수 있게.
+
+### 동작
+
+1. 빈 프롬프트 헤더에 `🤷 User | 🗑️ | ▼` 순서로 버튼 배치 (지우기 버튼은 minimize 왼쪽)
+2. 🗑️ 클릭 시 textarea `value = ''` → input 이벤트 발화 → height auto-grow가 한 줄로 리셋 → textarea에 포커스 유지 (바로 다시 타이핑 가능)
+3. textarea가 이미 비어있으면 클릭해도 아무 일 없음
+4. 빈 프롬프트 비활성 상태(empty-prompt 클래스)에선 `.user.empty-prompt *` 의 `pointer-events: none` 으로 자동 비활성 → 별도 가시성 토글 불필요
+5. 실수로 지웠을 때는 브라우저 기본 Ctrl+Z 로 복원 (별도 undo 구현 불필요)
+
+### 설계 결정
+
+| 옵션 | 선택 | 이유 |
+|---|---|---|
+| 아이콘 | 🗑️ | 직관적 (✕는 닫기 의미와 혼동) |
+| 위치 | minimize(▼) 왼쪽 | 헤더 좌측 액션 영역에 자연스럽게 배치 |
+| 클릭 후 포커스 | 유지 | 실수로 지웠을 때 바로 다시 타이핑 가능 |
+| 확인 다이얼로그 | 없음 | UX 거추장, 브라우저 Ctrl+Z 로 복원 가능 |
+| 표시 조건 | 항상 | `pointer-events: none` 으로 빈 상태에선 자동 비활성 |
+
+### 수정 파일 (2개)
+
+#### 25-1. `claude_code_log/html/templates/transcript.html`
+
+**HTML** — `#ccl-live-prompt > .header` 안에 minimize 버튼 왼쪽으로 추가:
+```html
+<div class='header'>
+    <span>🤷 User</span>
+    <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
+    <button class='prompt-minimize-btn' title='최소화'>▼</button>
+</div>
+```
+
+**JS** — `initEmptyPrompt()` 안의 minimize 핸들러 바로 앞에 click 핸들러 추가:
+```javascript
+var clearBtn = ep.querySelector('.prompt-clear-btn');
+if (clearBtn) {
+    clearBtn.addEventListener('click', function (e) {
+        e.stopPropagation();  // .empty-prompt 부모 click 핸들러로 버블링 방지
+        if (!textarea.value) return;
+        textarea.value = '';
+        // 붙어있는 input 리스너가 height를 0으로 리셋
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+    });
+}
+```
+
+리스너는 `DOMContentLoaded` 시 `initEmptyPrompt()`가 한 번만 호출되므로 (#24 수정 이후) 중복 등록 우려 없음.
+
+#### 25-2. `claude_code_log/html/templates/components/message_styles.css`
+
+기존 `.prompt-minimize-btn` 셀렉터를 그룹화하여 두 버튼 모두에 동일 스타일 적용 (CSS 중복 방지):
+
+```css
+/* Header action buttons in prompt header (clear, minimize) */
+.prompt-clear-btn,
+.prompt-minimize-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.prompt-clear-btn:hover,
+.prompt-minimize-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+```
+
+### #24와의 시너지
+
+이 기능은 #24 (SSE 업데이트 시 textarea 보존) 위에 자연스럽게 얹힘:
+- #24 이전: 프롬프트 element가 SSE update마다 재생성됐으므로 🗑️ 버튼의 click 리스너도 매번 다시 붙여야 했을 것
+- #24 이후: 프롬프트 element가 영구히 유지되므로 `DOMContentLoaded` 시 한 번 바인딩으로 충분
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1850,6 +1935,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
 | (pending) | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
 | (pending) | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
+| (pending) | 빈 프롬프트 입력 지우기 버튼 — 헤더에 🗑️ 추가 (minimize 왼쪽), 클릭 시 textarea 비우기 + height 리셋 + 포커스 유지. CSS는 `.prompt-minimize-btn` 셀렉터 그룹화로 공유 |
 
 ---
 

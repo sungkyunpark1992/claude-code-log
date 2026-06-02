@@ -358,7 +358,8 @@
     pointer-events: none;
 }
 
-/* Minimize/maximize toggle button in prompt header */
+/* Header action buttons in prompt header (clear, minimize) */
+.prompt-clear-btn,
 .prompt-minimize-btn {
     background: none;
     border: none;
@@ -370,6 +371,7 @@
     line-height: 1;
     flex-shrink: 0;
 }
+.prompt-clear-btn:hover,
 .prompt-minimize-btn:hover {
     background: rgba(0, 0, 0, 0.08);
 }
