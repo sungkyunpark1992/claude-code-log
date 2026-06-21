@@ -656,34 +656,32 @@
 
     // Handle keyboard shortcuts
     function handleKeyboardShortcuts(e) {
-        // Ctrl+F or Cmd+F
-        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-            e.preventDefault();
-
-            // On transcript pages, open filter toolbar if not visible
-            const filterToolbar = document.querySelector('.filter-toolbar');
-            if (filterToolbar && !filterToolbar.classList.contains('visible')) {
-                // Trigger filter button click to show toolbar
-                const filterButton = document.getElementById('filterMessages');
-                if (filterButton) filterButton.click();
-            }
-
-            // Focus and select search input
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
-        }
-
-        // F3 - Next match
-        if (e.key === 'F3') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                navigateMatch(-1);
-            } else {
-                navigateMatch(1);
-            }
-        }
+        // Ctrl+F / Cmd+F / F3 가로채기 비활성화 (브라우저 기본 찾기 사용)
+        // — 커스텀 filter-toolbar 검색이 동작이 어색하다는 피드백으로 임시 비활성화.
+        //   다시 활성화하려면 아래 블록의 주석을 해제하면 됨.
+        //   filter-toolbar는 우측 하단 🔍 플로팅 버튼으로 여전히 열 수 있음.
+        //
+        // if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        //     e.preventDefault();
+        //     const filterToolbar = document.querySelector('.filter-toolbar');
+        //     if (filterToolbar && !filterToolbar.classList.contains('visible')) {
+        //         const filterButton = document.getElementById('filterMessages');
+        //         if (filterButton) filterButton.click();
+        //     }
+        //     if (searchInput) {
+        //         searchInput.focus();
+        //         searchInput.select();
+        //     }
+        // }
+        //
+        // if (e.key === 'F3') {
+        //     e.preventDefault();
+        //     if (e.shiftKey) {
+        //         navigateMatch(-1);
+        //     } else {
+        //         navigateMatch(1);
+        //     }
+        // }
 
         // Escape - Close search results panel on index page
         if (e.key === 'Escape') {
