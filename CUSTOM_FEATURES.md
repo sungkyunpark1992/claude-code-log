@@ -32,10 +32,9 @@
 23. [Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)
 24. [SSE 업데이트 시 입력 중인 textarea 내용 보존](#24-sse-업데이트-시-입력-중인-textarea-내용-보존)
 25. [빈 프롬프트 입력 지우기 버튼 (🗑️)](#25-빈-프롬프트-입력-지우기-버튼-)
-26. [단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외](#26-단일-세션-페이지네이션--북마크-미리보기-ide-알림-제외)
-27. [검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)](#27-검색-단축키-비활성화-ctrlf-f3--브라우저-기본-찾기-사용)
-28. [📂 모든 메시지 펼치기/접기 통합 토글 버튼](#28--모든-메시지-펼치기접기-통합-토글-버튼)
-29. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#29-대시보드-검색-결과--세션-제목id미리보기-표시)
+26. [검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)](#26-검색-단축키-비활성화-ctrlf-f3--브라우저-기본-찾기-사용)
+27. [📂 도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기 토글 버튼](#27--도구-메시지-readeditbash-등-보이기숨기기-토글-버튼)
+28. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#28-대시보드-검색-결과--세션-제목id미리보기-표시)
 
 ---
 
@@ -1899,41 +1898,7 @@ if (clearBtn) {
 
 ---
 
-## 26. 단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외
-
-**목적**: 큰 세션(질문 200+) HTML을 페이지 단위로 잘라 초기 렌더링 비용 절감 + 북마크 패널 미리보기에서 IDE 자동 컨텍스트 제외.
-
-### 동작
-
-1. 단일 세션을 user 질문 **200개 단위**로 페이지 분할 (`USER_MSGS_PER_PAGE = 200`)
-2. URL `session-{id}.html` = **마지막 페이지** (기본, 활성 채팅 UX), `?page=N` = N페이지
-3. 질문 번호 `#N`은 페이지 오프셋 적용 (페이지 2 → `#201`부터)
-4. 북마크 패널은 **전체 세션**의 북마크를 표시, 다른 페이지 항목 클릭 시 `?page=N#msg-uuid`로 자동 점프
-5. 비-마지막 페이지에선 SSE 라이브 동기화 꺼짐 (`📖 과거 페이지` 인디케이터)
-6. **북마크 미리보기에서 IDE 자동 컨텍스트(`🤖 The user opened the file...`, `📝 selection`, diagnostics 등) 제외** — `_build_bookmark_index`에서 `<div class='ide-notification ...'>...</div>` 블록을 정규식으로 사전 제거
-
-### 수정 파일
-
-자세한 BEFORE/AFTER 코드 블록은 **[pagenation.md](pagenation.md)** 참조. 핵심:
-
-- `claude_code_log/html/renderer.py` — `USER_MSGS_PER_PAGE`, `_is_user_question`, `_compute_session_pages`, `_build_bookmark_index` 헬퍼 추가. `generate()` / `generate_session()` 시그니처 확장 (`user_msgs_per_page`, `current_page` 등)
-- `claude_code_log/server.py` — `serve_file`에서 `?page=N` 쿼리 파싱 후 `generate_session(page=...)` 전달. `jsonl_file.stem == session_id` 안전장치(Old Sessions 기능에서 도입) **유지**
-- `claude_code_log/html/templates/transcript.html` — JS 변수 주입(`__userMsgStartNumber`, `__bookmarkIndex`, `__currentPage`), `render_page_nav()` 매크로, `numberUserMessages()` 오프셋, `gatherBookmarksOnPage()` 인덱스 기반 전환, 크로스 페이지 북마크 점프, 비-마지막 페이지 SSE off
-- `claude_code_log/html/templates/components/page_nav_styles.css` — `.page-user-range`, `.bookmark-item-other-page` 스타일
-
-### 핵심 설계
-
-| 항목 | 결정 |
-|---|---|
-| 슬라이스 기준 | user 질문 개수 (assistant/tool은 부속 → 같이 따라감) |
-| 기본 페이지 | 마지막 (활성 채팅에서 새 메시지 보임 우선) |
-| 북마크 인덱스 | 전체 세션 메타데이터를 클라이언트에 주입 (페이지 무관) |
-| 미리보기 필터 | `<div class='ide-notification ...'>...</div>` 정규식 사전 제거 후 태그 스트립 → 60자 |
-| SSE 라이브 동기화 | 마지막 페이지에서만 활성 (옛 페이지에 새 메시지 append하면 경계 깨짐) |
-
----
-
-## 27. 검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)
+## 26. 검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)
 
 **목적**: 커스텀 `.filter-toolbar` 검색이 정상 동작하지 않는 동안 브라우저 기본 Ctrl+F 찾기가 제대로 동작하도록 임시 비활성화.
 
@@ -1962,44 +1927,85 @@ if (clearBtn) {
 
 ---
 
-## 28. 📂 모든 메시지 펼치기/접기 통합 토글 버튼
+## 27. 📂 도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기 토글 버튼
 
-**목적**: 메시지 fold-bar(▼/▶ 자식 메시지 토글)와 메시지 내부 `<details>`(코드/Read/Bash 결과 접힘)를 한 버튼으로 일괄 펼침/접힘.
+**목적**: 메시지 본문 영역에서 도구 호출/결과(`tool_use` + `tool_result`)만 일괄 표시·숨김. user / assistant / thinking은 항상 보이게 유지하고, 사용자가 원할 때만 도구 메시지(Read/Edit/Bash 등)를 한 번에 끄거나 켤 수 있음.
+
+### 배경 — 초기 설계가 잘못된 이유
+
+처음엔 메시지 **트리 구조**를 기준으로 접고 펼치는 방식이었음(`setInitialFoldState`/`expandAll`/`collapseToInitial`). 그러나 Claude Code의 메시지 트리는 도구 사용을 거치면 깊이가 길어짐:
+
+```
+User (질문)                           ← depth 1
+  └─ Assistant text (첫 응답)         ← depth 2  ← User의 직계 자식
+       └─ Tool use (도구 호출)         ← depth 3
+            └─ Tool result (도구 결과) ← depth 4
+                 └─ Assistant text (최종 답변) ← depth 5  ← 직계 자식이 아님 → 접기 시 사라짐
+```
+
+트리 기반 "직계 자식만 보이게" 로직이 깊이 5의 마지막 Assistant 답변까지 같이 숨겨버려, 사용자가 가장 보고 싶어하는 최신 답변이 사라지는 부작용이 있었음. 또한 사용자의 의도는 "트리 깊이"가 아니라 "메시지 종류"였음.
+
+**개선 방향**: 트리 깊이를 무시하고 메시지의 CSS 클래스(`.tool_use` / `.tool_result`)만 보고 토글.
 
 ### 동작
 
-| 클릭 시점 | 상태 판정 | 실행 | 아이콘 |
-|---|---|---|---|
-| 페이지 로드 직후 | 부분 접힘 → 완전 펼침 아님 | **expandAll** | 📂 → 📁 |
-| 다 펼친 뒤 다시 클릭 | 완전 펼침 | **collapseToInitial** | 📁 → 📂 |
-| 사용자가 일부만 펼쳤을 때 | 완전 펼침 아님 | **expandAll** (나머지 다 펼침) | 📂 → 📁 |
+| 클릭 | 동작 | 아이콘 변경 |
+|---|---|---|
+| 도구 메시지가 보이는 상태에서 클릭 | 모든 `.tool_use` / `.tool_result` 에 `display: none` | 📁 → 📂 |
+| 도구 메시지가 숨어있는 상태에서 클릭 | 모든 `.tool_use` / `.tool_result` 의 `display` 해제 | 📂 → 📁 |
+| 페이지 로드 직후 | `syncIcon()` 가 현재 가시성 보고 아이콘 결정 | 자동 |
 
-`isFullyExpanded()` 판정 — 모든 `.fold-bar-section`이 `.folded` 클래스 없음 **AND** 모든 collapsible `<details>`가 `open` 속성 있음.
-
-`expandAll()` — 모든 `.message` `display = ''` + 모든 fold-bar 펼침 상태로 (▼/▼▼ + `.folded` 제거 + tooltip 갱신) + 모든 collapsible details에 `open` 속성 부여.
-
-`collapseToInitial()` — 모든 details `open` 제거 + 페이지 로드 시 `setInitialFoldState()` 재실행 (user 메시지는 1단계 보이고 assistant/tool/thinking은 접힘 — 신중히 설계된 초기 UX 복귀).
+| 메시지 종류 | 동작 |
+|---|---|
+| 👤 user, 🤖 assistant, 💭 thinking | **항상 보임** — 버튼이 건드리지 않음 |
+| 🛠️ tool_use, tool_result (Read/Edit/Bash/Write/Grep/...) | 버튼으로 일괄 토글 |
+| fold-bar (▼/▶) | **독립 동작** — 사용자가 개별로 계속 사용 가능 |
+| 메시지 안의 `<details>` (긴 코드 펼침 등) | **그대로** — 📋 버튼이 담당 |
 
 ### 수정 파일 (1개)
 
 **`claude_code_log/html/templates/transcript.html`**:
 
-- `#floating-buttons` 영역에 버튼 추가: `<button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="모든 메시지 펼치기/접기">📂</button>`
-- `setInitialFoldState` 함수를 `window.setInitialFoldState`로 전역 노출 (collapseToInitial이 호출하기 위해)
-- DOMContentLoaded 안에 IIFE로 `isFullyExpanded` / `expandAll` / `collapseToInitial` + 클릭 핸들러 정의
+- `#floating-buttons` 영역에 버튼 추가: `<button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>`
+- DOMContentLoaded 안에 IIFE로 `anyToolVisible` / `showAllTools` / `hideAllTools` / `syncIcon` + 클릭 핸들러 정의
 - CSS는 기존 `.floating-btn` 스타일 그대로 재사용 (별도 CSS 없음)
+
+```javascript
+var toolSel = '.message.tool_use, .message.tool_result';
+
+function anyToolVisible() {
+    var tools = document.querySelectorAll(toolSel);
+    for (var i = 0; i < tools.length; i++) {
+        if (tools[i].style.display !== 'none') return true;
+    }
+    return false;
+}
+function showAllTools() {
+    document.querySelectorAll(toolSel).forEach(function(m) { m.style.display = ''; });
+    btn.textContent = '📁';
+}
+function hideAllTools() {
+    document.querySelectorAll(toolSel).forEach(function(m) { m.style.display = 'none'; });
+    btn.textContent = '📂';
+}
+syncIcon();  // 초기에 fold-bar 상태로 숨어있을 수 있으므로 아이콘 동기화
+btn.addEventListener('click', function() {
+    if (anyToolVisible()) hideAllTools(); else showAllTools();
+});
+```
 
 ### 핵심 설계
 
-| 항목 | 결정 | 대안 |
+| 항목 | 결정 | 이유 |
 |---|---|---|
-| 접기 깊이 | **초기 상태로 복귀** (user 보임, assistant 접힘) | top-level만 보이게 (assistant까지 다 숨기면 대화 사라져 보임) |
-| 트리거 | 단일 버튼 스마트 토글 | 펼치기/접기 버튼 2개 분리 |
-| 통합 범위 | fold-bar + `<details>` 모두 | `<details>`만 (기존 📋 버튼 역할) |
+| 토글 단위 | 메시지 CSS 클래스 (`.tool_use` / `.tool_result`) | 사용자가 생각하는 단위는 "메시지 종류"이지 "트리 깊이"가 아님 |
+| 토글 범위 | 도구 메시지만 | thinking은 본문 일부로 인식되므로 항상 보임 |
+| 다른 토글 기능 침범 | 없음 — fold-bar / `<details>` 건드리지 않음 | 직교성 유지 (fold-bar는 개별 메시지 트리, 📋 버튼은 본문 details) |
+| 아이콘 초기 동기화 | `syncIcon()` 으로 현재 DOM 상태 검사 | 페이지 로드 직후 도구는 fold-bar로 인해 숨어있을 수 있어 초기엔 📂 가 맞음 |
 
 ---
 
-## 29. 대시보드 검색 결과 — 세션 제목/ID/미리보기 표시
+## 28. 대시보드 검색 결과 — 세션 제목/ID/미리보기 표시
 
 **목적**: `class="search-result-group"` 안의 개별 검색 결과 항목에서 어떤 세션인지 식별이 어렵던 문제 해결.
 
@@ -2027,7 +2033,7 @@ if (clearBtn) {
 
 ### 수정 파일 (2개)
 
-#### 29-1. `claude_code_log/html/templates/components/search.html`
+#### 28-1. `claude_code_log/html/templates/components/search.html`
 
 **인덱싱** (`buildSearchIndex` 안): 세션 카드의 `.session-link`에서 깨끗한 메타 추출:
 ```javascript
@@ -2059,7 +2065,7 @@ html += `
 `;
 ```
 
-#### 29-2. `claude_code_log/html/templates/components/search_styles.css`
+#### 28-2. `claude_code_log/html/templates/components/search_styles.css`
 
 `.search-result-session`을 flex container로 변경 + 신규 클래스 추가:
 
@@ -2133,13 +2139,16 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
 | `09976ae` | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
 | `0087c13` | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
-| `32bfafc` | 단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외 — user 질문 200개 단위 분할, `?page=N`, 크로스 페이지 북마크 점프, 비-마지막 페이지 SSE off. `_build_bookmark_index` 미리보기에서 `<div class='ide-notification'>` 정규식 사전 제거. 상세: [pagenation.md](pagenation.md) |
+| `32bfafc` | 단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외 (**나중에 원복됨** — 무한로딩 문제와 무관함이 확인되어 페이지네이션은 제거, 북마크 IDE 알림 필터는 함수 자체와 함께 제거) |
 | `7e6f0ce` | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
 | `da3fca9` | 빈 프롬프트 입력 지우기 버튼 — 헤더에 🗑️ 추가 (minimize 왼쪽), 클릭 시 textarea 비우기 + height 리셋 + 포커스 유지. CSS는 `.prompt-minimize-btn` 셀렉터 그룹화로 공유 |
 | `98d57ae` | 🗑️ 지우기 버튼 Ctrl+Z 복원 지원 — `textarea.value = ''` 대신 `document.execCommand('selectAll' → 'delete')` 사용으로 native undo stack에 등록 → 키보드 Ctrl+Z 로 지운 내용 복원 가능. execCommand 실패 시 직접 비우기 fallback |
 | `4457889` | 검색 단축키 비활성화 — `handleKeyboardShortcuts`의 Ctrl+F / Cmd+F / F3 가로채기 블록 주석 처리 → 브라우저 기본 찾기 동작. 우측 🔍 플로팅 버튼은 그대로 유지 (재활성화 위해 코드 보존) |
-| `a7b814f` | 📂 모든 메시지 펼치기/접기 통합 토글 버튼 — `#toggleExpandAll` floating 버튼 + `setInitialFoldState` 전역 노출. fold-bar + `<details>` 두 종류 토글을 한 버튼으로 처리, 스마트 토글(완전 펼침이면 초기 상태로 복귀, 아니면 다 펼치기) |
+| `a7b814f` | 📂 모든 메시지 펼치기/접기 통합 토글 버튼 — `#toggleExpandAll` floating 버튼 + `setInitialFoldState` 전역 노출. fold-bar + `<details>` 두 종류 토글을 한 버튼으로 처리. (**나중에 재설계됨** — 트리 깊이 기반이 잘못된 접근이라 메시지 타입 기반으로 변경) |
 | `6800b89` | 대시보드 검색 결과 — 세션 제목/ID/미리보기 표시. `.session-link[data-title]`/`[data-session-id]` 추출 → 같은 줄에 `💬 제목` (좌측) + `#abcd1234` 칩 (우측). flex 레이아웃 + ellipsis. 미리보기 60자 + 검색어 하이라이트 |
+| (pending) | 페이지네이션 원복 (`32bfafc` 역방향) — 무한로딩의 진짜 원인이 브라우저 SSE 동시 연결 한도 초과(여러 탭) 였음이 확인됨. 페이지네이션은 무한로딩 해결에 기여하지 않는 부수 기능이므로 제거. renderer.py 헬퍼 4개 + `generate()`/`generate_session()` 시그니처 + server.py `?page=` 파싱 + transcript.html JS 변수/매크로/페이지 분기 + CSS 페이지네이션 블록 모두 제거. CUSTOM_FEATURES.md §26 제거. **단, server.py의 `jsonl_file.stem == session_id` 안전장치는 Old Sessions 기능 유지를 위해 보존**. `pagenation.md`는 향후 재적용 가능성을 위해 워킹트리에 보존 |
+| (pending) | 📂 토글 재설계 — 트리 깊이 기반(`setInitialFoldState` 호출) → 메시지 타입 기반(`.tool_use`/`.tool_result` 직접 선택) 으로 변경. 깊이 5에 있던 마지막 Assistant 답변이 사라지던 버그 해결. user/assistant/thinking은 항상 보임. fold-bar/`<details>`는 건드리지 않고 직교성 유지. CUSTOM_FEATURES.md §27 갱신 |
+| (pending) | SSE 무한로딩 fix 가이드 문서(`sse-connection-fix.md`) 추가 — 진짜 원인(크롬 6 슬롯 한도)과 두 가지 fix(server.py `direct_passthrough=True` + transcript.html `pagehide` 시 `source.close()`) 적용 가이드. 실 적용은 별도 작업으로 미룸 |
 
 ---
 

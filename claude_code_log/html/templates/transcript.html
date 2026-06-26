@@ -22,28 +22,13 @@
 </head>
 
 <body>
-    {# === 단일 세션 페이지네이션 JS 변수 주입 === #}
-    {# user_msg_start_number: 페이지 N의 첫 user 메시지 번호 (예: 페이지 2면 201) #}
-    {# bookmark_index: 전체 세션의 user 메시지 메타데이터 (북마크 패널이 다른 페이지 항목도 표시) #}
-    <script>
-        window.__userMsgStartNumber = {{ user_msg_start_number | default(1) }};
-        window.__bookmarkIndex = {{ bookmark_index | default([]) | tojson }};
-        window.__currentPage = {{ (page_info.page_number if page_info else 1) | tojson }};
-    </script>
-
     <h1 id="title"><a href="/" class="home-btn" title="메인 대시보드">🏠</a>{{ title }}</h1>
 
-    {# === 페이지 네비게이션 매크로 (상/하단에서 재사용) === #}
-    {% macro render_page_nav() %}
     {% if page_info %}
+    <!-- Page Navigation -->
     <div class="page-navigation">
         <div class="page-header">
-            <div class="page-title">
-                Page {{ page_info.page_number }}{% if page_info.total_pages %} / {{ page_info.total_pages }}{% endif %}
-                {% if page_info.is_single_session_pagination %}
-                <span class="page-user-range">(질문 #{{ page_info.first_user_num }} ~ #{{ page_info.last_user_num }})</span>
-                {% endif %}
-            </div>
+            <div class="page-title">Page {{ page_info.page_number }}</div>
             {% if page_stats %}
             <div class="page-stats">
                 <span class="stat">💬 {{ page_stats.message_count }} messages</span>
@@ -58,23 +43,12 @@
             {% if page_info.prev_link %}
             <a href="{{ page_info.prev_link }}" class="page-nav-link prev">← Previous</a>
             {% endif %}
-            {% if page_info.is_single_session_pagination %}
-                {# 단일 세션: 마지막 페이지면 Next 숨김 #}
-                {% if page_info.next_link %}
-                <a href="{{ page_info.next_link }}" class="page-nav-link next">Next →</a>
-                {% endif %}
-            {% else %}
-                {# combined_transcripts: 기존 동작 유지 (last-page 클래스 토글) #}
-                <!-- PAGINATION_NEXT_LINK_START -->
-                <a href="{{ page_info.next_link }}" class="page-nav-link next{% if page_info.is_last_page %} last-page{% endif %}">Next →</a>
-                <!-- PAGINATION_NEXT_LINK_END -->
-            {% endif %}
+            <!-- PAGINATION_NEXT_LINK_START -->
+            <a href="{{ page_info.next_link }}" class="page-nav-link next{% if page_info.is_last_page %} last-page{% endif %}">Next →</a>
+            <!-- PAGINATION_NEXT_LINK_END -->
         </div>
     </div>
     {% endif %}
-    {% endmacro %}
-
-    {{ render_page_nav() }}
 
     <!-- Timeline Component -->
     {% include 'components/timeline.html' %}
@@ -198,9 +172,6 @@
     </div>
     <!-- Clean container for SSE live messages — must be before #prompt-dock so new messages appear above the dock -->
     <div id="sse-live-messages"></div>
-
-    {# 하단 페이지 네비게이션 — 긴 페이지 끝에서 다음 페이지로 빠르게 이동 #}
-    {{ render_page_nav() }}
 <div id="prompt-dock">
     <!-- 빈 말풍선 -->
     <div id='ccl-live-prompt' class='message user empty-prompt'>
@@ -220,7 +191,7 @@
         <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
         <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
-        <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="모든 메시지 펼치기/접기">📂</button>
+        <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
         <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
         <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
@@ -887,65 +858,50 @@
             // Apply initial fold state
             setInitialFoldState();
 
-            // 전역 노출 — "모든 메시지 펼치기/접기" 버튼이 초기 상태로 복귀할 때 호출
-            window.setInitialFoldState = setInitialFoldState;
-
-            // "모든 메시지 펼치기/접기" — fold-bar + collapsible <details> 통합 토글
+            // "도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기" 토글 버튼
+            // — 트리 깊이/계층 무시하고 .tool_use / .tool_result 타입만 일괄 토글.
+            //   user/assistant/thinking은 항상 보임. fold-bar / <details>는 건드리지 않음.
             (function() {
                 var btn = document.getElementById('toggleExpandAll');
                 if (!btn) return;
-                var detailsSel = 'details.collapsible-details, details.collapsible-code, details.tool-param-collapsible';
+                var toolSel = '.message.tool_use, .message.tool_result';
 
-                function isFullyExpanded() {
-                    // fold-bar 중 하나라도 folded이면 false
-                    if (document.querySelector('.fold-bar-section.folded')) return false;
-                    // details 중 하나라도 닫혀 있으면 false
-                    var ds = document.querySelectorAll(detailsSel);
-                    for (var i = 0; i < ds.length; i++) {
-                        if (!ds[i].hasAttribute('open')) return false;
+                function anyToolVisible() {
+                    var tools = document.querySelectorAll(toolSel);
+                    for (var i = 0; i < tools.length; i++) {
+                        if (tools[i].style.display !== 'none') return true;
                     }
-                    return true;
+                    return false;
                 }
 
-                function expandAll() {
-                    // 1) 모든 메시지 표시
-                    document.querySelectorAll('.message').forEach(function(m) {
+                function showAllTools() {
+                    document.querySelectorAll(toolSel).forEach(function(m) {
                         m.style.display = '';
                     });
-                    // 2) 모든 fold-bar 펼침 상태로
-                    document.querySelectorAll('.fold-bar-section').forEach(function(s) {
-                        s.classList.remove('folded');
-                        var icon = s.querySelector('.fold-icon');
-                        if (!icon) return;
-                        icon.textContent = s.classList.contains('fold-all-levels') ? '▼▼' : '▼';
-                        // tooltip도 unfolded용으로 갱신
-                        var t = s.getAttribute('data-title-unfolded');
-                        if (t) s.setAttribute('title', t);
-                    });
-                    // 3) 모든 collapsible details 열기
-                    document.querySelectorAll(detailsSel).forEach(function(d) {
-                        d.setAttribute('open', '');
-                    });
-                    btn.textContent = '📁';  // 📁
-                    btn.title = '초기 접힘 상태로 복귀';
+                    btn.textContent = '📁';
+                    btn.title = '도구 메시지 (Read/Edit/Bash 등) 숨기기';
                 }
 
-                function collapseToInitial() {
-                    // 모든 collapsible details 닫기
-                    document.querySelectorAll(detailsSel).forEach(function(d) {
-                        d.removeAttribute('open');
+                function hideAllTools() {
+                    document.querySelectorAll(toolSel).forEach(function(m) {
+                        m.style.display = 'none';
                     });
-                    // 페이지 로드 시 동작 재실행 (user는 1단계 보이고 assistant/tool은 접힘)
-                    if (typeof window.setInitialFoldState === 'function') {
-                        window.setInitialFoldState();
-                    }
-                    btn.textContent = '📂';  // 📂
-                    btn.title = '모든 메시지 펼치기';
+                    btn.textContent = '📂';
+                    btn.title = '도구 메시지 (Read/Edit/Bash 등) 보이기';
                 }
+
+                // 초기 아이콘 동기화 — fold-bar 초기 상태로 인해 이미 숨어있을 수 있음
+                function syncIcon() {
+                    var visible = anyToolVisible();
+                    btn.textContent = visible ? '📁' : '📂';
+                    btn.title = visible ? '도구 메시지 (Read/Edit/Bash 등) 숨기기'
+                                        : '도구 메시지 (Read/Edit/Bash 등) 보이기';
+                }
+                syncIcon();
 
                 btn.addEventListener('click', function() {
-                    if (isFullyExpanded()) collapseToInitial();
-                    else expandAll();
+                    if (anyToolVisible()) hideAllTools();
+                    else showAllTools();
                 });
             })();
 
@@ -1031,11 +987,9 @@
             };
             window.initEmptyPrompt();
 
-            // Sequential numbering for user message bubbles + bookmark pins.
-            // 페이지네이션 시: 페이지 N에서는 #(N-1)*200+1 부터 시작 → window.__userMsgStartNumber 사용.
+            // Sequential numbering for user message bubbles + bookmark pins
             window.numberUserMessages = function() {
                 document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
-                var startN = (typeof window.__userMsgStartNumber === 'number') ? window.__userMsgStartNumber : 1;
                 document.querySelectorAll(
                     '.message.user:not(.empty-prompt):not(.session-header)'
                 ).forEach(function(msg, i) {
@@ -1043,7 +997,7 @@
                     if (!header) return;
                     var span = header.querySelector('span');
                     if (!span) return;
-                    var n = i + startN;
+                    var n = i + 1;
                     msg.dataset.userMsgNumber = String(n);
                     // Pin button (left of #N)
                     var pin = document.createElement('button');
@@ -1136,53 +1090,24 @@
                 var countEl = document.getElementById('bookmark-count');
 
                 // 북마크 패널 항목 수집.
-                // 페이지네이션 시 다른 페이지의 북마크도 표시 → window.__bookmarkIndex (서버 주입)
-                // 에서 메타데이터(uuid/n/page/ts/preview)를 가져옴. DOM에 메시지가 있으면 그 정보로
-                // 보강 (사용자가 편집해도 최신값 반영).
                 function gatherBookmarksOnPage() {
                     var items = [];
-                    var idx = window.__bookmarkIndex || [];
-                    var hasIndex = idx && idx.length > 0;
-
-                    if (hasIndex) {
-                        // 단일 세션 페이지네이션 모드: 인덱스 기반
-                        var sessionHeader = document.querySelector('.message.session-header[data-session-id]');
-                        var sid = sessionHeader ? sessionHeader.dataset.sessionId : null;
-                        if (!sid) return items;
-                        var bookmarked = loadBookmarks(sid);
-                        if (!bookmarked.length) return items;
-                        idx.forEach(function(entry) {
-                            if (bookmarked.indexOf(entry.uuid) < 0) return;
-                            items.push({
-                                sid: sid,
-                                uuid: entry.uuid,
-                                n: entry.n,
-                                ts: entry.ts,
-                                preview: entry.preview || '(내용 없음)',
-                                page: entry.page,
-                            });
-                        });
-                    } else {
-                        // 기존 동작: DOM 스캔 (페이지네이션 없는 환경)
-                        document.querySelectorAll(
-                            '.message.user:not(.empty-prompt):not(.session-header)'
-                        ).forEach(function(msg) {
-                            var sid = getMsgSessionId(msg);
-                            var uuid = msg.dataset.messageId;
-                            if (!sid || !uuid) return;
-                            if (loadBookmarks(sid).indexOf(uuid) < 0) return;
-                            var n = msg.dataset.userMsgNumber || '?';
-                            var ts = msg.querySelector('.timestamp');
-                            var tsText = ts ? ts.textContent.trim() : '';
-                            var userTexts = msg.querySelectorAll('.content .user-text');
-                            var preview = Array.prototype.map.call(userTexts, function(el) {
-                                return el.textContent;
-                            }).join(' ').replace(/\s+/g, ' ').trim().slice(0, 60);
-                            items.push({ sid: sid, uuid: uuid, n: n, ts: tsText, preview: preview, page: null });
-                        });
-                    }
-                    // 번호 오름차순으로 정렬
-                    items.sort(function(a, b) { return (parseInt(a.n, 10) || 0) - (parseInt(b.n, 10) || 0); });
+                    document.querySelectorAll(
+                        '.message.user:not(.empty-prompt):not(.session-header)'
+                    ).forEach(function(msg) {
+                        var sid = getMsgSessionId(msg);
+                        var uuid = msg.dataset.messageId;
+                        if (!sid || !uuid) return;
+                        if (loadBookmarks(sid).indexOf(uuid) < 0) return;
+                        var n = msg.dataset.userMsgNumber || '?';
+                        var ts = msg.querySelector('.timestamp');
+                        var tsText = ts ? ts.textContent.trim() : '';
+                        var userTexts = msg.querySelectorAll('.content .user-text');
+                        var preview = Array.prototype.map.call(userTexts, function(el) {
+                            return el.textContent;
+                        }).join(' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+                        items.push({ sid: sid, uuid: uuid, n: n, ts: tsText, preview: preview });
+                    });
                     return items;
                 }
 
@@ -1195,24 +1120,14 @@
                         return;
                     }
                     panelList.innerHTML = '';
-                    var curPage = window.__currentPage || 1;
                     items.forEach(function(item) {
                         var row = document.createElement('div');
                         row.className = 'bookmark-item';
                         row.dataset.uuid = item.uuid;
                         row.dataset.sid = item.sid;
-                        if (item.page) row.dataset.page = String(item.page);
-                        // 다른 페이지 북마크는 시각적 구분
-                        if (item.page && item.page !== curPage) {
-                            row.classList.add('bookmark-item-other-page');
-                        }
                         var l1 = document.createElement('div');
                         l1.className = 'bookmark-item-line1';
-                        var line1Text = '#' + item.n + (item.ts ? ' · ' + item.ts : '');
-                        if (item.page && item.page !== curPage) {
-                            line1Text += ' (p.' + item.page + ')';
-                        }
-                        l1.textContent = line1Text;
+                        l1.textContent = '#' + item.n + (item.ts ? ' · ' + item.ts : '');
                         var l2 = document.createElement('div');
                         l2.className = 'bookmark-item-line2';
                         l2.textContent = item.preview || '(내용 없음)';
@@ -1247,17 +1162,6 @@
                             e.stopPropagation();
                             toggleBookmark(row.dataset.sid, row.dataset.uuid);
                             window.applyBookmarkState();
-                            return;
-                        }
-                        // 다른 페이지 북마크 → ?page=N#msg-<uuid>로 이동
-                        var targetPage = parseInt(row.dataset.page, 10);
-                        var curPage = window.__currentPage || 1;
-                        if (targetPage && targetPage !== curPage) {
-                            var loc = window.location;
-                            // 현재 경로 유지, page 쿼리만 갱신, 해시는 UUID
-                            var params = new URLSearchParams(loc.search);
-                            params.set('page', String(targetPage));
-                            window.location.href = loc.pathname + '?' + params.toString() + '#msg-' + row.dataset.uuid;
                             return;
                         }
                         scrollToMessage(row.dataset.uuid);
@@ -1336,13 +1240,6 @@
 
                 // Initial state apply (numberUserMessages already called above)
                 window.applyBookmarkState();
-
-                // 크로스 페이지 북마크 점프: URL 해시 #msg-<uuid> 처리 → 해당 메시지로 스크롤 + 펄스
-                if (window.location.hash && window.location.hash.indexOf('#msg-') === 0) {
-                    var hashUuid = window.location.hash.slice(5); // remove '#msg-'
-                    // 약간 지연 후 실행 (이미지/타임라인 로딩 후 정확한 위치 계산)
-                    setTimeout(function() { scrollToMessage(hashUuid); }, 200);
-                }
             })();
 
 
@@ -1398,20 +1295,6 @@
         var match = window.location.pathname.match(/session-([a-f0-9-]+)\.html/);
         if (!match) return;
         var sessionId = match[1];
-
-        // 페이지네이션 시: 비-마지막 페이지에서 SSE 자동 append를 끔.
-        // 옛 페이지에 새 메시지를 append하면 페이지 경계가 깨지므로 라이브 업데이트를 받지 않음.
-        // 마지막 페이지에서만 라이브 동기화 유지 (활성 채팅 UX 보장).
-        {% if page_info and page_info.is_single_session_pagination and not page_info.is_last_page %}
-        var indicator = document.createElement('div');
-        indicator.id = 'live-indicator';
-        indicator.textContent = '📖 과거 페이지';
-        indicator.title = '이 페이지는 과거 기록입니다. 라이브 동기화는 마지막 페이지에서만 작동합니다.';
-        indicator.style.cssText = 'position:fixed;top:10px;right:10px;background:#888;color:#fff;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:bold;z-index:9999;opacity:0.85;cursor:help;';
-        document.body.appendChild(indicator);
-        return;
-        {% endif %}
-
         var source = new EventSource('/api/sessions/' + sessionId + '/stream');
         var updating = false;
         var indicator = document.createElement('div');
