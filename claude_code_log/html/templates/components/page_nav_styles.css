@@ -77,21 +77,3 @@
 .page-nav-link.next.last-page {
     display: none;
 }
-
-/* 단일 세션 페이지네이션 — user 질문 번호 범위 표시 */
-.page-user-range {
-    font-size: 0.7em;
-    color: var(--text-muted);
-    font-weight: 400;
-    margin-left: 8px;
-}
-
-/* 북마크 패널: 다른 페이지의 북마크 항목은 흐리게 표시 */
-.bookmark-item.bookmark-item-other-page {
-    opacity: 0.65;
-    border-left: 3px solid #ccc;
-}
-.bookmark-item.bookmark-item-other-page:hover {
-    opacity: 1;
-    border-left-color: var(--system-warning-color, #f39c12);
-}

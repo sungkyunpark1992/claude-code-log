@@ -64,107 +64,6 @@ from ..renderer_timings import (
     set_timing_var,
 )
 from ..utils import format_timestamp
-
-# =============================================================================
-# 단일 세션 페이지네이션 설정
-# =============================================================================
-# 한 페이지에 표시할 user 질문 개수. 200개 단위로 자르면 12MB HTML이 ~600KB로 줄어듦.
-# ↓↓↓ 페이지당 질문 개수를 바꾸려면 이 숫자만 수정 ↓↓↓
-USER_MSGS_PER_PAGE = 200
-# ↑↑↑ 페이지당 질문 개수를 바꾸려면 이 숫자만 수정 ↑↑↑
-
-
-def _is_user_question(msg: "TemplateMessage") -> bool:
-    """numberUserMessages() JS 셀렉터 '.message.user:not(.empty-prompt):not(.session-header)'
-    와 동일 정의. session-header / live empty-prompt 만 제외하고 모든 user 메시지를 셈."""
-    return msg.type == "user" and not msg.is_session_header
-
-
-def _compute_session_pages(
-    template_messages: list[Tuple["TemplateMessage", str, str, str]],
-    page_size: int = USER_MSGS_PER_PAGE,
-) -> list[Tuple[int, int, int, int]]:
-    """user 메시지 개수 기준으로 슬라이스 경계를 계산.
-
-    Returns:
-        list of (start_idx, end_idx, first_user_num, last_user_num)
-        — template_messages[start_idx:end_idx]이 페이지 콘텐츠.
-        — first_user_num/last_user_num은 1-based user 번호 범위.
-
-    경계 규칙:
-      - user 메시지 N개씩 그룹 → 페이지마다 user msg 1~200, 201~400 …
-      - 각 페이지는 자신의 첫 user 메시지에서 시작
-      - 페이지 끝 = 다음 페이지의 첫 user 메시지 직전 (= 이 페이지 마지막 user의
-        모든 응답/tool/thinking 포함)
-      - 첫 페이지는 그 앞의 session-header 등도 포함
-    """
-    user_indices = [
-        i for i, (msg, _, _, _) in enumerate(template_messages) if _is_user_question(msg)
-    ]
-    if not user_indices:
-        return [(0, len(template_messages), 0, 0)]
-
-    pages: list[Tuple[int, int, int, int]] = []
-    total_users = len(user_indices)
-    for chunk_start in range(0, total_users, page_size):
-        chunk_end = min(chunk_start + page_size, total_users)
-        first_user_num = chunk_start + 1
-        last_user_num = chunk_end
-        start_idx = user_indices[chunk_start]
-        if chunk_start == 0:
-            start_idx = 0  # 첫 페이지는 헤더 포함
-        if chunk_end < total_users:
-            end_idx = user_indices[chunk_end]  # 다음 페이지 첫 user 직전까지
-        else:
-            end_idx = len(template_messages)
-        pages.append((start_idx, end_idx, first_user_num, last_user_num))
-    return pages
-
-
-def _build_bookmark_index(
-    template_messages: list[Tuple["TemplateMessage", str, str, str]],
-    pages: list[Tuple[int, int, int, int]],
-) -> list[dict[str, Any]]:
-    """모든 user 메시지의 (uuid, n, page, ts, preview) 인덱스 생성 — 북마크 패널이
-    다른 페이지의 북마크도 표시/이동할 수 있게 클라이언트에 주입."""
-    import re
-
-    # idx → (page_number 1-based, user_n 1-based) 매핑
-    idx_to_page_and_n: dict[int, Tuple[int, int]] = {}
-    for page_i, (start_idx, end_idx, first_u, _last_u) in enumerate(pages):
-        # 이 페이지의 user 메시지들에 번호 부여
-        user_n = first_u
-        for i in range(start_idx, end_idx):
-            msg = template_messages[i][0]
-            if _is_user_question(msg):
-                idx_to_page_and_n[i] = (page_i + 1, user_n)
-                user_n += 1
-
-    # IDE 알림(🤖 The user opened the file..., 📝 selection, diagnostics 등)은
-    # 사용자가 작성한 컨텐츠가 아니므로 미리보기에서 제외.
-    # 형식: <div class='ide-notification ...'>...</div> (단일 따옴표, 중첩 div 없음)
-    ide_notification_re = re.compile(
-        r"<div class='ide-notification[^']*'>.*?</div>", re.DOTALL
-    )
-    tag_re = re.compile(r"<[^>]+>")
-    ws_re = re.compile(r"\s+")
-    index: list[dict[str, Any]] = []
-    for i, (msg, _title, html, ts) in enumerate(template_messages):
-        if not _is_user_question(msg):
-            continue
-        page_n, user_n = idx_to_page_and_n.get(i, (1, 0))
-        # 미리보기: IDE 알림 제거 → HTML 태그 제거 → 공백 정규화 → 60자
-        cleaned_html = ide_notification_re.sub(" ", html or "")
-        text = tag_re.sub(" ", cleaned_html)
-        preview = ws_re.sub(" ", text).strip()[:60]
-        index.append({
-            "uuid": msg.message_id,
-            "n": user_n,
-            "page": page_n,
-            "ts": ts or "",
-            "preview": preview,
-        })
-    return index
 from .system_formatters import (
     format_hook_summary_content,
     format_session_header_content,
@@ -619,12 +518,6 @@ class HtmlRenderer(Renderer):
         output_dir: Optional[Path] = None,
         page_info: Optional[dict[str, Any]] = None,
         page_stats: Optional[dict[str, Any]] = None,
-        # === 단일 세션 페이지네이션 (user 질문 N개 기준) ===
-        # user_msgs_per_page가 None이면 페이지네이션 안 함 (기존 combined_transcripts 동작 유지).
-        # 값이 주어지면 user 질문 N개 단위로 잘라서 current_page만 렌더링.
-        user_msgs_per_page: Optional[int] = None,
-        current_page: Optional[int] = None,  # 1-based. None=마지막 페이지.
-        page_base_url: str = "",  # prev/next 링크의 베이스 (보통 빈 문자열 → ?page=N)
     ) -> str:
         """Generate HTML from transcript messages.
 
@@ -635,9 +528,6 @@ class HtmlRenderer(Renderer):
             output_dir: Optional output directory for referenced images.
             page_info: Optional pagination info (page_number, prev_link, next_link).
             page_stats: Optional page statistics (message_count, date_range, token_summary).
-            user_msgs_per_page: 단일 세션 페이지네이션 활성화 (예: 200).
-            current_page: 현재 페이지 (1-based). None이면 마지막 페이지.
-            page_base_url: prev/next 링크의 베이스 URL (빈 문자열 시 ?page=N).
         """
         import time
 
@@ -656,42 +546,6 @@ class HtmlRenderer(Renderer):
         # Flatten tree via pre-order traversal, formatting content along the way
         with log_timing("Content formatting (pre-order)", t_start):
             template_messages = self._flatten_preorder(root_messages)
-
-        # === 단일 세션 페이지네이션 처리 ===
-        # 페이지네이션이 켜져 있으면 슬라이스 후 page_info를 만들어 템플릿에 전달.
-        # 북마크 인덱스(전체 세션의 user 메시지 메타데이터)는 페이지와 무관하게 항상 빌드.
-        bookmark_index: list[dict[str, Any]] = []
-        user_msg_start_number = 1
-        if user_msgs_per_page is not None:
-            pages = _compute_session_pages(template_messages, user_msgs_per_page)
-            total_pages = len(pages)
-            bookmark_index = _build_bookmark_index(template_messages, pages)
-
-            if total_pages > 1:
-                # 기본값: 마지막 페이지 (최신 메시지)
-                cp = total_pages if current_page is None else current_page
-                cp = max(1, min(cp, total_pages))
-                start_idx, end_idx, first_u, last_u = pages[cp - 1]
-                template_messages = template_messages[start_idx:end_idx]
-                user_msg_start_number = first_u
-
-                def _link(n: int) -> str:
-                    # 베이스 URL이 비어 있으면 동일 경로의 쿼리만 변경
-                    if page_base_url:
-                        sep = "&" if "?" in page_base_url else "?"
-                        return f"{page_base_url}{sep}page={n}"
-                    return f"?page={n}"
-
-                page_info = {
-                    "page_number": cp,
-                    "total_pages": total_pages,
-                    "prev_link": _link(cp - 1) if cp > 1 else None,
-                    "next_link": _link(cp + 1) if cp < total_pages else None,
-                    "is_last_page": cp == total_pages,
-                    "is_single_session_pagination": True,
-                    "first_user_num": first_u,
-                    "last_user_num": last_u,
-                }
 
         # Render template
         with log_timing("Template environment setup", t_start):
@@ -713,8 +567,6 @@ class HtmlRenderer(Renderer):
                     is_session_header=is_session_header,
                     page_info=page_info,
                     page_stats=page_stats,
-                    user_msg_start_number=user_msg_start_number,
-                    bookmark_index=bookmark_index,
                 )
             )
 
@@ -727,11 +579,6 @@ class HtmlRenderer(Renderer):
         title: Optional[str] = None,
         cache_manager: Optional["CacheManager"] = None,
         output_dir: Optional[Path] = None,
-        # === 단일 세션 페이지네이션 ===
-        # page: 1-based 페이지 번호. None이면 마지막 페이지 (활성 세션 UX).
-        # page_size: 페이지당 user 질문 개수. None이면 USER_MSGS_PER_PAGE (200).
-        page: Optional[int] = None,
-        page_size: Optional[int] = None,
     ) -> str:
         """Generate HTML for a single session."""
         # Filter messages for this session (SummaryTranscriptEntry.sessionId is always None)
@@ -752,8 +599,6 @@ class HtmlRenderer(Renderer):
             title or f"Session {session_id[:8]}",
             combined_transcript_link=combined_link,
             output_dir=output_dir,
-            user_msgs_per_page=page_size if page_size is not None else USER_MSGS_PER_PAGE,
-            current_page=page,
         )
 
     def get_template_messages(
