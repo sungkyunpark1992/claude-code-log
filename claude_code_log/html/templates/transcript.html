@@ -220,6 +220,7 @@
         <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
         <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
+        <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="모든 메시지 펼치기/접기">📂</button>
         <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
         <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
@@ -885,6 +886,68 @@
 
             // Apply initial fold state
             setInitialFoldState();
+
+            // 전역 노출 — "모든 메시지 펼치기/접기" 버튼이 초기 상태로 복귀할 때 호출
+            window.setInitialFoldState = setInitialFoldState;
+
+            // "모든 메시지 펼치기/접기" — fold-bar + collapsible <details> 통합 토글
+            (function() {
+                var btn = document.getElementById('toggleExpandAll');
+                if (!btn) return;
+                var detailsSel = 'details.collapsible-details, details.collapsible-code, details.tool-param-collapsible';
+
+                function isFullyExpanded() {
+                    // fold-bar 중 하나라도 folded이면 false
+                    if (document.querySelector('.fold-bar-section.folded')) return false;
+                    // details 중 하나라도 닫혀 있으면 false
+                    var ds = document.querySelectorAll(detailsSel);
+                    for (var i = 0; i < ds.length; i++) {
+                        if (!ds[i].hasAttribute('open')) return false;
+                    }
+                    return true;
+                }
+
+                function expandAll() {
+                    // 1) 모든 메시지 표시
+                    document.querySelectorAll('.message').forEach(function(m) {
+                        m.style.display = '';
+                    });
+                    // 2) 모든 fold-bar 펼침 상태로
+                    document.querySelectorAll('.fold-bar-section').forEach(function(s) {
+                        s.classList.remove('folded');
+                        var icon = s.querySelector('.fold-icon');
+                        if (!icon) return;
+                        icon.textContent = s.classList.contains('fold-all-levels') ? '▼▼' : '▼';
+                        // tooltip도 unfolded용으로 갱신
+                        var t = s.getAttribute('data-title-unfolded');
+                        if (t) s.setAttribute('title', t);
+                    });
+                    // 3) 모든 collapsible details 열기
+                    document.querySelectorAll(detailsSel).forEach(function(d) {
+                        d.setAttribute('open', '');
+                    });
+                    btn.textContent = '📁';  // 📁
+                    btn.title = '초기 접힘 상태로 복귀';
+                }
+
+                function collapseToInitial() {
+                    // 모든 collapsible details 닫기
+                    document.querySelectorAll(detailsSel).forEach(function(d) {
+                        d.removeAttribute('open');
+                    });
+                    // 페이지 로드 시 동작 재실행 (user는 1단계 보이고 assistant/tool은 접힘)
+                    if (typeof window.setInitialFoldState === 'function') {
+                        window.setInitialFoldState();
+                    }
+                    btn.textContent = '📂';  // 📂
+                    btn.title = '모든 메시지 펼치기';
+                }
+
+                btn.addEventListener('click', function() {
+                    if (isFullyExpanded()) collapseToInitial();
+                    else expandAll();
+                });
+            })();
 
             // Empty user prompt: always sticky from init (함수로 분리 → SSE DOM 교체 후 재바인딩 가능)
             window.initEmptyPrompt = function() {
