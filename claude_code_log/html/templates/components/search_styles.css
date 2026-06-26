@@ -300,6 +300,52 @@
     color: var(--text-muted);
     margin-bottom: 5px;
     font-weight: 500;
+    /* 제목과 세션 ID를 같은 줄에 배치 (제목은 좌측 길게, ID는 우측 끝 고정) */
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.search-result-session-title {
+    /* 제목이 길면 줄임표 (...) 처리 — ID 영역 침범 방지 */
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.search-result-session-id {
+    flex: 0 0 auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.search-result-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-bottom: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-result-preview .search-highlight,
+.search-result-session-title .search-highlight {
+    font-weight: 600;
+    background-color: #ffeb3b;
+    color: #000;
+    padding: 0 2px;
+    border-radius: 2px;
 }
 
 .search-result-excerpt {

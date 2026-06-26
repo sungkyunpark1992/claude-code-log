@@ -117,13 +117,18 @@
                     const sessionHref = link.getAttribute('href') || '';
                     const sessionPreview = link.querySelector('.session-preview')?.textContent?.trim() || '';
                     const sessionMeta = link.querySelector('.session-link-meta')?.textContent || '';
-                    
+                    // 깨끗한 제목과 전체 세션 ID — 결과 항목 헤더에 표시
+                    const sessionTitle = (link.querySelector('.session-title')?.dataset?.title || '').trim();
+                    const sessionFullId = link.dataset?.sessionId || '';
+
                     searchState.searchIndex.push({
                         type: 'session',
                         projectName: projectName,
                         sessionText: sessionText,
                         sessionPreview: sessionPreview,
                         sessionMeta: sessionMeta,
+                        sessionTitle: sessionTitle,
+                        sessionFullId: sessionFullId,
                         element: card,
                         link: sessionHref,
                         searchText: `${projectName} ${sessionText} ${sessionPreview} ${sessionMeta}`,
@@ -575,11 +580,21 @@
             
             // Show session matches
             groups.sessions.forEach(match => {
-                const sessionId = match.link.split('/').pop().replace('session-', '').replace('.html', '').substring(0, 8);
+                const fullId = match.sessionFullId
+                    || match.link.split('/').pop().replace('session-', '').replace('.html', '');
+                const shortId = fullId.substring(0, 8);
+                const title = match.sessionTitle || `Session ${shortId}`;
                 html += `
                     <div class="search-result-item">
                         <a href="${match.link}">
-                            <div class="search-result-session">💬 Session ${sessionId}</div>
+                            <div class="search-result-session">
+                                <span class="search-result-session-title">💬 ${highlightText(title, searchState.query)}</span>
+                                <span class="search-result-session-id" title="${fullId}">#${shortId}</span>
+                            </div>
+                            ${match.sessionPreview ? `
+                            <div class="search-result-preview">
+                                ${highlightText(match.sessionPreview, searchState.query)}
+                            </div>` : ''}
                             <div class="search-result-excerpt">
                                 ${highlightText(match.excerpt, searchState.query)}
                             </div>
