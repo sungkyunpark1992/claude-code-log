@@ -32,6 +32,10 @@
 23. [Old Sessions — JSONL 삭제 후 HTML만 잔존하는 세션 조회](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)
 24. [SSE 업데이트 시 입력 중인 textarea 내용 보존](#24-sse-업데이트-시-입력-중인-textarea-내용-보존)
 25. [빈 프롬프트 입력 지우기 버튼 (🗑️)](#25-빈-프롬프트-입력-지우기-버튼-)
+26. [단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외](#26-단일-세션-페이지네이션--북마크-미리보기-ide-알림-제외)
+27. [검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)](#27-검색-단축키-비활성화-ctrlf-f3--브라우저-기본-찾기-사용)
+28. [📂 모든 메시지 펼치기/접기 통합 토글 버튼](#28--모든-메시지-펼치기접기-통합-토글-버튼)
+29. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#29-대시보드-검색-결과--세션-제목id미리보기-표시)
 
 ---
 
@@ -1895,6 +1899,178 @@ if (clearBtn) {
 
 ---
 
+## 26. 단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외
+
+**목적**: 큰 세션(질문 200+) HTML을 페이지 단위로 잘라 초기 렌더링 비용 절감 + 북마크 패널 미리보기에서 IDE 자동 컨텍스트 제외.
+
+### 동작
+
+1. 단일 세션을 user 질문 **200개 단위**로 페이지 분할 (`USER_MSGS_PER_PAGE = 200`)
+2. URL `session-{id}.html` = **마지막 페이지** (기본, 활성 채팅 UX), `?page=N` = N페이지
+3. 질문 번호 `#N`은 페이지 오프셋 적용 (페이지 2 → `#201`부터)
+4. 북마크 패널은 **전체 세션**의 북마크를 표시, 다른 페이지 항목 클릭 시 `?page=N#msg-uuid`로 자동 점프
+5. 비-마지막 페이지에선 SSE 라이브 동기화 꺼짐 (`📖 과거 페이지` 인디케이터)
+6. **북마크 미리보기에서 IDE 자동 컨텍스트(`🤖 The user opened the file...`, `📝 selection`, diagnostics 등) 제외** — `_build_bookmark_index`에서 `<div class='ide-notification ...'>...</div>` 블록을 정규식으로 사전 제거
+
+### 수정 파일
+
+자세한 BEFORE/AFTER 코드 블록은 **[pagenation.md](pagenation.md)** 참조. 핵심:
+
+- `claude_code_log/html/renderer.py` — `USER_MSGS_PER_PAGE`, `_is_user_question`, `_compute_session_pages`, `_build_bookmark_index` 헬퍼 추가. `generate()` / `generate_session()` 시그니처 확장 (`user_msgs_per_page`, `current_page` 등)
+- `claude_code_log/server.py` — `serve_file`에서 `?page=N` 쿼리 파싱 후 `generate_session(page=...)` 전달. `jsonl_file.stem == session_id` 안전장치(Old Sessions 기능에서 도입) **유지**
+- `claude_code_log/html/templates/transcript.html` — JS 변수 주입(`__userMsgStartNumber`, `__bookmarkIndex`, `__currentPage`), `render_page_nav()` 매크로, `numberUserMessages()` 오프셋, `gatherBookmarksOnPage()` 인덱스 기반 전환, 크로스 페이지 북마크 점프, 비-마지막 페이지 SSE off
+- `claude_code_log/html/templates/components/page_nav_styles.css` — `.page-user-range`, `.bookmark-item-other-page` 스타일
+
+### 핵심 설계
+
+| 항목 | 결정 |
+|---|---|
+| 슬라이스 기준 | user 질문 개수 (assistant/tool은 부속 → 같이 따라감) |
+| 기본 페이지 | 마지막 (활성 채팅에서 새 메시지 보임 우선) |
+| 북마크 인덱스 | 전체 세션 메타데이터를 클라이언트에 주입 (페이지 무관) |
+| 미리보기 필터 | `<div class='ide-notification ...'>...</div>` 정규식 사전 제거 후 태그 스트립 → 60자 |
+| SSE 라이브 동기화 | 마지막 페이지에서만 활성 (옛 페이지에 새 메시지 append하면 경계 깨짐) |
+
+---
+
+## 27. 검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)
+
+**목적**: 커스텀 `.filter-toolbar` 검색이 정상 동작하지 않는 동안 브라우저 기본 Ctrl+F 찾기가 제대로 동작하도록 임시 비활성화.
+
+### 배경
+
+`search.html`의 `handleKeyboardShortcuts`가 Ctrl+F / Cmd+F / F3을 가로채서 `e.preventDefault()`로 브라우저 기본 찾기를 막고 `.filter-toolbar`를 띄우는 구조였음. 그런데 커스텀 검색이 어색하게 동작하여 페이지 본문 검색이 사실상 불가능해짐.
+
+### 동작
+
+- Ctrl+F / Cmd+F / F3 핸들러 블록을 주석 처리하여 브라우저 기본 동작 복원
+- 우측 하단 🔍 플로팅 버튼은 그대로 유지 → 필요 시 커스텀 filter-toolbar 사용 가능
+- 검색창 내부의 Enter/Escape는 그대로 유지 (검색창 포커스 시에만 발화하므로 일반 페이지 간섭 없음)
+
+### 수정 파일 (1개)
+
+**`claude_code_log/html/templates/components/search.html`** — `handleKeyboardShortcuts()` 안의 Ctrl+F / F3 블록을 코드 삭제가 아닌 **주석 처리**로 비활성화. 검색 기능을 제대로 고친 뒤 빠르게 재활성화할 수 있도록 코드는 보존:
+
+```javascript
+// Ctrl+F / Cmd+F / F3 가로채기 비활성화 (브라우저 기본 찾기 사용)
+// — 커스텀 filter-toolbar 검색이 동작이 어색하다는 피드백으로 임시 비활성화.
+//   다시 활성화하려면 아래 블록의 주석을 해제하면 됨.
+//
+// if ((e.ctrlKey || e.metaKey) && e.key === 'f') { ... }
+// if (e.key === 'F3') { ... }
+```
+
+---
+
+## 28. 📂 모든 메시지 펼치기/접기 통합 토글 버튼
+
+**목적**: 메시지 fold-bar(▼/▶ 자식 메시지 토글)와 메시지 내부 `<details>`(코드/Read/Bash 결과 접힘)를 한 버튼으로 일괄 펼침/접힘.
+
+### 동작
+
+| 클릭 시점 | 상태 판정 | 실행 | 아이콘 |
+|---|---|---|---|
+| 페이지 로드 직후 | 부분 접힘 → 완전 펼침 아님 | **expandAll** | 📂 → 📁 |
+| 다 펼친 뒤 다시 클릭 | 완전 펼침 | **collapseToInitial** | 📁 → 📂 |
+| 사용자가 일부만 펼쳤을 때 | 완전 펼침 아님 | **expandAll** (나머지 다 펼침) | 📂 → 📁 |
+
+`isFullyExpanded()` 판정 — 모든 `.fold-bar-section`이 `.folded` 클래스 없음 **AND** 모든 collapsible `<details>`가 `open` 속성 있음.
+
+`expandAll()` — 모든 `.message` `display = ''` + 모든 fold-bar 펼침 상태로 (▼/▼▼ + `.folded` 제거 + tooltip 갱신) + 모든 collapsible details에 `open` 속성 부여.
+
+`collapseToInitial()` — 모든 details `open` 제거 + 페이지 로드 시 `setInitialFoldState()` 재실행 (user 메시지는 1단계 보이고 assistant/tool/thinking은 접힘 — 신중히 설계된 초기 UX 복귀).
+
+### 수정 파일 (1개)
+
+**`claude_code_log/html/templates/transcript.html`**:
+
+- `#floating-buttons` 영역에 버튼 추가: `<button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="모든 메시지 펼치기/접기">📂</button>`
+- `setInitialFoldState` 함수를 `window.setInitialFoldState`로 전역 노출 (collapseToInitial이 호출하기 위해)
+- DOMContentLoaded 안에 IIFE로 `isFullyExpanded` / `expandAll` / `collapseToInitial` + 클릭 핸들러 정의
+- CSS는 기존 `.floating-btn` 스타일 그대로 재사용 (별도 CSS 없음)
+
+### 핵심 설계
+
+| 항목 | 결정 | 대안 |
+|---|---|---|
+| 접기 깊이 | **초기 상태로 복귀** (user 보임, assistant 접힘) | top-level만 보이게 (assistant까지 다 숨기면 대화 사라져 보임) |
+| 트리거 | 단일 버튼 스마트 토글 | 펼치기/접기 버튼 2개 분리 |
+| 통합 범위 | fold-bar + `<details>` 모두 | `<details>`만 (기존 📋 버튼 역할) |
+
+---
+
+## 29. 대시보드 검색 결과 — 세션 제목/ID/미리보기 표시
+
+**목적**: `class="search-result-group"` 안의 개별 검색 결과 항목에서 어떤 세션인지 식별이 어렵던 문제 해결.
+
+### 배경
+
+기존 결과는 `💬 Session abc12345`처럼 URL에서 잘라낸 짧은 ID 8자만 보였음. 세션 제목이나 어떤 질문이었는지 알 수 없어서 결과를 보고도 클릭해야 확인 가능했음.
+
+### 동작
+
+각 세션 매치 항목이 이제 이렇게 표시됨:
+
+```
+┌─ search-result-item ─────────────────────────────────────────┐
+│ 💬 [세션 제목]                                  #ab2c1c60    │  ← 같은 줄 (제목 좌측, ID 우측)
+│ 첫 user 질문 미리보기 (60자, 검색어 하이라이트)              │  ← 회색 이탤릭
+│ ...검색어가 포함된 본문 발췌...                              │  ← 기존 excerpt
+│ 3 matches    2026-06-21 11:32 • 28 messages                 │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- 세션 제목 — `.session-title[data-title]`에서 추출. `custom_title` > `summary` > "Session abc12345" 폴백
+- 세션 ID — `.session-link[data-session-id]`의 전체 UUID에서 앞 8자. ID 칩 hover 시 전체 UUID tooltip
+- 미리보기 — `sessionPreview` (있을 때만 표시, 없으면 생략)
+- 검색어 하이라이트 — 제목/미리보기/excerpt 세 곳 모두 노란 형광펜
+
+### 수정 파일 (2개)
+
+#### 29-1. `claude_code_log/html/templates/components/search.html`
+
+**인덱싱** (`buildSearchIndex` 안): 세션 카드의 `.session-link`에서 깨끗한 메타 추출:
+```javascript
+const sessionTitle = (link.querySelector('.session-title')?.dataset?.title || '').trim();
+const sessionFullId = link.dataset?.sessionId || '';
+searchState.searchIndex.push({
+    ...,
+    sessionTitle: sessionTitle,
+    sessionFullId: sessionFullId,
+});
+```
+
+**렌더링** (`groups.sessions.forEach` 안): 같은 줄 레이아웃 + 미리보기 줄:
+```javascript
+const fullId = match.sessionFullId || /* URL fallback */;
+const shortId = fullId.substring(0, 8);
+const title = match.sessionTitle || `Session ${shortId}`;
+html += `
+    <div class="search-result-item">
+        <a href="${match.link}">
+            <div class="search-result-session">
+                <span class="search-result-session-title">💬 ${highlightText(title, query)}</span>
+                <span class="search-result-session-id" title="${fullId}">#${shortId}</span>
+            </div>
+            ${match.sessionPreview ? `<div class="search-result-preview">${highlightText(match.sessionPreview, query)}</div>` : ''}
+            ...
+        </a>
+    </div>
+`;
+```
+
+#### 29-2. `claude_code_log/html/templates/components/search_styles.css`
+
+`.search-result-session`을 flex container로 변경 + 신규 클래스 추가:
+
+- `.search-result-session` — `display: flex; justify-content: space-between` (제목 좌측 길게, ID 우측 끝 고정)
+- `.search-result-session-title` — `flex: 1` + `text-overflow: ellipsis` (제목 길면 `...` 처리, ID 영역 침범 방지)
+- `.search-result-session-id` — 모노스페이스 폰트 + 회색 배경 칩 스타일
+- `.search-result-preview` — 회색 이탤릭, 1줄 ellipsis
+- 새 세 클래스 모두 `.search-highlight` 적용 가능
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -1955,11 +2131,15 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 빈 프롬프트 실시간 모델 배지 + watchdog settings.json 감시 + `_DEFAULT_MODEL`(/model default 지원) + JSONL user 엔트리 /model 스캔(`_MODEL_CMD_RE`) + JSONL-first 우선순위 + 미인식 타입 경고 제거 |
 | (pending) | User 말풍선 간 이동 버튼 ▲▼ — 우측 사이드바에 추가, ±50px 임계값으로 연속 클릭 시 재탐지 버그 방지 |
 | (pending) | 빈 말풍선 blur 복원 — 내용 없이 외부 클릭 시 `empty-prompt` 상태로 복원, `{ once: true }` 제거로 재클릭 가능 |
-| (pending) | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
-| (pending) | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
-| (pending) | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
-| (pending) | 빈 프롬프트 입력 지우기 버튼 — 헤더에 🗑️ 추가 (minimize 왼쪽), 클릭 시 textarea 비우기 + height 리셋 + 포커스 유지. CSS는 `.prompt-minimize-btn` 셀렉터 그룹화로 공유 |
-| (pending) | 🗑️ 지우기 버튼 Ctrl+Z 복원 지원 — `textarea.value = ''` 대신 `document.execCommand('selectAll' → 'delete')` 사용으로 native undo stack에 등록 → 키보드 Ctrl+Z 로 지운 내용 복원 가능. execCommand 실패 시 직접 비우기 fallback |
+| `09976ae` | 질문 말풍선 순차 번호 + 북마크 기능 — 각 user 말풍선 헤더에 `📌 #N` 표시, 사선↔직각(-30deg) 토글로 북마크, 우측 슬라이드 패널(280px)에 두 줄(번호·시각 / 미리보기 60자) 목록, 클릭 시 스크롤 + 펄스, localStorage(`ccl:bookmarks:{sessionId}`) 영구 저장. 미리보기는 `.user-text`만(IDE 자동 컨텍스트 제외) |
+| `0087c13` | Old Sessions — `_scan_old_sessions()` 추가, `TemplateProject.old_sessions`, 인덱스 Old Sessions 토글, `serve_file` content-only 매치 시 정적 HTML 서빙 |
+| `32bfafc` | 단일 세션 페이지네이션 + 북마크 미리보기 IDE 알림 제외 — user 질문 200개 단위 분할, `?page=N`, 크로스 페이지 북마크 점프, 비-마지막 페이지 SSE off. `_build_bookmark_index` 미리보기에서 `<div class='ide-notification'>` 정규식 사전 제거. 상세: [pagenation.md](pagenation.md) |
+| `7e6f0ce` | SSE 업데이트 시 입력 중인 textarea 보존 — 프롬프트 element 재생성 폐기, sticky-bottom padding 재계산만 inline으로 분리 (`initEmptyPrompt` 미호출) |
+| `da3fca9` | 빈 프롬프트 입력 지우기 버튼 — 헤더에 🗑️ 추가 (minimize 왼쪽), 클릭 시 textarea 비우기 + height 리셋 + 포커스 유지. CSS는 `.prompt-minimize-btn` 셀렉터 그룹화로 공유 |
+| `98d57ae` | 🗑️ 지우기 버튼 Ctrl+Z 복원 지원 — `textarea.value = ''` 대신 `document.execCommand('selectAll' → 'delete')` 사용으로 native undo stack에 등록 → 키보드 Ctrl+Z 로 지운 내용 복원 가능. execCommand 실패 시 직접 비우기 fallback |
+| `4457889` | 검색 단축키 비활성화 — `handleKeyboardShortcuts`의 Ctrl+F / Cmd+F / F3 가로채기 블록 주석 처리 → 브라우저 기본 찾기 동작. 우측 🔍 플로팅 버튼은 그대로 유지 (재활성화 위해 코드 보존) |
+| `a7b814f` | 📂 모든 메시지 펼치기/접기 통합 토글 버튼 — `#toggleExpandAll` floating 버튼 + `setInitialFoldState` 전역 노출. fold-bar + `<details>` 두 종류 토글을 한 버튼으로 처리, 스마트 토글(완전 펼침이면 초기 상태로 복귀, 아니면 다 펼치기) |
+| `6800b89` | 대시보드 검색 결과 — 세션 제목/ID/미리보기 표시. `.session-link[data-title]`/`[data-session-id]` 추출 → 같은 줄에 `💬 제목` (좌측) + `#abcd1234` 칩 (우측). flex 레이아웃 + ellipsis. 미리보기 60자 + 검색어 하이라이트 |
 
 ---
 
