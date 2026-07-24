@@ -1437,16 +1437,20 @@
                             if (typeof convertTimestamps === 'function') convertTimestamps();
                             if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
 
-                            // sticky-bottom 도크 padding 재계산 — 새 메시지로 문서 높이가
-                            // 늘어났으므로 body.padding-bottom을 다시 계산해야 함.
+                            // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
+                            // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크
+                            // 크기에 맞춰 다시 잡음.
                             // initEmptyPrompt는 호출하지 않음 (textarea/click 리스너가 중복으로
-                            // 또 붙어 동작이 이상해질 수 있음)
+                            // 또 붙어 동작이 이상해질 수 있음).
+                            //
+                            // dock.offsetHeight를 사용하는 이유: sticky된 도크는 position:fixed
+                            // 라서 getBoundingClientRect().top이 뷰포트 기준 값이 됨 → 사용자
+                            // 스크롤 위치에 따라 결과가 달라지므로 padding이 폭발적으로 커지는
+                            // 버그가 있었음. offsetHeight는 positioning과 무관하게 실제 레이아웃
+                            // 높이를 리턴하므로 최소화 핸들러와 동일한 정확한 값을 줌.
                             var dock = document.getElementById('prompt-dock');
                             if (dock && dock.classList.contains('sticky')) {
-                                document.body.style.paddingBottom = '';
-                                var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
-                                var docHeight = document.documentElement.scrollHeight;
-                                document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+                                document.body.style.paddingBottom = dock.offsetHeight + 'px';
                             }
 
                             if (atBottom) {

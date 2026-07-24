@@ -473,6 +473,65 @@ document.body.addEventListener('click', function(e) {
 
 ---
 
+### Bug 11: SSE 후 sticky 도크 padding 폭발 — 위로 스크롤 상태에서 재계산 시 body 하단에 수천 px 빈 공간
+
+**증상**: SSE로 새 메시지가 도착한 뒤 마지막 Assistant 메시지창과 화면 맨 아래 사이가 너무 벌어짐. `scroll-bottom` 버튼(⬇️)을 눌러도 텅 빈 공간의 맨 밑으로만 이동하고, 마지막 메시지를 보려면 마우스 휠을 한참 위로 굴려야 함. `prev-user-msg` 버튼(▲)도 화면이 "쭈~욱" 위로 튐.
+
+**원인 — 잘못 복사한 padding 재계산 공식**:
+
+§24 (SSE textarea 보존 fix, `7e6f0ce`) 에서 프롬프트 element 재생성을 폐기하면서, body의 `padding-bottom` 을 SSE 업데이트 마다 다시 계산하는 코드를 추가. 이 때 §10 (sticky prompt, `556e3b4`) 의 초기 계산식을 그대로 복붙:
+
+```javascript
+// 잘못된 코드 — sticky된 도크에 대해 rect를 사용
+var dockAbsTop = dock.getBoundingClientRect().top + window.scrollY;
+var docHeight = document.documentElement.scrollHeight;
+document.body.style.paddingBottom = (docHeight - dockAbsTop) + 'px';
+```
+
+이 공식은 **§10 초기 계산 시점엔 옳음** — 그땐 도크가 아직 normal flow에 있어서 `rect.top + scrollY`가 문서 내 실제 위치.
+
+하지만 **§24 SSE 재계산 시점엔 도크가 이미 `position: fixed`** (sticky 된 상태). `getBoundingClientRect().top`이 뷰포트 기준 좌표를 리턴함:
+
+- 뷰포트 하단에 고정된 도크의 `rect.top` ≈ `viewport_height - dock_height - 10`
+- `dockAbsTop = (viewport_height - dock_height - 10) + scrollY`
+- `padding = docHeight - dockAbsTop = docHeight - scrollY - viewport_height + dock_height + 10`
+
+즉 padding이 **사용자의 스크롤 위치에 의존**하게 됨.
+
+**수치로 재현** (문서 콘텐츠 4850px, 뷰포트 800px, 도크 150px):
+
+| scrollY | 계산된 padding | 결과 |
+|---|---|---|
+| 4050 (하단 근처) | ~160px | 정상 |
+| 500 (위로 스크롤한 상태) | **3710px** | body 하단에 거대한 빈 공간 |
+
+`scroll-bottom` → `scrollHeight` (= 콘텐츠 4850 + padding 3710 = 8560) 로 이동 → 뷰포트 (7760~8560) 는 전부 빈 공간, 마지막 메시지(4750~4850)는 3000px 위에 있음.
+
+**수정** ([transcript.html:1444-1454](claude_code_log/html/templates/transcript.html)):
+
+같은 파일의 최소화 버튼 핸들러가 이미 사용하던 정답 방식으로 통일:
+
+```javascript
+// 도크는 position:fixed 라서 rect는 사용 불가. offsetHeight는 positioning과
+// 무관하게 요소의 실제 레이아웃 높이를 리턴하므로 이걸 사용.
+var dock = document.getElementById('prompt-dock');
+if (dock && dock.classList.contains('sticky')) {
+    document.body.style.paddingBottom = dock.offsetHeight + 'px';
+}
+```
+
+**결과 — 세 곳의 padding 계산이 일관됨**:
+
+| 위치 | 도크 상태 | 계산 방식 |
+|---|---|---|
+| §10 초기 (`initEmptyPrompt`) | normal flow | `docHeight - dockAbsTop` (= 사실상 `dock.offsetHeight`) |
+| §10 최소화 버튼 핸들러 | fixed | `dock.offsetHeight` |
+| §24 SSE 재계산 (**수정 후**) | fixed | `dock.offsetHeight` ← 통일 |
+
+`docHeight - dockAbsTop` 공식은 오직 §10 초기 시점(도크가 normal flow에 있을 때)에만 옳게 동작한다는 사실을 인지하지 못하고 §24 코드에 복사한 게 이 버그의 근원.
+
+---
+
 ## 6. 현재 구현 코드
 
 ### 수정 파일 (2개)
