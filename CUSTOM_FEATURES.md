@@ -35,6 +35,7 @@
 26. [검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)](#26-검색-단축키-비활성화-ctrlf-f3--브라우저-기본-찾기-사용)
 27. [📂 도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기 토글 버튼](#27--도구-메시지-readeditbash-등-보이기숨기기-토글-버튼)
 28. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#28-대시보드-검색-결과--세션-제목id미리보기-표시)
+29. [메시지 선택 후 HTML 내보내기 (체크박스 + 📤)](#29-메시지-선택-후-html-내보내기-체크박스--)
 
 ---
 
@@ -2074,6 +2075,52 @@ html += `
 - `.search-result-session-id` — 모노스페이스 폰트 + 회색 배경 칩 스타일
 - `.search-result-preview` — 회색 이탤릭, 1줄 ellipsis
 - 새 세 클래스 모두 `.search-highlight` 적용 가능
+
+---
+
+## 29. 메시지 선택 후 HTML 내보내기 (체크박스 + 📤)
+
+**목적**: 세션에서 원하는 메시지만 체크박스로 골라, 선택된 것만 추려 CSS가 인라인된 **독립 실행 HTML 파일**로 내보내기. (예: Q&A 발췌본을 팀에 공유)
+
+### 동작
+
+- 우측 사이드바 `☑️` 버튼으로 **선택 모드** 토글 → 각 메시지 헤더 좌측에 체크박스 표시
+- 체크박스 체크 = **표시만** (초록 테두리 `msg-selected` + 카운트 badge 갱신). **추출 안 함**
+- `📤` 버튼 클릭 시에만 체크된 메시지를 모아 HTML 다운로드 (`exported-messages-{timestamp}.html`)
+- 선택 모드에서만 보이는 보조 버튼: `✅` 보이는 메시지 전체 선택 / `🧹` 선택 해제
+- SSE로 추가된 메시지에도 체크박스 자동 부착 (`window.addSelectionCheckboxes` 재호출)
+
+> **설계 결정 (2단계 분리)**: 체크는 마킹만 하고, 실제 추출은 반드시 `📤` 클릭이라는 별도 행위로 트리거. 체크 즉시 추출은 성급하다는 판단.
+
+### 내보내기 산출물
+
+- 페이지의 모든 `<style>` 태그를 수집해 `<head>`에 인라인 → **파일 하나로 완결** (외부 CSS 불필요)
+- 클론에서 제거: `.msg-select-checkbox`, `.bookmark-pin`, `.fold-bar` (UI 전용 요소)
+- fold로 `display:none` 처리된 요소는 표시 복원, `<details>`는 `open` 처리 → 접힌 내용도 다 보이게
+- DOM 순서(`:checked` 순회) 유지 → 대화 순서 보존. 자식 메시지는 형제 div라 부모 선택 시 중복 없음
+
+### 수정 파일 (4개)
+
+#### 29-1. `claude_code_log/html/templates/components/export_styles.css` (신규)
+
+체크박스(`.msg-select-checkbox`, `body.selection-mode`에서만 표시), 선택 하이라이트(`.message.msg-selected`), 선택 모드 전용 버튼(`.selection-action`), 카운트 badge(`.sel-count-badge`) 스타일.
+
+#### 29-2. `claude_code_log/html/templates/components/message_export.html` (신규)
+
+체크박스 주입(`window.addSelectionCheckboxes`, 멱등), 선택 모드 토글, `buildExportDoc()`(CSS 수집 + 클론 정리 + `<details>` open), `exportSelected()`(Blob 다운로드), `selectAllVisible()`/`clearSelection()`. 체크박스 `change`는 이벤트 위임으로 카운트/하이라이트만 갱신.
+
+#### 29-3. `claude_code_log/html/templates/transcript.html`
+
+- `<style>`에 `{% include 'components/export_styles.css' %}` 추가
+- `#floating-buttons`에 `☑️`/`✅`/`🧹`/`📤`(+`#selCountBadge`) 버튼 추가
+- 검색 스크립트 다음에 `{% include 'components/message_export.html' %}`
+- SSE `iframe.onload` 후처리에 `window.addSelectionCheckboxes()` 호출 추가
+
+#### 29-4. `claude_code_log/html/templates/components/global_styles.css`
+
+`.floating-btn` order 목록에 신규 버튼 5개(📂/☑️/✅/🧹/📤) 편입, 전체 order 재정렬(1~13). (기존에 order 없던 `.expand-collapse-all`도 이때 order 5로 편입)
+
+> **순수 클라이언트 사이드**: Python/서버 변경 없음. 브라우저 `Blob` + `URL.createObjectURL`로 다운로드.
 
 ---
 

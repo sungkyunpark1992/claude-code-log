@@ -247,15 +247,20 @@ pre {
     color: var(--text-muted);
 }
 
-/* Floating buttons order (top→bottom in container = 📆 🔍 🔖 📋 ▲ ▼ ⬆️ ⬇️) */
-.timeline-toggle.floating-btn  { order: 1; }
-.filter-messages.floating-btn  { order: 2; }
-.bookmark-toggle.floating-btn  { order: 3; }
-.toggle-details.floating-btn   { order: 4; }
-.prev-user-msg.floating-btn    { order: 5; }
-.next-user-msg.floating-btn    { order: 6; }
-.scroll-top.floating-btn       { order: 7; }
-.scroll-bottom.floating-btn    { order: 8; }
+/* Floating buttons order (top→bottom = 📆 🔍 🔖 📋 📂 ☑️ ✅ 🧹 📤 ▲ ▼ ⬆️ ⬇️) */
+.timeline-toggle.floating-btn     { order: 1; }
+.filter-messages.floating-btn     { order: 2; }
+.bookmark-toggle.floating-btn     { order: 3; }
+.toggle-details.floating-btn      { order: 4; }
+.expand-collapse-all.floating-btn { order: 5; }
+.toggle-selection.floating-btn    { order: 6; }
+.select-all-msgs.floating-btn     { order: 7; }
+.clear-selection.floating-btn     { order: 8; }
+.export-selected.floating-btn     { order: 9; }
+.prev-user-msg.floating-btn       { order: 10; }
+.next-user-msg.floating-btn       { order: 11; }
+.scroll-top.floating-btn          { order: 12; }
+.scroll-bottom.floating-btn       { order: 13; }
 
 .bookmark-toggle.floating-btn.active {
     background: rgba(255, 200, 100, 0.25);

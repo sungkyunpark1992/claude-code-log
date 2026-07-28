@@ -1,0 +1,151 @@
+<!-- Per-message selection + export selected messages to a standalone HTML file -->
+<script>
+(function () {
+    'use strict';
+
+    // Every real message bubble (exclude session headers and the live/empty prompt)
+    var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+
+    // Inject a checkbox into every message header.
+    // Idempotent + exposed globally so SSE-added messages get one too.
+    window.addSelectionCheckboxes = function () {
+        document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+            var header = msg.querySelector('.header');
+            if (!header) return;
+            if (header.querySelector('.msg-select-checkbox')) return;
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'msg-select-checkbox';
+            cb.title = '이 메시지를 내보내기 대상으로 선택';
+            header.insertBefore(cb, header.firstChild);
+        });
+    };
+
+    function selectedCheckboxes() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('.msg-select-checkbox:checked')
+        );
+    }
+
+    function updateCount() {
+        var n = selectedCheckboxes().length;
+        var badge = document.getElementById('selCountBadge');
+        if (badge) {
+            badge.textContent = String(n);
+            badge.classList.toggle('visible', n > 0);
+        }
+        var exportBtn = document.getElementById('exportSelected');
+        if (exportBtn) exportBtn.title = '선택한 ' + n + '개 메시지를 HTML로 내보내기';
+    }
+
+    // Event delegation — works for SSE-added checkboxes too
+    document.addEventListener('change', function (e) {
+        var cb = e.target;
+        if (!cb.classList || !cb.classList.contains('msg-select-checkbox')) return;
+        var msg = cb.closest('.message');
+        if (msg) msg.classList.toggle('msg-selected', cb.checked);
+        updateCount();
+    });
+
+    function setSelectionMode(on) {
+        document.body.classList.toggle('selection-mode', on);
+        var toggleBtn = document.getElementById('toggleSelection');
+        if (toggleBtn) {
+            toggleBtn.classList.toggle('active', on);
+            toggleBtn.title = on ? '선택 모드 끄기' : '메시지 선택 모드';
+        }
+    }
+
+    // Grab all inline <style> from the current page so the export is self-contained
+    function gatherCss() {
+        var css = '';
+        document.querySelectorAll('style').forEach(function (s) { css += s.textContent + '\n'; });
+        return css;
+    }
+
+    function buildExportDoc(messages) {
+        var parts = [];
+        messages.forEach(function (msg) {
+            var clone = msg.cloneNode(true);
+            // Drop interactive/UI-only bits that don't belong in a static export
+            clone.classList.remove('msg-selected');
+            clone.querySelectorAll('.msg-select-checkbox, .bookmark-pin, .fold-bar')
+                .forEach(function (el) { el.remove(); });
+            // Reveal anything hidden by fold state so the export is fully readable
+            if (clone.style && clone.style.display === 'none') clone.style.display = '';
+            clone.querySelectorAll('[style]').forEach(function (el) {
+                if (el.style.display === 'none') el.style.display = '';
+            });
+            // Expand collapsed details so their content is visible in the export
+            clone.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
+            parts.push(clone.outerHTML);
+        });
+        return '<!DOCTYPE html>\n<html lang="ko">\n<head>\n<meta charset="UTF-8">\n' +
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+            '<title>내보낸 메시지</title>\n<style>\n' + gatherCss() + '\n</style>\n</head>\n<body>\n' +
+            parts.join('\n') + '\n</body>\n</html>\n';
+    }
+
+    function exportSelected() {
+        var checked = selectedCheckboxes();
+        if (!checked.length) {
+            alert('선택된 메시지가 없습니다. 내보낼 메시지의 체크박스를 선택하세요.');
+            return;
+        }
+        var messages = checked
+            .map(function (cb) { return cb.closest('.message'); })
+            .filter(Boolean);
+        var doc = buildExportDoc(messages);
+        var blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        a.download = 'exported-messages-' + stamp + '.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function selectAllVisible() {
+        document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+            // Only messages currently on screen (skip folded/filtered-away)
+            if (msg.offsetParent === null) return;
+            var cb = msg.querySelector('.msg-select-checkbox');
+            if (cb && !cb.checked) {
+                cb.checked = true;
+                msg.classList.add('msg-selected');
+            }
+        });
+        updateCount();
+    }
+
+    function clearSelection() {
+        selectedCheckboxes().forEach(function (cb) {
+            cb.checked = false;
+            var msg = cb.closest('.message');
+            if (msg) msg.classList.remove('msg-selected');
+        });
+        updateCount();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        window.addSelectionCheckboxes();
+
+        var toggleBtn = document.getElementById('toggleSelection');
+        var exportBtn = document.getElementById('exportSelected');
+        var selectAllBtn = document.getElementById('selectAllMsgs');
+        var clearBtn = document.getElementById('clearSelection');
+
+        if (toggleBtn) toggleBtn.addEventListener('click', function () {
+            setSelectionMode(!document.body.classList.contains('selection-mode'));
+        });
+        if (exportBtn) exportBtn.addEventListener('click', exportSelected);
+        if (selectAllBtn) selectAllBtn.addEventListener('click', selectAllVisible);
+        if (clearBtn) clearBtn.addEventListener('click', clearSelection);
+
+        updateCount();
+    });
+})();
+</script>

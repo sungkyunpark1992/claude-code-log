@@ -18,6 +18,7 @@
 {% include 'components/edit_diff_styles.css' %}
 {% include 'components/pygments_styles.css' %}
 {% include 'components/page_nav_styles.css' %}
+{% include 'components/export_styles.css' %}
     </style>
 </head>
 
@@ -192,6 +193,10 @@
         <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
         <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
+        <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 모드">☑️</button>
+        <button class="selection-action select-all-msgs floating-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">✅</button>
+        <button class="selection-action clear-selection floating-btn" id="clearSelection" title="선택 해제">🧹</button>
+        <button class="selection-action export-selected floating-btn" id="exportSelected" title="선택한 메시지 내보내기">📤<span class="sel-count-badge" id="selCountBadge">0</span></button>
         <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
         <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
@@ -1288,6 +1293,9 @@
     {% set is_transcript = True %}
     {% include 'components/search.html' %}
 
+    <!-- Message selection & export script -->
+    {% include 'components/message_export.html' %}
+
     <!-- Live update via SSE -->
     <script>
     (function() {
@@ -1436,6 +1444,7 @@
                             // Post-processing on new content
                             if (typeof convertTimestamps === 'function') convertTimestamps();
                             if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
+                            if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
 
                             // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                             // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크

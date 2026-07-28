@@ -1,0 +1,60 @@
+/* Message selection & export styles */
+
+/* Per-message selection checkbox — hidden until selection mode is on */
+.msg-select-checkbox {
+    display: none;
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: var(--tool-use-color);
+    vertical-align: middle;
+}
+
+body.selection-mode .msg-select-checkbox {
+    display: inline-block;
+}
+
+/* Highlight messages that are currently selected */
+.message.msg-selected {
+    outline: 2px solid var(--tool-use-color);
+    outline-offset: 2px;
+}
+
+/* Selection-mode-only floating buttons (export / select all / clear) */
+.selection-action.floating-btn {
+    display: none;
+}
+
+body.selection-mode .selection-action.floating-btn {
+    display: flex;
+}
+
+/* Active state for the selection-mode toggle button */
+.toggle-selection.floating-btn.active {
+    background: rgba(76, 175, 80, 0.25);
+}
+
+/* Count badge on the export button */
+.sel-count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--tool-use-color);
+    color: #fff;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    padding: 0 4px;
+    box-sizing: border-box;
+    display: none;
+    pointer-events: none;
+}
+
+.sel-count-badge.visible {
+    display: block;
+}
