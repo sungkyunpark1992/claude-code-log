@@ -27,36 +27,149 @@
         );
     }
 
-    function updateCount() {
-        var n = selectedCheckboxes().length;
-        var badge = document.getElementById('selCountBadge');
-        if (badge) {
-            badge.textContent = String(n);
-            badge.classList.toggle('visible', n > 0);
+    // Short label ("🤖 Assistant", "🤷 User #3", ...) for the panel list
+    function msgLabel(msg) {
+        var pairs = [
+            ['thinking', '💭 Thinking'],
+            ['tool_use', '🛠️ Tool'],
+            ['tool_result', '🛠️ Tool'],
+            ['system', '⚙️ System'],
+            ['assistant', '🤖 Assistant'],
+            ['user', '🤷 User']
+        ];
+        for (var i = 0; i < pairs.length; i++) {
+            if (msg.classList.contains(pairs[i][0])) {
+                var label = pairs[i][1];
+                if (pairs[i][0] === 'user' && msg.dataset.userMsgNumber) {
+                    label += ' #' + msg.dataset.userMsgNumber;
+                }
+                return label;
+            }
         }
-        var exportBtn = document.getElementById('exportSelected');
-        if (exportBtn) exportBtn.title = '선택한 ' + n + '개 메시지를 HTML로 내보내기';
+        return '메시지';
     }
 
-    // Event delegation — works for SSE-added checkboxes too
+    function msgPreview(msg) {
+        var content = msg.querySelector('.content');
+        var t = content ? content.textContent : '';
+        return t.replace(/\s+/g, ' ').trim().slice(0, 60);
+    }
+
+    // ===== Panel =====
+    var panel = document.getElementById('export-panel');
+    var listEl = document.getElementById('export-list');
+    var countEl = document.getElementById('export-count');
+    var toggleBtn = document.getElementById('toggleSelection');
+    var badge = document.getElementById('selCountBadge');
+
+    function updateBadge(n) {
+        if (!badge) return;
+        badge.textContent = String(n);
+        badge.classList.toggle('visible', n > 0);
+    }
+
+    function refreshPanel() {
+        var checked = selectedCheckboxes();
+        if (countEl) countEl.textContent = '(' + checked.length + ')';
+        updateBadge(checked.length);
+        if (!listEl) return;
+        if (!checked.length) {
+            listEl.innerHTML = '<div class="export-empty">선택된 메시지가 없습니다.<br>메시지의 체크박스를 클릭해 선택하세요.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        checked.forEach(function (cb) {
+            var msg = cb.closest('.message');
+            if (!msg) return;
+            var row = document.createElement('div');
+            row.className = 'export-item';
+            row.dataset.msgId = msg.dataset.messageId || '';
+
+            var l1 = document.createElement('div');
+            l1.className = 'export-item-line1';
+            l1.textContent = msgLabel(msg);
+
+            var l2 = document.createElement('div');
+            l2.className = 'export-item-line2';
+            l2.textContent = msgPreview(msg) || '(내용 없음)';
+
+            var rm = document.createElement('button');
+            rm.className = 'export-item-remove';
+            rm.type = 'button';
+            rm.title = '선택 해제';
+            rm.textContent = '✕';
+
+            row.appendChild(l1);
+            row.appendChild(l2);
+            row.appendChild(rm);
+            listEl.appendChild(row);
+        });
+    }
+
+    function scrollToMessage(target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.remove('bookmark-highlight');
+        void target.offsetWidth;
+        target.classList.add('bookmark-highlight');
+        setTimeout(function () { target.classList.remove('bookmark-highlight'); }, 1500);
+    }
+
+    // Checkbox toggled anywhere on the page → keep outline + panel in sync
     document.addEventListener('change', function (e) {
         var cb = e.target;
         if (!cb.classList || !cb.classList.contains('msg-select-checkbox')) return;
         var msg = cb.closest('.message');
         if (msg) msg.classList.toggle('msg-selected', cb.checked);
-        updateCount();
+        refreshPanel();
     });
 
-    function setSelectionMode(on) {
-        document.body.classList.toggle('selection-mode', on);
-        var toggleBtn = document.getElementById('toggleSelection');
-        if (toggleBtn) {
-            toggleBtn.classList.toggle('active', on);
-            toggleBtn.title = on ? '선택 모드 끄기' : '메시지 선택 모드';
-        }
+    // Panel list interactions: click row → scroll, click ✕ → deselect
+    if (listEl) {
+        listEl.addEventListener('click', function (e) {
+            var row = e.target.closest('.export-item');
+            if (!row) return;
+            var msgId = row.dataset.msgId;
+            var msg = msgId ? document.getElementById('msg-' + msgId) : null;
+            if (e.target.closest('.export-item-remove')) {
+                e.stopPropagation();
+                if (msg) {
+                    var cb = msg.querySelector('.msg-select-checkbox');
+                    if (cb) cb.checked = false;
+                    msg.classList.remove('msg-selected');
+                }
+                refreshPanel();
+                return;
+            }
+            if (msg) scrollToMessage(msg);
+        });
     }
 
-    // Grab all inline <style> from the current page so the export is self-contained
+    function openPanel() {
+        if (!panel) return;
+        document.body.classList.add('selection-mode');
+        panel.classList.add('open');
+        panel.setAttribute('aria-hidden', 'false');
+        if (toggleBtn) toggleBtn.classList.add('active');
+        // Avoid overlap with the bookmark panel (both dock at right:60px)
+        var bp = document.getElementById('bookmark-panel');
+        if (bp) {
+            bp.classList.remove('open');
+            bp.setAttribute('aria-hidden', 'true');
+            var bpBtn = document.getElementById('toggleBookmarks');
+            if (bpBtn) bpBtn.classList.remove('active');
+        }
+        refreshPanel();
+    }
+
+    function closePanel() {
+        if (!panel) return;
+        document.body.classList.remove('selection-mode');
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+        if (toggleBtn) toggleBtn.classList.remove('active');
+    }
+
+    // ===== Export action =====
     function gatherCss() {
         var css = '';
         document.querySelectorAll('style').forEach(function (s) { css += s.textContent + '\n'; });
@@ -118,7 +231,7 @@
                 msg.classList.add('msg-selected');
             }
         });
-        updateCount();
+        refreshPanel();
     }
 
     function clearSelection() {
@@ -127,25 +240,81 @@
             var msg = cb.closest('.message');
             if (msg) msg.classList.remove('msg-selected');
         });
-        updateCount();
+        refreshPanel();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         window.addSelectionCheckboxes();
 
-        var toggleBtn = document.getElementById('toggleSelection');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function () {
+                if (panel && panel.classList.contains('open')) closePanel();
+                else openPanel();
+            });
+        }
+
+        var closeBtn = panel ? panel.querySelector('.export-panel-close') : null;
+        if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+        // Close on outside click (like the bookmark panel) — but keep it open when
+        // the click is on the toggle button or on a message checkbox (so selecting
+        // messages doesn't dismiss the panel).
+        document.addEventListener('click', function (e) {
+            if (!panel || !panel.classList.contains('open')) return;
+            if (panel.contains(e.target)) return;
+            if (toggleBtn && toggleBtn.contains(e.target)) return;
+            if (e.target.classList && e.target.classList.contains('msg-select-checkbox')) return;
+            closePanel();
+        });
+
         var exportBtn = document.getElementById('exportSelected');
         var selectAllBtn = document.getElementById('selectAllMsgs');
         var clearBtn = document.getElementById('clearSelection');
-
-        if (toggleBtn) toggleBtn.addEventListener('click', function () {
-            setSelectionMode(!document.body.classList.contains('selection-mode'));
-        });
         if (exportBtn) exportBtn.addEventListener('click', exportSelected);
         if (selectAllBtn) selectAllBtn.addEventListener('click', selectAllVisible);
         if (clearBtn) clearBtn.addEventListener('click', clearSelection);
 
-        updateCount();
+        // Resizable left edge — drag to adjust width (min = 300px = default)
+        var resizeHandle = panel ? panel.querySelector('.export-panel-resize-handle') : null;
+        if (resizeHandle && panel) {
+            var MIN_WIDTH = 300;
+            var WIDTH_KEY = 'ccl:export:panel-width';
+            try {
+                var saved = parseInt(localStorage.getItem(WIDTH_KEY), 10);
+                if (saved && saved >= MIN_WIDTH) panel.style.width = saved + 'px';
+            } catch (e) {}
+
+            var resizing = false, startX = 0, startW = 0;
+            resizeHandle.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                resizing = true;
+                startX = e.clientX;
+                startW = panel.getBoundingClientRect().width;
+                resizeHandle.classList.add('dragging');
+                document.body.classList.add('export-resizing');
+            });
+            document.addEventListener('mousemove', function (e) {
+                if (!resizing) return;
+                var dx = startX - e.clientX;  // drag left → wider
+                var w = startW + dx;
+                if (w < MIN_WIDTH) w = MIN_WIDTH;
+                var maxW = window.innerWidth - 100;
+                if (w > maxW) w = maxW;
+                panel.style.width = w + 'px';
+            });
+            document.addEventListener('mouseup', function () {
+                if (!resizing) return;
+                resizing = false;
+                resizeHandle.classList.remove('dragging');
+                document.body.classList.remove('export-resizing');
+                try {
+                    var w = parseInt(panel.style.width, 10);
+                    if (w) localStorage.setItem(WIDTH_KEY, String(w));
+                } catch (e) {}
+            });
+        }
+
+        refreshPanel();
     });
 })();
 </script>

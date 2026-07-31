@@ -35,7 +35,7 @@
 26. [검색 단축키 비활성화 (Ctrl+F, F3 — 브라우저 기본 찾기 사용)](#26-검색-단축키-비활성화-ctrlf-f3--브라우저-기본-찾기-사용)
 27. [📂 도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기 토글 버튼](#27--도구-메시지-readeditbash-등-보이기숨기기-토글-버튼)
 28. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#28-대시보드-검색-결과--세션-제목id미리보기-표시)
-29. [메시지 선택 후 HTML 내보내기 (체크박스 + 📤)](#29-메시지-선택-후-html-내보내기-체크박스--)
+29. [메시지 선택 후 HTML 내보내기 (체크박스 + 슬라이드 패널)](#29-메시지-선택-후-html-내보내기-체크박스--슬라이드-패널)
 
 ---
 
@@ -2078,19 +2078,24 @@ html += `
 
 ---
 
-## 29. 메시지 선택 후 HTML 내보내기 (체크박스 + 📤)
+## 29. 메시지 선택 후 HTML 내보내기 (체크박스 + 슬라이드 패널)
 
 **목적**: 세션에서 원하는 메시지만 체크박스로 골라, 선택된 것만 추려 CSS가 인라인된 **독립 실행 HTML 파일**로 내보내기. (예: Q&A 발췌본을 팀에 공유)
 
-### 동작
+### 동작 (북마크 패널과 동일한 UX)
 
-- 우측 사이드바 `☑️` 버튼으로 **선택 모드** 토글 → 각 메시지 헤더 좌측에 체크박스 표시
-- 체크박스 체크 = **표시만** (초록 테두리 `msg-selected` + 카운트 badge 갱신). **추출 안 함**
-- `📤` 버튼 클릭 시에만 체크된 메시지를 모아 HTML 다운로드 (`exported-messages-{timestamp}.html`)
-- 선택 모드에서만 보이는 보조 버튼: `✅` 보이는 메시지 전체 선택 / `🧹` 선택 해제
+- 우측 사이드바 `☑️` 버튼 → **선택 패널**(`#export-panel`)이 오른쪽에서 슬라이드 인 + 선택 모드 ON → 각 메시지 헤더 좌측에 체크박스 표시
+- 체크박스 체크 = **표시만** (초록 테두리 `msg-selected` + 패널에 짧은 미리보기 항목 추가 + 카운트 badge 갱신). **추출 안 함**
+- 패널 내장 컨트롤: **전체 선택** / **선택 해제** / **📤 HTML로 내보내기** (버튼은 패널 안에만, 플로팅 버튼은 `☑️` 하나로 축소)
+- 패널 리스트: 선택된 각 메시지를 `라벨(🤖 Assistant 등) + 60자 미리보기`로 표시. 항목 클릭 → 해당 메시지로 스크롤(하이라이트), `✕` → 선택 해제
+- `📤` 클릭 시에만 HTML 다운로드 (`exported-messages-{timestamp}.html`)
+- 좌측 가장자리 드래그로 패널 너비 조절 (localStorage `ccl:export:panel-width`)
+- 북마크 패널과 도킹 위치(`right:60px`)가 같아, 선택 패널을 열면 북마크 패널은 자동으로 닫힘
 - SSE로 추가된 메시지에도 체크박스 자동 부착 (`window.addSelectionCheckboxes` 재호출)
 
-> **설계 결정 (2단계 분리)**: 체크는 마킹만 하고, 실제 추출은 반드시 `📤` 클릭이라는 별도 행위로 트리거. 체크 즉시 추출은 성급하다는 판단.
+> **설계 결정 1 (2단계 분리)**: 체크는 마킹만 하고, 실제 추출은 반드시 `📤` 클릭이라는 별도 행위로 트리거. 체크 즉시 추출은 성급하다는 판단.
+>
+> **설계 결정 2 (패널 방식)**: 초기엔 선택 모드에서 보조 플로팅 버튼(전체선택/해제/내보내기)이 추가로 뜨는 방식이었으나, 사이드바가 번잡해져 북마크 패널처럼 **창 하나에 모든 컨트롤 + 선택 목록**을 담는 방식으로 재설계.
 
 ### 내보내기 산출물
 
@@ -2103,22 +2108,23 @@ html += `
 
 #### 29-1. `claude_code_log/html/templates/components/export_styles.css` (신규)
 
-체크박스(`.msg-select-checkbox`, `body.selection-mode`에서만 표시), 선택 하이라이트(`.message.msg-selected`), 선택 모드 전용 버튼(`.selection-action`), 카운트 badge(`.sel-count-badge`) 스타일.
+체크박스(`.msg-select-checkbox`, `body.selection-mode`에서만 표시), 선택 하이라이트(`.message.msg-selected`), 토글 버튼 카운트 badge(`.sel-count-badge`), **선택 패널**(`#export-panel` — `#bookmark-panel` 스타일 미러링: 헤더/액션 버튼/리스트 항목/resize 핸들).
 
 #### 29-2. `claude_code_log/html/templates/components/message_export.html` (신규)
 
-체크박스 주입(`window.addSelectionCheckboxes`, 멱등), 선택 모드 토글, `buildExportDoc()`(CSS 수집 + 클론 정리 + `<details>` open), `exportSelected()`(Blob 다운로드), `selectAllVisible()`/`clearSelection()`. 체크박스 `change`는 이벤트 위임으로 카운트/하이라이트만 갱신.
+체크박스 주입(`window.addSelectionCheckboxes`, 멱등), 패널 open/close(`body.selection-mode` 토글 + 북마크 패널 닫기), `refreshPanel()`(선택 항목 라벨/미리보기 렌더 + 배지), `buildExportDoc()`(CSS 수집 + 클론 정리 + `<details>` open), `exportSelected()`(Blob 다운로드), `selectAllVisible()`/`clearSelection()`, resize 핸들. 체크박스 `change`는 이벤트 위임으로 하이라이트 + 패널 갱신.
 
 #### 29-3. `claude_code_log/html/templates/transcript.html`
 
 - `<style>`에 `{% include 'components/export_styles.css' %}` 추가
-- `#floating-buttons`에 `☑️`/`✅`/`🧹`/`📤`(+`#selCountBadge`) 버튼 추가
+- `#floating-buttons`에 `☑️`(+`#selCountBadge`) 버튼 **하나만** 추가
+- `#bookmark-panel` 다음에 `#export-panel` 마크업 추가 (헤더 + 전체선택/해제/📤 버튼 + 리스트)
 - 검색 스크립트 다음에 `{% include 'components/message_export.html' %}`
 - SSE `iframe.onload` 후처리에 `window.addSelectionCheckboxes()` 호출 추가
 
 #### 29-4. `claude_code_log/html/templates/components/global_styles.css`
 
-`.floating-btn` order 목록에 신규 버튼 5개(📂/☑️/✅/🧹/📤) 편입, 전체 order 재정렬(1~13). (기존에 order 없던 `.expand-collapse-all`도 이때 order 5로 편입)
+`.floating-btn` order 목록에 `☑️`(`.toggle-selection`) 편입, 전체 order 재정렬(1~10). (기존에 order 없던 `.expand-collapse-all`도 이때 order 5로 편입)
 
 > **순수 클라이언트 사이드**: Python/서버 변경 없음. 브라우저 `Blob` + `URL.createObjectURL`로 다운로드.
 

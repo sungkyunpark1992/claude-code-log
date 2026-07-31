@@ -193,10 +193,7 @@
         <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
         <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
-        <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 모드">☑️</button>
-        <button class="selection-action select-all-msgs floating-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">✅</button>
-        <button class="selection-action clear-selection floating-btn" id="clearSelection" title="선택 해제">🧹</button>
-        <button class="selection-action export-selected floating-btn" id="exportSelected" title="선택한 메시지 내보내기">📤<span class="sel-count-badge" id="selCountBadge">0</span></button>
+        <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
         <button class="prev-user-msg floating-btn" id="prevUserMsg" title="이전 질문으로">▲</button>
         <button class="next-user-msg floating-btn" id="nextUserMsg" title="다음 질문으로">▼</button>
         <button class="scroll-top floating-btn" title="Scroll to top" onclick="window.scrollTo(0, 0)">⬆️</button>
@@ -211,6 +208,22 @@
         </div>
         <div class="bookmark-panel-list" id="bookmark-list">
             <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+        </div>
+    </div>
+
+    <div id="export-panel" aria-hidden="true">
+        <div class="export-panel-resize-handle" title="드래그하여 너비 조절"></div>
+        <div class="export-panel-header">
+            <span>☑️ 선택 <span id="export-count">(0)</span></span>
+            <button class="export-panel-close" title="닫기">✕</button>
+        </div>
+        <div class="export-panel-actions">
+            <button class="export-action-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">전체 선택</button>
+            <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
+            <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
+        </div>
+        <div class="export-panel-list" id="export-list">
+            <div class="export-empty">선택된 메시지가 없습니다.<br>메시지의 체크박스를 클릭해 선택하세요.</div>
         </div>
     </div>
 
