@@ -36,6 +36,7 @@
 27. [📂 도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기 토글 버튼](#27--도구-메시지-readeditbash-등-보이기숨기기-토글-버튼)
 28. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#28-대시보드-검색-결과--세션-제목id미리보기-표시)
 29. [메시지 선택 후 HTML 내보내기 (체크박스 + 슬라이드 패널)](#29-메시지-선택-후-html-내보내기-체크박스--슬라이드-패널)
+30. [대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼](#30-대시보드에-원본-jsonl-디렉토리-경로-표시--복사-버튼)
 
 ---
 
@@ -2130,6 +2131,222 @@ html += `
 
 ---
 
+## 30. 대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼
+
+**목적**: 대시보드에서 각 프로젝트의 실제 JSONL 파일 위치를 바로 확인·복사할 수 있게 하기. 파일 탐색기에 붙여넣어서 원본 JSONL 파일을 열람하거나 백업할 때 유용.
+
+### 배경
+
+기존 대시보드는 프로젝트 이름 (`c--Users-User-Desktop-kyochon-prj`) 만 표시. 실제 JSONL이 어디 있는지 알려면 사용자가 `~/.claude/projects/<프로젝트명>/` 를 직접 계산해서 파일 탐색기에 붙여넣어야 했음. 원본 파일 접근성이 낮았음.
+
+### 동작
+
+**두 곳에 표시**:
+
+1. **`summary-stats` 아래**: 모든 프로젝트의 공통 부모 경로 한 줄
+   ```
+   📂 All JSONL files under: C:\Users\User\.claude\projects\  [📋]
+   ```
+
+2. **각 `project-card`의 프로젝트 이름 밑**: 해당 프로젝트의 절대 경로 (회색 작은 monospace)
+   ```
+   📁 kyochon-prj  (← open combined transcript)
+      C:\Users\User\.claude\projects\c--Users-User-Desktop-kyochon-prj  [📋]
+   ```
+
+**복사 버튼 (📋)**:
+- 클릭 시 `navigator.clipboard.writeText()` 로 경로를 클립보드에 복사
+- 성공 시 버튼이 `✓` (초록색 배경) 로 1.2초 바뀌었다 원상 복귀
+- Clipboard API 차단 환경 (HTTP + non-localhost 등) 에서는 hidden `<textarea>` + `document.execCommand('copy')` 로 fallback
+
+### 하드코딩 없음 — 완전한 런타임 파생
+
+경로는 100% 실행 시점에 결정됨. 다른 컴퓨터/OS 에서도 그 환경의 실제 경로가 자동 반영됨.
+
+**데이터 흐름**:
+1. CLI 진입점에서 `projects_dir = Path.home() / ".claude" / "projects"` (사용자 홈 기준)
+2. `converter.py` 가 `projects_path.iterdir()` 로 실제 디렉토리 순회
+3. 각 project_summary에 `"path": project_dir` (실제 `Path` 객체) 저장
+4. `TemplateProject.jsonl_dir = str(project_data["path"])` — 런타임 값을 문자열 변환
+
+**OS별 자동 대응** (`Path` 가 알아서 처리):
+| OS | 표시 예시 |
+|---|---|
+| Windows | `C:\Users\User\.claude\projects\c--Users-User-Desktop-kyochon-prj` |
+| macOS | `/Users/john/.claude/projects/-Users-john-Desktop-my-proj` |
+| Linux | `/home/alice/.claude/projects/-home-alice-work-repo` |
+
+### 수정 파일 (4개)
+
+#### 30-1. `claude_code_log/renderer.py`
+
+`TemplateProject` 에 프로젝트별 절대 경로 필드 추가:
+
+```python
+def __init__(self, project_data: dict[str, Any]):
+    ...
+    # 원본 JSONL 파일들이 저장된 절대 경로 (index.html 카드 표시 + 복사 버튼용)
+    self.jsonl_dir = str(project_data["path"])
+    ...
+```
+
+`TemplateSummary` 에 모든 프로젝트의 공통 부모 경로 필드 추가:
+
+```python
+def __init__(self, project_summaries: list[dict[str, Any]]):
+    ...
+    # 모든 프로젝트 디렉토리의 공통 부모 (~/.claude/projects/)
+    if project_summaries:
+        self.jsonl_root = str(project_summaries[0]["path"].parent)
+    else:
+        self.jsonl_root = ""
+```
+
+> `project_data["path"]` 는 이미 `converter.py` 에서 `Path` 객체로 저장하고 있으므로 (line 1954, 2069) 별도 데이터 흐름 변경 불필요.
+
+#### 30-2. `claude_code_log/html/templates/index.html`
+
+**summary-stats 안** — `<div class='summary-stats'>` 닫힌 직후에:
+
+```jinja
+{% if summary.jsonl_root %}
+<div class='summary-jsonl-root'>
+    📂 All JSONL files under:
+    <code class='jsonl-path'>{{ summary.jsonl_root }}</code>
+    <button class='jsonl-path-copy' type='button' title='경로 복사' data-copy='{{ summary.jsonl_root }}'>📋</button>
+</div>
+{% endif %}
+```
+
+**project-card 안** — `<div class='project-name'>` 닫힌 직후에:
+
+```jinja
+{% if project.jsonl_dir %}
+<div class='project-jsonl-dir'>
+    <code class='jsonl-path'>{{ project.jsonl_dir }}</code>
+    <button class='jsonl-path-copy' type='button' title='경로 복사' data-copy='{{ project.jsonl_dir }}'>📋</button>
+</div>
+{% endif %}
+```
+
+**하단 `<script>` 안 DOMContentLoaded 리스너**에 복사 버튼 이벤트 위임 핸들러 추가:
+
+```javascript
+// JSONL 경로 복사 버튼 (project-card + summary-stats 공용) — 이벤트 위임
+document.body.addEventListener('click', function(e) {
+    var btn = e.target.closest('.jsonl-path-copy');
+    if (!btn) return;
+    var path = btn.getAttribute('data-copy') || '';
+    if (!path) return;
+
+    var showCopied = function() {
+        var original = btn.textContent;
+        btn.classList.add('copied');
+        btn.textContent = '✓';
+        setTimeout(function() {
+            btn.classList.remove('copied');
+            btn.textContent = original;
+        }, 1200);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(path).then(showCopied).catch(function() {
+            fallbackCopy(path, showCopied);
+        });
+    } else {
+        fallbackCopy(path, showCopied);
+    }
+});
+
+function fallbackCopy(text, onSuccess) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try {
+        if (document.execCommand('copy')) onSuccess();
+    } catch (err) {}
+    document.body.removeChild(ta);
+}
+```
+
+#### 30-3. `claude_code_log/html/templates/components/project_card_styles.css`
+
+`.project-jsonl-dir`, `.summary-jsonl-root`, `.jsonl-path`, `.jsonl-path-copy` (+ `:hover`, `.copied`) 스타일 추가. 회색 작은 monospace 텍스트 + 은은한 복사 버튼:
+
+```css
+/* 원본 JSONL 디렉토리 경로 표시 (project-name 밑 회색 작은 줄) */
+.project-jsonl-dir {
+    font-size: 0.75em;
+    color: #888;
+    margin: -6px 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    word-break: break-all;
+}
+.project-jsonl-dir .jsonl-path {
+    background: transparent;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #666;
+}
+.jsonl-path-copy {
+    background: none;
+    border: 1px solid #00000022;
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #666;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.jsonl-path-copy:hover {
+    background: #00000011;
+    border-color: #00000044;
+}
+.jsonl-path-copy.copied {
+    background: #22c55e33;
+    border-color: #22c55e;
+    color: #16a34a;
+}
+/* summary-stats 아래 JSONL 루트 경로 표시 */
+.summary-jsonl-root {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #00000011;
+    font-size: 0.85em;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.summary-jsonl-root .jsonl-path {
+    background: #00000008;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #444;
+}
+```
+
+### 핵심 설계
+
+| 항목 | 결정 | 이유 |
+|---|---|---|
+| 표시 위치 | project-card = 주 정보, summary-stats = 부가 정보 | 프로젝트별 경로가 다르므로 카드가 주. summary는 부모 뿌리 안내 |
+| 복사 방식 | Clipboard API + execCommand fallback | HTTPS/localhost 에서는 Clipboard API 우선. 오래된 브라우저/차단 환경도 지원 |
+| 복사 성공 피드백 | 아이콘 잠시 변경 (✓ + 초록) | 별도 toast/dialog 없이 은은한 표시 |
+| 이벤트 등록 | body 이벤트 위임 | project-card N개 + summary 1개에 리스너 하나로 처리. SSE로 카드가 재렌더링돼도 자동 동작 |
+| 하드코딩 | 없음 — 모두 `Path` 객체 → `str()` | 다른 컴퓨터/OS 어디서 실행해도 그 환경 실제 경로 자동 반영 |
+| 경로 표기 | Windows `\`, macOS/Linux `/` | `str(Path)` 가 OS별 구분자 자동 사용 |
+
+---
+
 ## 공통 인프라
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
@@ -2202,6 +2419,7 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
 | (pending) | 페이지네이션 원복 (`32bfafc` 역방향) — 무한로딩의 진짜 원인이 브라우저 SSE 동시 연결 한도 초과(여러 탭) 였음이 확인됨. 페이지네이션은 무한로딩 해결에 기여하지 않는 부수 기능이므로 제거. renderer.py 헬퍼 4개 + `generate()`/`generate_session()` 시그니처 + server.py `?page=` 파싱 + transcript.html JS 변수/매크로/페이지 분기 + CSS 페이지네이션 블록 모두 제거. CUSTOM_FEATURES.md §26 제거. **단, server.py의 `jsonl_file.stem == session_id` 안전장치는 Old Sessions 기능 유지를 위해 보존**. `pagenation.md`는 향후 재적용 가능성을 위해 워킹트리에 보존 |
 | (pending) | 📂 토글 재설계 — 트리 깊이 기반(`setInitialFoldState` 호출) → 메시지 타입 기반(`.tool_use`/`.tool_result` 직접 선택) 으로 변경. 깊이 5에 있던 마지막 Assistant 답변이 사라지던 버그 해결. user/assistant/thinking은 항상 보임. fold-bar/`<details>`는 건드리지 않고 직교성 유지. CUSTOM_FEATURES.md §27 갱신 |
 | (pending) | SSE 무한로딩 fix 가이드 문서(`sse-connection-fix.md`) 추가 — 진짜 원인(크롬 6 슬롯 한도)과 두 가지 fix(server.py `direct_passthrough=True` + transcript.html `pagehide` 시 `source.close()`) 적용 가이드. 실 적용은 별도 작업으로 미룸 |
+| (pending) | 대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼 — `TemplateProject.jsonl_dir` + `TemplateSummary.jsonl_root` 노출. summary-stats 아래 부모 경로, 각 project-card 밑에 프로젝트별 절대 경로. 📋 버튼 클릭 시 `navigator.clipboard.writeText()` (fallback: `execCommand('copy')`). 하드코딩 없음 — `Path` 객체 기반이라 다른 컴퓨터/OS 어디서 실행해도 그 환경의 실제 경로 자동 반영 |
 
 ---
 

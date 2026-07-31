@@ -38,6 +38,67 @@
     text-decoration: underline;
 }
 
+/* 원본 JSONL 디렉토리 경로 표시 (project-name 밑 회색 작은 줄) */
+.project-jsonl-dir {
+    font-size: 0.75em;
+    color: #888;
+    margin: -6px 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    word-break: break-all;
+}
+
+.project-jsonl-dir .jsonl-path {
+    background: transparent;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #666;
+}
+
+.jsonl-path-copy {
+    background: none;
+    border: 1px solid #00000022;
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #666;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.jsonl-path-copy:hover {
+    background: #00000011;
+    border-color: #00000044;
+}
+.jsonl-path-copy.copied {
+    background: #22c55e33;
+    border-color: #22c55e;
+    color: #16a34a;
+}
+
+/* summary-stats 아래 JSONL 루트 경로 표시 */
+.summary-jsonl-root {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #00000011;
+    font-size: 0.85em;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.summary-jsonl-root .jsonl-path {
+    background: #00000008;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #444;
+}
+
 .transcript-link-hint {
     font-size: 0.6em;
     color: var(--text-muted);

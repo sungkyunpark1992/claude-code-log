@@ -398,6 +398,9 @@ class TemplateProject:
     def __init__(self, project_data: dict[str, Any]):
         self.name = project_data["name"]
         self.html_file = project_data["html_file"]
+        # 원본 JSONL 파일들이 저장된 절대 경로 (예: C:\Users\User\.claude\projects\c--Users-...)
+        # index.html 카드에서 표시 + 복사 버튼용
+        self.jsonl_dir = str(project_data["path"])
         self.jsonl_count = project_data["jsonl_count"]
         self.message_count = project_data["message_count"]
         self.last_modified = project_data["last_modified"]
@@ -469,6 +472,12 @@ class TemplateSummary:
         self.total_projects = len(project_summaries)
         self.total_jsonl = sum(p["jsonl_count"] for p in project_summaries)
         self.total_messages = sum(p["message_count"] for p in project_summaries)
+
+        # 모든 프로젝트 디렉토리의 공통 부모 (~/.claude/projects/) — index.html summary에 표시
+        if project_summaries:
+            self.jsonl_root = str(project_summaries[0]["path"].parent)
+        else:
+            self.jsonl_root = ""
 
         # Calculate aggregated token usage
         self.total_input_tokens = sum(
