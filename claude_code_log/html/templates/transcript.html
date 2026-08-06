@@ -130,7 +130,7 @@
     {%- set msg_css_class = css_class_from_message(message) %}
     {% set ns.last_css = msg_css_class %}
     {% set markdown = message.content.has_markdown if message.content else false %}
-    <div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'>
+    <div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{% if is_user_authored(message) %} data-authored{% endif %}>
         <div class='header'>
             {% set msg_emoji = get_message_emoji(message) -%}
             <span{% if message.title_hint %} title="{{ message.title_hint }}"{% endif %}>{% if message_title %}{%
@@ -1266,8 +1266,12 @@
             // User message navigation (▲▼)
             (function() {
                 function getUserMsgs() {
+                    // data-authored 는 사용자가 직접 입력한 말풍선에만 붙는다 (utils.py: is_user_authored).
+                    // 제외 목록을 나열하는 대신 이 표식을 직접 고르는 화이트리스트 방식이라,
+                    // 새 메시지 타입이 생겨도 기본이 "이동 대상 아님"이 된다.
                     return Array.from(document.querySelectorAll(
-                        '.message.user:not(.empty-prompt):not(.session-header):not(.filtered-hidden)'
+                        '.message[data-authored]:not(.filtered-hidden)'
+                        {# 과거 블랙리스트 방식: '.message.user:not(.empty-prompt):not(.session-header):not(.filtered-hidden):not(.slash-command)' #}
                     ));
                 }
 

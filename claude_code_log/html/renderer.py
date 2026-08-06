@@ -114,6 +114,7 @@ from .utils import (
     get_message_emoji,
     get_template_environment,
     is_session_header,
+    is_user_authored,
 )
 
 if TYPE_CHECKING:
@@ -565,6 +566,7 @@ class HtmlRenderer(Renderer):
                     css_class_from_message=css_class_from_message,
                     get_message_emoji=get_message_emoji,
                     is_session_header=is_session_header,
+                    is_user_authored=is_user_authored,
                     page_info=page_info,
                     page_stats=page_stats,
                 )
@@ -633,6 +635,7 @@ class HtmlRenderer(Renderer):
                 css_class_from_message=css_class_from_message,
                 get_message_emoji=get_message_emoji,
                 is_session_header=is_session_header,
+                is_user_authored=is_user_authored,
             )
         )
 

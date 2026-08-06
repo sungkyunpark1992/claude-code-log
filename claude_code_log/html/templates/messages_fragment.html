@@ -28,7 +28,7 @@
 {%- set msg_css_class = css_class_from_message(message) %}
 {% set ns.last_css = msg_css_class %}
 {% set markdown = message.content.has_markdown if message.content else false %}
-<div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'>
+<div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{% if is_user_authored(message) %} data-authored{% endif %}>
     <div class='header'>
         {% set msg_emoji = get_message_emoji(message) -%}
         <span{% if message.title_hint %} title="{{ message.title_hint }}"{% endif %}>{% if message_title %}{%

@@ -29,10 +29,12 @@ from ..models import (
     CommandOutputMessage,
     CompactedSummaryMessage,
     HookSummaryMessage,
+    ImageContent,
     MessageContent,
     SessionHeaderMessage,
     SlashCommandMessage,
     SystemMessage,
+    TextContent,
     ThinkingMessage,
     ToolResultMessage,
     ToolUseMessage,
@@ -132,6 +134,41 @@ def css_class_from_message(msg: "TemplateMessage") -> str:
         parts.append("sidechain")
 
     return " ".join(parts)
+
+
+def is_user_authored(msg: "TemplateMessage") -> bool:
+    """Check if the message was actually typed/pasted by the user.
+
+    Used to mark bubbles with `data-authored` so navigation can target
+    real user input positively, instead of maintaining an ever-growing
+    blacklist of auto-generated message types.
+
+    True only for UserTextMessage (and UserSteeringMessage, which subclasses
+    it) carrying real content. Slash commands, command output, compacted
+    summaries, memory blocks and bubbles holding nothing but IDE
+    notifications are all excluded, as are sidechain prompts, which Claude
+    generates for subagents rather than the user typing them.
+
+    Args:
+        msg: The template message to check
+
+    Returns:
+        True if the message represents user-authored input
+    """
+    if msg.is_sidechain:
+        return False
+
+    content = msg.content
+    if not isinstance(content, UserTextMessage):
+        return False
+
+    for item in content.items:
+        # Image-only messages (pasted screenshots) still count as authored
+        if isinstance(item, ImageContent):
+            return True
+        if isinstance(item, TextContent) and item.text.strip():
+            return True
+    return False
 
 
 def is_session_header(msg: "TemplateMessage") -> bool:
