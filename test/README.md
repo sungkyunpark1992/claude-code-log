@@ -146,24 +146,51 @@ The project uses a categorized test system to avoid async event loop conflicts b
 
 Snapshot tests capture the full HTML output and detect unintended regressions. They use [syrupy](https://github.com/syrupy-project/syrupy) with a custom serializer that normalises dynamic content (library version, tmp paths).
 
+<!-- CUSTOM: 아래 코드블록의 update 명령을 직렬로 바꾸고 diff 를 --stat 으로 변경. 원본은 OLD 주석 참고 -->
 ```bash
 # Run snapshot tests
 uv run pytest -n auto test/test_snapshot_html.py -v
 
+# Update snapshots after intentional HTML changes — SERIAL, never -n auto
+just update-snapshot
+# or, without the just CLI:
+uv run pytest -m snapshot --snapshot-update -v
+
+# Review changes before committing
+git diff --stat test/__snapshots__/
+```
+<!-- OLD (원본): 위 두 명령은 원래 아래와 같았음
 # Update snapshots after intentional HTML changes
 uv run pytest -n auto test/test_snapshot_html.py --snapshot-update
 
 # Review changes before committing
 git diff test/__snapshots__/
-```
+-->
+
+<!-- CUSTOM: 아래 경고 블록 전체가 커스텀 추가분 (원본에 없음) -->
+> **`--snapshot-update` must run serially.** Under `-n auto` the update silently
+> discards most of the file while reporting all tests passed (measured: 29787 →
+> 16149 lines, whole `<script>` blocks gone). Workers don't share which snapshots
+> were visited, so each prunes the ones it never saw. This only triggers when
+> snapshots are actually being rewritten, so a parallel update against
+> already-current snapshots looks fine — which is what makes it easy to miss.
+>
+> 상세 분석 및 재현 방법: [SNAPSHOT_TESTING.md](../SNAPSHOT_TESTING.md)
 
 **Snapshot files** are stored in `test/__snapshots__/test_snapshot_html.ambr` and must be committed to version control.
 
+<!-- CUSTOM: 2번 명령 교체, 3번 신규 추가 (원본 3번은 4번으로 밀림) -->
 **When to update snapshots**:
 
 1. Run tests - if they fail, review the diff
+2. If changes are intentional, run `just update-snapshot`
+3. **Check `git diff --stat`** - a diff far larger than your change means the
+   snapshots were already stale, or the update was corrupted. Do not commit blindly.
+4. Commit updated snapshots with your code changes
+<!-- OLD (원본): 위 목록은 원래 아래와 같았음
 2. If changes are intentional, run with `--snapshot-update`
 3. Commit updated snapshots with your code changes
+-->
 
 #### Running Tests
 

@@ -113,18 +113,42 @@ just test-cov
 
 Snapshot tests detect unintended HTML output changes using [syrupy](https://github.com/syrupy-project/syrupy):
 
+<!-- CUSTOM: 아래 코드블록의 update 명령을 직렬로 바꿈. 원본은 OLD 주석 참고 -->
 ```bash
 # Run snapshot tests
 uv run pytest -n auto test/test_snapshot_html.py -v
 
+# Update snapshots after intentional HTML changes — SERIAL, never -n auto
+just update-snapshot
+# or: uv run pytest -m snapshot --snapshot-update -v
+```
+<!-- OLD (원본): 위 update 명령은 원래 아래와 같았음
 # Update snapshots after intentional HTML changes
 uv run pytest -n auto test/test_snapshot_html.py --snapshot-update
-```
+-->
 
+<!-- CUSTOM: 아래 경고 블록 전체가 커스텀 추가분 (원본에 없음) -->
+> **Never pass `-n auto` to `--snapshot-update`.** Under xdist the update silently
+> discards most of the snapshot file while still reporting all tests passed — a
+> measured run went from 29787 lines to 16149, dropping whole `<script>` blocks.
+> Workers don't share which snapshots were visited, so each prunes the ones it
+> never saw. It only bites when snapshots are actually being rewritten, so a
+> parallel update against current snapshots looks harmless. Serial is faster here
+> anyway (1.7s vs 5.0s) — there are only 5 snapshot tests.
+>
+> 상세 분석 및 재현 방법: [SNAPSHOT_TESTING.md](SNAPSHOT_TESTING.md)
+
+<!-- CUSTOM: 2번 명령 교체, 3번 신규 추가 (원본 3번은 4번으로 밀림) -->
 When snapshot tests fail:
 1. Review the diff to verify changes are intentional
+2. If intentional, run `just update-snapshot` to accept new output
+3. Check the diff size — if it is far larger than your change, the snapshots were
+   already stale or the update was corrupted; verify with `git diff --stat`
+4. If unintentional, fix your code and re-run tests
+<!-- OLD (원본): 위 목록은 원래 아래와 같았음
 2. If intentional, run `--snapshot-update` to accept new output
 3. If unintentional, fix your code and re-run tests
+-->
 
 ### Test Prerequisites
 

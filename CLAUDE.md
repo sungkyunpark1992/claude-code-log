@@ -70,6 +70,29 @@ just test-all
 
 **Tip:** Add `-x` to stop on first failure (e.g., `uv run pytest -n auto -m "not (tui or browser)" -v -x`).
 
+<!-- CUSTOM: 아래 예외 절 전체가 커스텀 추가분 (원본에 없음, 삭제된 원본 내용 없음) -->
+**Exception — never use `-n auto` with `--snapshot-update`:**
+
+```bash
+just update-snapshot
+# or, without the just CLI:
+uv run pytest -m snapshot --snapshot-update -v
+```
+
+Updating snapshots under xdist silently discards most of the file. Measured on a
+stale-snapshot run: `29787 lines → 16149`, losing over half the content including
+whole `<script>` blocks, while still reporting `5 passed`. Workers don't share which
+snapshots were visited, so each one prunes the "unused" snapshots it never saw.
+
+The corruption only happens when snapshots are actually being rewritten — a parallel
+update against already-current snapshots is a no-op, which is why this hides easily.
+Serial is also faster here (1.7s vs 5.0s); there are only 5 snapshot tests, so xdist
+startup costs more than it saves.
+
+After updating, always check `git diff --stat test/__snapshots__/`. A diff much larger
+than your change means the snapshots were already stale or the update was corrupted —
+do not commit it blindly. Full analysis: @SNAPSHOT_TESTING.md
+
 ### Code Quality
 
 ```bash
