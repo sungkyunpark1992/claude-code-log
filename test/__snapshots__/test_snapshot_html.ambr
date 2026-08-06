@@ -7520,10 +7520,14 @@
               window.initEmptyPrompt();
   
               // Sequential numbering for user message bubbles + bookmark pins
+              // ▲▼ 이동과 같은 data-authored 기준을 쓴다 (utils.py: is_user_authored).
+              // 셋이 어긋나면 "#5로 이동했는데 패널에는 #4로 보이는" 식으로 번호가 꼬인다.
+              // filtered-hidden 은 일부러 제외하지 않는다 — 필터를 켤 때마다 번호가
+              // 밀리면 북마크 패널의 #N 이 실제 말풍선과 어긋나기 때문.
               window.numberUserMessages = function() {
                   document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
                   document.querySelectorAll(
-                      '.message.user:not(.empty-prompt):not(.session-header)'
+                      '.message[data-authored]'
                   ).forEach(function(msg, i) {
                       var header = msg.querySelector('.header');
                       if (!header) return;
@@ -7587,7 +7591,7 @@
                   // Apply bookmark visual state to all pins (called after numbering)
                   window.applyBookmarkState = function() {
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var pin = msg.querySelector('.bookmark-pin');
                           if (!pin) return;
@@ -7625,7 +7629,7 @@
                   function gatherBookmarksOnPage() {
                       var items = [];
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var sid = getMsgSessionId(msg);
                           var uuid = msg.dataset.messageId;
@@ -14384,10 +14388,14 @@
               window.initEmptyPrompt();
   
               // Sequential numbering for user message bubbles + bookmark pins
+              // ▲▼ 이동과 같은 data-authored 기준을 쓴다 (utils.py: is_user_authored).
+              // 셋이 어긋나면 "#5로 이동했는데 패널에는 #4로 보이는" 식으로 번호가 꼬인다.
+              // filtered-hidden 은 일부러 제외하지 않는다 — 필터를 켤 때마다 번호가
+              // 밀리면 북마크 패널의 #N 이 실제 말풍선과 어긋나기 때문.
               window.numberUserMessages = function() {
                   document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
                   document.querySelectorAll(
-                      '.message.user:not(.empty-prompt):not(.session-header)'
+                      '.message[data-authored]'
                   ).forEach(function(msg, i) {
                       var header = msg.querySelector('.header');
                       if (!header) return;
@@ -14451,7 +14459,7 @@
                   // Apply bookmark visual state to all pins (called after numbering)
                   window.applyBookmarkState = function() {
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var pin = msg.querySelector('.bookmark-pin');
                           if (!pin) return;
@@ -14489,7 +14497,7 @@
                   function gatherBookmarksOnPage() {
                       var items = [];
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var sid = getMsgSessionId(msg);
                           var uuid = msg.dataset.messageId;
@@ -21301,10 +21309,14 @@
               window.initEmptyPrompt();
   
               // Sequential numbering for user message bubbles + bookmark pins
+              // ▲▼ 이동과 같은 data-authored 기준을 쓴다 (utils.py: is_user_authored).
+              // 셋이 어긋나면 "#5로 이동했는데 패널에는 #4로 보이는" 식으로 번호가 꼬인다.
+              // filtered-hidden 은 일부러 제외하지 않는다 — 필터를 켤 때마다 번호가
+              // 밀리면 북마크 패널의 #N 이 실제 말풍선과 어긋나기 때문.
               window.numberUserMessages = function() {
                   document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
                   document.querySelectorAll(
-                      '.message.user:not(.empty-prompt):not(.session-header)'
+                      '.message[data-authored]'
                   ).forEach(function(msg, i) {
                       var header = msg.querySelector('.header');
                       if (!header) return;
@@ -21368,7 +21380,7 @@
                   // Apply bookmark visual state to all pins (called after numbering)
                   window.applyBookmarkState = function() {
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var pin = msg.querySelector('.bookmark-pin');
                           if (!pin) return;
@@ -21406,7 +21418,7 @@
                   function gatherBookmarksOnPage() {
                       var items = [];
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var sid = getMsgSessionId(msg);
                           var uuid = msg.dataset.messageId;
@@ -28068,10 +28080,14 @@
               window.initEmptyPrompt();
   
               // Sequential numbering for user message bubbles + bookmark pins
+              // ▲▼ 이동과 같은 data-authored 기준을 쓴다 (utils.py: is_user_authored).
+              // 셋이 어긋나면 "#5로 이동했는데 패널에는 #4로 보이는" 식으로 번호가 꼬인다.
+              // filtered-hidden 은 일부러 제외하지 않는다 — 필터를 켤 때마다 번호가
+              // 밀리면 북마크 패널의 #N 이 실제 말풍선과 어긋나기 때문.
               window.numberUserMessages = function() {
                   document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
                   document.querySelectorAll(
-                      '.message.user:not(.empty-prompt):not(.session-header)'
+                      '.message[data-authored]'
                   ).forEach(function(msg, i) {
                       var header = msg.querySelector('.header');
                       if (!header) return;
@@ -28135,7 +28151,7 @@
                   // Apply bookmark visual state to all pins (called after numbering)
                   window.applyBookmarkState = function() {
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var pin = msg.querySelector('.bookmark-pin');
                           if (!pin) return;
@@ -28173,7 +28189,7 @@
                   function gatherBookmarksOnPage() {
                       var items = [];
                       document.querySelectorAll(
-                          '.message.user:not(.empty-prompt):not(.session-header)'
+                          '.message[data-authored]'
                       ).forEach(function(msg) {
                           var sid = getMsgSessionId(msg);
                           var uuid = msg.dataset.messageId;
