@@ -37,6 +37,7 @@
 28. [대시보드 검색 결과 — 세션 제목/ID/미리보기 표시](#28-대시보드-검색-결과--세션-제목id미리보기-표시)
 29. [메시지 선택 후 HTML 내보내기 (체크박스 + 슬라이드 패널)](#29-메시지-선택-후-html-내보내기-체크박스--슬라이드-패널)
 30. [대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼](#30-대시보드에-원본-jsonl-디렉토리-경로-표시--복사-버튼)
+31. [JSONL 자동 삭제 막기 (환경 설정)](#31-jsonl-자동-삭제-막기-환경-설정)
 
 ---
 
@@ -1326,7 +1327,44 @@ elif entry_type in {
 - **▲**: 현재 뷰포트 상단 기준 50px 이상 위에 있는 마지막 User 말풍선으로 이동
 - **▼**: 현재 뷰포트 상단 기준 50px 아래에 있는 첫 번째 User 말풍선으로 이동
 - 클릭 없이 현재 스크롤 위치 기준으로 자동 탐색
-- `.empty-prompt`, `.session-header`, `.filtered-hidden` 제외
+- **이동 대상은 `data-authored` 속성으로 판별** (아래 "핵심 설계: 화이트리스트" 참고)
+
+### 핵심 설계: 화이트리스트 (`data-authored`)
+
+초기 구현은 `:not(.slash-command)` 처럼 **제외할 타입을 나열하는 블랙리스트**였다.
+이 방식은 새 메시지 타입이 생길 때마다 뚫린다 — 실제로 슬래시 명령의 결과 말풍선
+(`user command-output`)이 걸러지지 않아 `/model` 실행 결과에서 이동이 멈추는 버그가 있었다.
+
+`user` CSS 클래스는 7종이 공유하므로 클래스만으로는 구분할 수 없다:
+
+```
+UserTextMessage         → user              ← 진짜 사용자 입력
+UserMemoryMessage       → user              ← 같은 클래스, 구분 불가
+UserSteeringMessage     → user steering
+SlashCommandMessage     → user slash-command
+UserSlashCommandMessage → user slash-command
+CompactedSummaryMessage → user compacted
+CommandOutputMessage    → user command-output
+```
+
+그래서 **Python이 렌더링 시점에 `data-authored` 표식을 붙이고, JS는 그것만 고른다.**
+새 타입이 생겨도 기본이 "이동 대상 아님"이 된다.
+
+> **CSS 클래스가 아니라 `data-` 속성인 이유**: `css_class_from_message()` 결과는
+> `class=` 뿐 아니라 `data-border-color=` 에도 쓰이는데, `message_styles.css` 가
+> `[data-border-color="user"]` 처럼 **정확히 일치**로 매칭한다. 클래스를 추가하면
+> 값이 `"user user-authored"` 가 되어 접기 막대 색상이 조용히 깨진다.
+
+#### 판별 기준
+
+| 대상 | 이동 |
+|---|---|
+| 텍스트가 있는 사용자 메시지 | ✅ |
+| 이미지만 붙여넣은 메시지 | ✅ |
+| IDE 알림만 있는 말풍선 (🤖 파일 열림 / 📝 선택 영역) | ❌ |
+| 슬래시 명령 호출 + 그 결과 | ❌ |
+| `/compact` 자동 요약, 메모리, 빈 입력창 | ❌ |
+| 서브에이전트(sidechain) 프롬프트 | ❌ |
 
 ### 핵심 설계: ±50px 임계값
 
@@ -1334,9 +1372,46 @@ elif entry_type in {
 
 ▼는 `top > 50`, ▲는 `top < -50`으로 대칭 설계하여 이 문제를 방지.
 
-### 수정 파일 (2개)
+### 수정 파일 (5개)
 
-#### 20-1. `claude_code_log/html/templates/transcript.html`
+#### 20-1. `claude_code_log/html/utils.py` — 판별 함수
+
+```python
+def is_user_authored(msg: "TemplateMessage") -> bool:
+    """사용자가 직접 입력한 말풍선인지 판별."""
+    if msg.is_sidechain:          # 서브에이전트 프롬프트는 사용자 입력이 아님
+        return False
+    content = msg.content
+    if not isinstance(content, UserTextMessage):
+        return False
+    for item in content.items:
+        if isinstance(item, ImageContent):
+            return True           # 스크린샷만 붙여넣은 경우도 포함
+        if isinstance(item, TextContent) and item.text.strip():
+            return True
+    return False                  # IDE 알림만 있는 말풍선은 제외
+```
+
+`ImageContent`, `TextContent` 임포트 추가 필요.
+`UserSteeringMessage` 는 `UserTextMessage` 를 상속하므로 자동 포함된다.
+
+#### 20-2. `claude_code_log/html/renderer.py` — Jinja에 노출
+
+`css_class_from_message` 와 동일한 방식으로 3곳:
+임포트 + `generate_html()` / `generate_messages_fragment()` 의 `template.render(...)` 에
+`is_user_authored=is_user_authored` 추가. (`html/__init__.py` 재익스포트도 함께)
+
+#### 20-3. 템플릿 2개 — 속성 부착
+
+`transcript.html` 과 **`messages_fragment.html` 둘 다** message div에 추가:
+```jinja
+<div class='message {{ msg_css_class }}...' data-message-id='...'{% if is_user_authored(message) %} data-authored{% endif %}>
+```
+
+> `messages_fragment.html` 은 SSE 실시간 추가에 쓰인다. 빼먹으면 **대화 중 새로 온
+> 메시지만 이동이 안 되는** 증상이 나온다.
+
+#### 20-4. `claude_code_log/html/templates/transcript.html` — 버튼과 JS
 
 **HTML**: `#floating-buttons` 안에 버튼 추가 (📋 다음, ⬆️ 앞):
 ```html
@@ -1349,7 +1424,7 @@ elif entry_type in {
 (function() {
     function getUserMsgs() {
         return Array.from(document.querySelectorAll(
-            '.message.user:not(.empty-prompt):not(.session-header):not(.filtered-hidden)'
+            '.message[data-authored]:not(.filtered-hidden)'
         ));
     }
 
@@ -1379,7 +1454,7 @@ elif entry_type in {
 })();
 ```
 
-#### 20-2. `claude_code_log/html/templates/components/global_styles.css`
+#### 20-5. `claude_code_log/html/templates/components/global_styles.css`
 
 버튼 순서 추가 (📋 다음, ⬆️⬇️ 앞):
 ```css
@@ -1400,8 +1475,13 @@ elif entry_type in {
 
 - `🤷 User #3` 형태로 표시 (번호는 "User" 텍스트 오른쪽)
 - 페이지 로드 시 + SSE로 메시지 추가 시 모두 자동 재계산
-- `.empty-prompt`, `.session-header` 제외하고 DOM 순서대로 1부터 부여
+- **`data-authored` 가 붙은 말풍선만** DOM 순서대로 1부터 부여 (섹션 20 참고)
 - 필터 적용 후 숨겨진 메시지도 번호 유지 (북마크 안정성을 위해 `:not(.filtered-hidden)` 미사용)
+
+> **선택자는 ▲▼·북마크와 반드시 같아야 한다.** 어긋나면 "▲▼로 #5에 갔는데
+> 북마크 패널에는 #4로 보이는" 식으로 번호가 꼬인다. 현재 4곳이 모두
+> `.message[data-authored]` 를 쓴다 — 번호매기기, 북마크 상태 복원,
+> 북마크 패널 수집, ▲▼ 이동(여기에만 `:not(.filtered-hidden)` 추가).
 
 ### 수정 파일 (2개)
 
@@ -1411,7 +1491,7 @@ elif entry_type in {
 window.numberUserMessages = function() {
     document.querySelectorAll('.msg-number, .bookmark-pin').forEach(function(el) { el.remove(); });
     document.querySelectorAll(
-        '.message.user:not(.empty-prompt):not(.session-header)'
+        '.message[data-authored]'
     ).forEach(function(msg, i) {
         var header = msg.querySelector('.header');
         if (!header) return;
@@ -1653,7 +1733,8 @@ span.appendChild(pin);
 
 - JSONL 삭제 → 캐시 DB에서도 제거 → 인덱스에서 사라짐
 - HTML 파일은 `session-{id}.html`로 프로젝트 디렉토리에 남아있어 직접 서빙 가능
-- 관련 분석: [missing-old-sessions.md](../missing-old-sessions.md)
+- 관련 분석: [missing-old-sessions.md](missing-old-sessions.md)
+- **사전 대책**: 애초에 JSONL이 안 지워지게 하려면 → [31번](#31-jsonl-자동-삭제-막기-환경-설정) / [JSONL_RETENTION.md](JSONL_RETENTION.md)
 
 ### 동작
 
@@ -2344,6 +2425,37 @@ function fallbackCopy(text, onSuccess) {
 | 이벤트 등록 | body 이벤트 위임 | project-card N개 + summary 1개에 리스너 하나로 처리. SSE로 카드가 재렌더링돼도 자동 동작 |
 | 하드코딩 | 없음 — 모두 `Path` 객체 → `str()` | 다른 컴퓨터/OS 어디서 실행해도 그 환경 실제 경로 자동 반영 |
 | 경로 표기 | Windows `\`, macOS/Linux `/` | `str(Path)` 가 OS별 구분자 자동 사용 |
+
+---
+
+## 31. JSONL 자동 삭제 막기 (환경 설정)
+
+**목적**: Claude Code가 30일 지난 JSONL을 자동 삭제해 세션이 통째로 사라지는 것을 막음.
+23번(Old Sessions)이 삭제된 뒤의 사후 대책이라면, 이건 애초에 안 지워지게 하는 사전 대책.
+
+> 이 프로젝트 코드 수정이 아니라 **Claude Code 자체 설정**이다. 새 컴퓨터마다 따로 해야 한다.
+
+`%USERPROFILE%\.claude\settings.json` 에 한 줄 추가:
+
+```json
+{
+  "cleanupPeriodDays": 3650
+}
+```
+
+기본값 30일 → 3650일(~10년). 최소 1이며 `0`/끄기는 불가.
+앞 줄 끝 **쉼표를 빠뜨리면 JSON이 깨져 해당 파일 설정이 통째로 무시**되므로 주의.
+
+### 2단계 방어 — 백업 자동화 (선택)
+
+위 설정 **자체가 사라지는 경우**(Claude Code 재설치, 설정 초기화)를 대비한 백업.
+`C:\claude-backup\backup-jsonl.bat` + Windows 예약 작업(로그온 시 실행) 구성.
+
+- **핵심 원칙**: 단방향 누적 복사 — 원본에서 사라져도 백업에서는 안 지움
+- **`/MIR`, `/PURGE` 절대 금지** — 목적과 정반대로 동작함
+- 상주 프로세스 없음. 실행 시간 1초 미만
+
+**상세: [JSONL_RETENTION.md](JSONL_RETENTION.md)**
 
 ---
 
