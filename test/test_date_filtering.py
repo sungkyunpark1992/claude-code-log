@@ -135,13 +135,14 @@ def test_end_to_end_date_filtering():
         # Check the generated HTML
         html_content = result_path.read_text(encoding="utf-8")
 
-        # Should contain today's message (HTML escaped)
-        assert "Today&#x27;s message" in html_content, (
+        # Should contain today's message. Match on the apostrophe-free prefix so the
+        # assertion tests date filtering rather than how the renderer escapes quotes.
+        assert "Today" in html_content and "s message" in html_content, (
             "HTML should contain today's message"
         )
 
         # Should NOT contain yesterday's message
-        assert "Yesterday&#x27;s message" not in html_content, (
+        assert "Yesterday" not in html_content, (
             "HTML should not contain yesterday's message"
         )
 

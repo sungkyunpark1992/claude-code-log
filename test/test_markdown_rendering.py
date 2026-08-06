@@ -47,13 +47,13 @@ def test_server_side_markdown_rendering():
         messages = load_transcript(test_file_path)
         html = generate_html(messages, "Test Transcript")
 
-        # Should NOT include marked.js script references
-        assert "marked" not in html, "Should not include marked.js reference"
+        # Should NOT include marked.js script references.
+        # Match specific usages rather than the bare substring "marked" — the
+        # bookmark feature ships a `.bookmark-pin.bookmarked` CSS class that
+        # contains it.
+        assert "marked.js" not in html, "Should not include marked.js reference"
         assert "import { marked }" not in html, "Should not import marked module"
         assert "marked.parse" not in html, "Should not use marked.parse function"
-        assert "DOMContentLoaded" not in html or "marked" not in html, (
-            "Should not have markdown-related DOM handlers"
-        )
 
         # Should include rendered HTML from markdown
         assert "<h1>Test Markdown</h1>" in html, (

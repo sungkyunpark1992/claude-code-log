@@ -70,6 +70,7 @@ class TestTemplateProject:
         """Test creating a TemplateProject with basic data."""
         project_data = {
             "name": "test-project",
+            "path": Path("/projects/test-project"),
             "html_file": "test-project/combined_transcripts.html",
             "jsonl_count": 3,
             "message_count": 15,
@@ -90,6 +91,7 @@ class TestTemplateProject:
         """Test TemplateProject display name formatting for dashed names."""
         project_data = {
             "name": "-user-workspace-my-app",
+            "path": Path("/projects/-user-workspace-my-app"),
             "html_file": "-user-workspace-my-app/combined_transcripts.html",
             "jsonl_count": 2,
             "message_count": 8,
@@ -107,6 +109,7 @@ class TestTemplateProject:
         """Test TemplateProject display name when no leading dash."""
         project_data = {
             "name": "simple-project-name",
+            "path": Path("/projects/simple-project-name"),
             "html_file": "simple-project-name/combined_transcripts.html",
             "jsonl_count": 1,
             "message_count": 5,
@@ -122,6 +125,7 @@ class TestTemplateProject:
         # Test with both earliest and latest timestamps
         project_data = {
             "name": "time-range-project",
+            "path": Path("/projects/time-range-project"),
             "html_file": "time-range-project/combined_transcripts.html",
             "jsonl_count": 1,
             "message_count": 5,
@@ -139,6 +143,7 @@ class TestTemplateProject:
         """Test TemplateProject with single timestamp (same earliest and latest)."""
         project_data = {
             "name": "single-time-project",
+            "path": Path("/projects/single-time-project"),
             "html_file": "single-time-project/combined_transcripts.html",
             "jsonl_count": 1,
             "message_count": 1,
@@ -154,6 +159,7 @@ class TestTemplateProject:
         """Test TemplateProject with no timestamps."""
         project_data = {
             "name": "no-time-project",
+            "path": Path("/projects/no-time-project"),
             "html_file": "no-time-project/combined_transcripts.html",
             "jsonl_count": 1,
             "message_count": 1,
@@ -172,18 +178,21 @@ class TestTemplateSummary:
         project_summaries = [
             {
                 "name": "project1",
+                "path": Path("/projects/project1"),
                 "jsonl_count": 3,
                 "message_count": 15,
                 "last_modified": 1700000000.0,
             },
             {
                 "name": "project2",
+                "path": Path("/projects/project2"),
                 "jsonl_count": 2,
                 "message_count": 8,
                 "last_modified": 1700000100.0,
             },
             {
                 "name": "project3",
+                "path": Path("/projects/project3"),
                 "jsonl_count": 1,
                 "message_count": 12,
                 "last_modified": 1700000200.0,

@@ -279,9 +279,11 @@ class TestTemplateRendering:
         html_file = convert_jsonl_to_html(test_data_path)
         html_content = html_file.read_text(encoding="utf-8")
 
-        # Should NOT have client-side JavaScript for markdown rendering
-        assert "marked" not in html_content
-        assert "DOMContentLoaded" not in html_content or "marked" not in html_content
+        # Should NOT have client-side JavaScript for markdown rendering.
+        # Match specific usages rather than the bare substring "marked" — the
+        # bookmark feature ships a `.bookmark-pin.bookmarked` CSS class.
+        assert "marked.js" not in html_content
+        assert "import { marked }" not in html_content
         assert "querySelectorAll('.content')" not in html_content
         assert "marked.parse" not in html_content
 

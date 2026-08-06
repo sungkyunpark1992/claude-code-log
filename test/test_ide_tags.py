@@ -346,12 +346,12 @@ class TestContentFormatters:
     """Tests for content formatter functions (user and assistant text)."""
 
     def test_format_user_text_content(self):
-        """Test that user text is formatted as preformatted HTML."""
+        """Test that user text is rendered as markdown."""
         html = format_user_text_content("Simple user message")
 
-        # Should be wrapped in <pre> for user messages
-        assert html.startswith("<pre>")
-        assert html.endswith("</pre>")
+        # Wrapped in a user-text markdown div, not <pre>
+        assert html.startswith('<div class="user-text markdown">')
+        assert html.endswith("</div>")
         assert "Simple user message" in html
 
     def test_format_assistant_text_content(self):
