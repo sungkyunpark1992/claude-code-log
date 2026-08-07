@@ -318,8 +318,8 @@ class TestFormatUserTextModelContent:
 
         html = format_user_text_model_content(content)
 
-        # User text is rendered as markdown (collapsible past 20 lines), not <pre>
-        assert 'class="user-text markdown"' in html
+        # User text is shown verbatim in <pre>, never parsed as markdown
+        assert "<pre>" in html
         assert "User question here" in html
 
     def test_format_user_text_escapes_html(self):

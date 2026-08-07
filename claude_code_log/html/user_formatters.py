@@ -27,7 +27,12 @@ from ..models import (
     UserTextMessage,
 )
 from .tool_formatters import render_params_table
-from .utils import escape_html, render_collapsible_code, render_markdown_collapsible
+from .utils import (
+    escape_html,
+    render_collapsible_code,
+    render_markdown_collapsible,
+    render_text_collapsible,
+)
 
 
 # =============================================================================
@@ -180,16 +185,19 @@ def format_bash_output_content(
 def format_user_text_content(text: str) -> str:
     """Format plain user text content as HTML.
 
-    User text is rendered as markdown and made collapsible if it exceeds
-    the line threshold, consistent with assistant message formatting.
+    User text is shown verbatim and made collapsible if it exceeds the line
+    threshold. It is deliberately NOT parsed as markdown: the user typed this
+    text, they did not author it as markdown, so rendering it would drop
+    backslashes from Windows paths (``user\\.claude`` -> ``user.claude``) and
+    turn indented pasted output into stray code blocks.
 
     Args:
         text: The raw user message text
 
     Returns:
-        HTML string with rendered markdown, optionally wrapped in collapsible details
+        HTML string with escaped text in a pre tag, optionally collapsible
     """
-    return render_markdown_collapsible(text, "user-text", line_threshold=20)
+    return render_text_collapsible(text, "user-text", line_threshold=20)
 
 
 def format_user_text_model_content(

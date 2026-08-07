@@ -758,9 +758,14 @@ body {
 
 기존에 User 메시지는 `<pre>` 태그로 전문 출력했고, Assistant 메시지만 `render_markdown_collapsible()`을 통해 20줄 초과 시 `<details>`로 접혔음. 긴 질문을 입력한 경우 스크롤이 길어지는 문제.
 
-### 수정 파일 (1개)
+### 수정 파일 (3개)
 
-**`claude_code_log/html/user_formatters.py`** — `format_user_text_content()`:
+접기만 얻고 마크다운 해석은 피하기 위해, 마크다운 없는 접기 함수를 따로 둔다.
+
+#### 12-1. `claude_code_log/html/utils.py` — `render_text_collapsible()` 추가
+
+`render_markdown_collapsible()` 과 형태는 같되 본문을 마크다운으로 파싱하지 않고
+이스케이프해 `<pre>` 에 넣는다. 기존 함수는 그대로 두어 Assistant 메시지가 계속 쓴다.
 
 ```python
 # 수정 전
@@ -769,11 +774,78 @@ def format_user_text_content(text: str) -> str:
     return f"<pre>{escaped_text}</pre>"
 
 # 수정 후
-def format_user_text_content(text: str) -> str:
-    return render_markdown_collapsible(text, "user-text", line_threshold=20)
+def render_text_collapsible(raw_content, css_class, line_threshold=20, preview_line_count=5):
+    full_html = f"<pre>{escape_html(raw_content)}</pre>"
+    lines = raw_content.splitlines()
+    if len(lines) <= line_threshold:
+        return f'<div class="{css_class}">{full_html}</div>'
+    preview_text = "\n".join(lines[:preview_line_count]) + "\n\n..."
+    preview_html = f"<pre>{escape_html(preview_text)}</pre>"
+    collapsible = render_collapsible_code(preview_html, full_html, len(lines), is_markdown=False)
+    return f'<div class="{css_class}">{collapsible}</div>'
 ```
 
-> **부작용**: 기존 `<pre>` (날 텍스트)에서 마크다운 렌더링으로 변경됨. 메시지에 `**굵게**`, 코드블록 등이 있으면 렌더링되어 표시됨.
+#### 12-2. `claude_code_log/html/user_formatters.py` — 호출 교체
+
+```python
+# 최초 원본
+def format_user_text_content(text: str) -> str:
+    return f"<pre>{escape_html(text)}</pre>"          # 접기 없음
+
+# 1차 변경 (마크다운 부작용 발생)
+    return render_markdown_collapsible(text, "user-text", line_threshold=20)
+
+# 현재
+    return render_text_collapsible(text, "user-text", line_threshold=20)
+```
+
+#### 12-3. `components/message_styles.css` — 글꼴·색상 유지
+
+`<pre>` 로 바뀌면 `.content pre` 규칙 때문에 고정폭 글꼴에 연한 회색(`#555`)이 된다.
+마크다운이던 때와 같은 모양을 유지하려면 되돌려줘야 한다.
+
+```css
+.user-text pre {
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+}
+```
+
+### 왜 마크다운을 쓰면 안 되는가
+
+1차 변경 때는 부작용을 "`**굵게**` 등이 렌더링되어 보인다"는 **모양 문제**로만 파악했으나,
+실제로는 **글자가 사라진다**:
+
+| 입력 | 마크다운 렌더링 결과 | 문제 |
+|---|---|---|
+| `C:\Users\user\.claude` | `C:\Users\user.claude` | 백슬래시 소실 — 경로가 틀린 값이 됨 |
+| `test\__snapshots__` | `test__snapshots__` | 동일 |
+| 빈 줄 뒤 4칸 이상 들여쓴 줄 | 중간만 음영 처리된 코드 블록 | 붙여넣은 HTML·로그가 뜬금없이 잘림 |
+| `# 주석` | 큰 제목(`<h1>`) | 모양 변형 |
+| `1. 문장` / `- 문장` | 번호·글머리 목록 | 모양 변형 |
+
+`\` 는 마크다운에서 "다음 글자를 그대로 취급하라"는 이스케이프 기호라 자신이 먹힌다.
+실측: 한 세션의 user 메시지 58건 중 10건에서 글자 소실, 전부 윈도우 경로였다.
+
+> 원본 프로젝트에 `test_user_message_not_markdown_rendered` 테스트가 있는 이유가 이것이다.
+> Assistant 응답은 마크다운으로 작성되지만, user 입력은 그냥 텍스트다.
+
+### 검증
+
+| 항목 | 결과 |
+|---|---|
+| 실제 세션 user 메시지 68건, 문자 단위 대조 | 전부 원문과 완전 동일 |
+| 생성 HTML 의 user 말풍선 44개 | `<h1>` / `<strong>` / `<ol>` / 코드블록 **0건** |
+| 백슬래시 경로 | 손상 0건 |
+| 20줄 초과 접기 | 그대로 동작 |
+| 북마크 미리보기 (`.user-text`) | 정상 — 클래스를 유지했으므로 |
+| Assistant 메시지 | 영향 없음 — `render_markdown_collapsible()` 을 그대로 두었다 |
+| 전체 테스트 | 693 passed, 0 failed |
+
+보류 상태였던 `test_user_message_not_markdown_rendered` 가 이 변경으로 통과한다.
+
+> **주의**: 파이썬 코드가 바뀌므로 확인하려면 **서버 재시작**이 필요하다.
+> 템플릿만 바뀐 경우와 달리 하드 리프레시로는 반영되지 않는다.
 
 ---
 

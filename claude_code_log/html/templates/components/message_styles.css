@@ -977,6 +977,13 @@ details summary {
     word-wrap: break-word;
 }
 
+/* User text is shown verbatim in <pre> so markdown syntax can't mangle it,
+   but it should still read like prose rather than a code listing. */
+.user-text pre {
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+}
+
 /* Message filtering */
 .message.filtered-hidden {
     display: none;

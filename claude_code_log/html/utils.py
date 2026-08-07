@@ -414,6 +414,48 @@ def render_markdown_collapsible(
     return f'<div class="{css_class}">{collapsible}</div>'
 
 
+def render_text_collapsible(
+    raw_content: str,
+    css_class: str,
+    line_threshold: int = 20,
+    preview_line_count: int = 5,
+) -> str:
+    """Render plain text verbatim, collapsible if it exceeds a line threshold.
+
+    Same shape as render_markdown_collapsible() but the text is escaped into a
+    <pre> block instead of being parsed as markdown. Use this for content the
+    user typed rather than authored as markdown: markdown parsing eats
+    backslashes (``user\\.claude`` renders as ``user.claude``) and turns an
+    indented run of lines following a blank line into a stray code block.
+
+    Args:
+        raw_content: The raw text to display as-is
+        css_class: CSS class for the wrapper div
+        line_threshold: Number of lines above which content becomes collapsible
+        preview_line_count: Number of lines to show in the preview
+
+    Returns:
+        HTML string with the text in a pre tag, optionally wrapped in details
+    """
+    full_html = f"<pre>{escape_html(raw_content)}</pre>"
+
+    lines = raw_content.splitlines()
+    if len(lines) <= line_threshold:
+        # Short content, show inline
+        return f'<div class="{css_class}">{full_html}</div>'
+
+    # Long content - make collapsible with a truncated preview
+    preview_text = "\n".join(lines[:preview_line_count])
+    if len(lines) > preview_line_count:
+        preview_text += "\n\n..."
+    preview_html = f"<pre>{escape_html(preview_text)}</pre>"
+
+    collapsible = render_collapsible_code(
+        preview_html, full_html, len(lines), is_markdown=False
+    )
+    return f'<div class="{css_class}">{collapsible}</div>'
+
+
 def render_file_content_collapsible(
     code_content: str,
     file_path: str,
