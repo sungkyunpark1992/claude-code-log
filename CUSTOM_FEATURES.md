@@ -105,7 +105,7 @@ window.initEmptyPrompt();
 
 ## 2. 세션 제목 수정
 
-**목적**: 인덱스/세션 네비게이션에서 ✏️ 버튼으로 세션 제목을 인라인 편집. 수정된 제목은 브라우저 탭 제목과 VS Code Claude Code 확장에도 반영됨.
+**목적**: 인덱스/세션 네비게이션에서 ✏️ 버튼으로 세션 제목을 인라인 편집. 수정된 제목은 브라우저 탭 제목과 VS Code Claude Code 확장에도 반영됨 — 단 **대화 중인 세션은 예외**다([한계](#한계--대화-중인-세션은-vs-code-에-반영되지-않는다) 참고).
 
 ### 수정 파일 (3개)
 
@@ -141,8 +141,8 @@ def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> N
     """JSONL 파일의 custom-title 항목을 갱신.
 
     기존 custom-title 항목을 sessionId 무관하게 모두 삭제 후 새 항목을 맨 뒤에 추가.
-    Claude Code가 자동으로 작성한 garbage 항목이 남아 있으면 VS Code 확장이
-    첫 번째 항목을 읽어 잘못된 제목을 표시하는 버그를 방지.
+    읽는 쪽은 마지막 항목을 쓰므로 새 제목이 최종값이 된다.
+    (단, 세션이 VS Code 에서 열려 있으면 확장이 그 뒤에 계속 덧쓴다 — 아래 "한계" 참고)
     """
     lines = jsonl_file.read_text(encoding="utf-8").splitlines()
     new_entry = json.dumps(
@@ -188,7 +188,7 @@ html = renderer.generate_session(messages, session_id, title=custom_title)
 
 > **핵심 설계 결정**:
 > - `_get_custom_title`은 마지막 항목을 반환 → ✏️ 이전에 Claude Code가 자동으로 쓴 garbage 항목보다 나중에 추가된 항목이 우선
-> - `_update_custom_title`은 모든 `custom-title` 항목을 삭제 후 재추가 → sessionId가 다른 형식의 garbage 항목까지 완전히 제거. VS Code Claude Code 확장은 JSONL의 첫 번째 `custom-title` 항목을 읽으므로, 항목이 하나뿐이어야 VS Code에도 올바르게 반영됨.
+> - `_update_custom_title`은 모든 `custom-title` 항목을 삭제 후 재추가 → sessionId가 다른 형식의 garbage 항목까지 완전히 제거. VS Code 확장도 **마지막** 항목을 쓰므로 항목이 하나뿐이면 확실하게 반영됨.
 
 #### 2-2. `claude_code_log/html/templates/components/session_nav.html` — 편집 버튼
 
@@ -243,6 +243,82 @@ document.querySelectorAll('.session-edit-btn').forEach(function (btn) {
     });
 });
 ```
+
+### 한계 — 대화 중인 세션은 VS Code 에 반영되지 않는다
+
+대시보드에서 바꾼 제목이 VS Code 세션 목록에 안 나타나는 경우가 있다. **버그가 아니라
+구조적 충돌**이고, 조건이 명확하다.
+
+| 대상 | 결과 |
+|---|---|
+| VS Code 에서 열려 있지 않은 세션 | ✅ 반영됨 |
+| **지금 대화 중인 세션** | ❌ 곧 옛 제목으로 덮임 |
+
+#### 원인 — 확장이 자기 메모리 값을 매 턴 덧쓴다
+
+VS Code 확장은 세션을 열 때 제목을 메모리에 올려두고(`this.customTitles`), 대화가 오갈
+때마다 그 값을 JSONL 뒤에 append 한다. 파일을 외부에서 고쳐도 확장 메모리는 모른다.
+
+실제로 관측한 파일 상태 — 대시보드가 1번 쓰는 사이 확장이 11번 덧썼다.
+
+```
+2906행 [대시보드]  새 제목            ← 여기서 수정
+2907행 [VS Code ]  옛 제목
+2921행 [VS Code ]  옛 제목
+  ... 9번 더 ...
+3087행 [VS Code ]  옛 제목            ← 마지막 = 최종값
+```
+
+읽는 쪽은 마지막 항목을 쓰므로 옛 제목이 이긴다.
+
+```js
+// 확장의 파싱 로직 — 순서대로 훑으며 덮어쓴다
+if (c.type === "custom-title" && c.customTitle) o = c.customTitle, s = true;
+else if (c.type === "ai-title" && c.aiTitle && !s) o = c.aiTitle;
+```
+
+#### `Developer: Reload Window` 는 해결책이 아니다
+
+새로고침하면 확장이 파일을 **다시 읽는 것은 맞다.** 하지만 읽어봐야 마지막이 옛 제목이라
+결과가 같다. "캐시 때문에 안 읽는다"는 진단은 틀렸다 — 읽되 읽을 값 자체가 옛 제목이다.
+
+참고로 세션 목록에는 영구 캐시가 없다. 사이드카 mtime 이 JSONL 보다 오래되면 원본을
+다시 읽는다.
+
+```js
+let f = p !== void 0 && d.mtime < p.mtime;   // 사이드카가 더 오래됐나
+info: f ? void 0 : Yet(d, r)                  // 그러면 비우고
+if (u.length > 0) await ide(e, u, n, r)       // JSONL 재파싱
+```
+
+#### 해결
+
+**① VS Code 의 ✏️ 버튼을 쓴다** — 파일과 메모리를 함께 갱신하므로 충돌이 없다.
+확장 UI 의 세션 목록 항목과 패널 상단 양쪽에 있다.
+
+```js
+appendFile(i, JSON.stringify(o) + "\n");   // 파일
+this.customTitles.set(e, t);               // 메모리  ← 대시보드에는 없는 단계
+```
+
+> `package.json` 의 `contributes.commands` 에는 rename 명령이 없다. 이 버튼은
+> webview 안에 있어서 명령 목록만 봐서는 없는 것처럼 보인다.
+
+**② 대시보드로 바꾸려면 VS Code 를 닫고 한다** — `_update_custom_title` 이 기존 항목을
+전부 지우므로, 확장이 안 돌고 있으면 우리 항목 하나만 남는다. 다음에 VS Code 를 열면
+그 값을 읽는다.
+
+#### 자동 제목(ai-title)은 사용자 제목을 덮지 않는다
+
+확장의 자동 제목 생성은 `onlyIfNoCustomTitle = true` 로 호출되고, 파일 머리/꼬리에
+`customTitle` 이 있으면 건너뛴다. 대시보드는 항상 꼬리에 하나를 남기므로 안전하다.
+
+```js
+if (ia(s.tail, "customTitle") || ia(s.head, "customTitle")) return true;  // skip
+```
+
+> 조사 대상: `~/.vscode/extensions/anthropic.claude-code-2.1.226-win32-x64/`
+> (`extension.js`, `webview/index.js`)
 
 ---
 

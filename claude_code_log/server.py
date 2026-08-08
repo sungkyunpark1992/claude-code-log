@@ -201,9 +201,15 @@ def _update_custom_title(jsonl_file: Path, session_id: str, new_title: str) -> N
     """Add or update a custom-title entry in the JSONL file.
 
     Removes ALL existing custom-title entries (regardless of sessionId) and
-    appends a single authoritative entry. This prevents stale/garbage entries
-    written by Claude Code from confusing VS Code extension (which reads the
-    first matching entry).
+    appends a single authoritative entry, so the file cannot accumulate
+    stale/garbage titles.
+
+    Readers take the LAST custom-title entry, not the first — the VS Code
+    extension parses the file in order and each custom-title overwrites the
+    previous one. That has a consequence: while a session is open in VS Code
+    the extension keeps appending its own in-memory title on every turn, so an
+    edit made here is quickly buried and will not show up. Editing the title
+    of a session that is not currently open works as expected.
     """
     lines = jsonl_file.read_text(encoding="utf-8").splitlines()
     new_entry = json.dumps(
