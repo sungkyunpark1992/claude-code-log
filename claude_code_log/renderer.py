@@ -303,6 +303,7 @@ def _shorten_model_name(model: str) -> str:
         "opus"              -> "Opus"  (from ~/.claude/settings.json)
     """
     import re
+
     m = re.search(r"(opus|sonnet|haiku)-(\d+)-(\d+)", model, re.IGNORECASE)
     if m:
         family = m.group(1).capitalize()
@@ -414,6 +415,9 @@ class TemplateProject:
         self.earliest_timestamp = project_data.get("earliest_timestamp", "")
         self.sessions = project_data.get("sessions", [])
         self.old_sessions = project_data.get("old_sessions", [])
+        # JSONL이 전부 사라지고 세션 HTML만 남은 프로젝트.
+        # index.html이 'Archived' 배지를 띄우는 데 쓴다.
+        self.is_archived = project_data.get("is_archived", False)
         self.working_directories = project_data.get("working_directories", [])
 
         # Format display name using shared logic

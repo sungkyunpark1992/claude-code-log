@@ -2111,8 +2111,46 @@ def process_projects_hierarchy(
             if cached_project_data is None:
                 continue
             archived_project_count += 1
+
+            # JSONL이 전부 사라진 프로젝트라 남은 세션 HTML이 유일한 흔적이다.
+            # 이 목록이 비면 카드를 만들어도 열 것이 없으므로 건너뛴다.
+            old_sessions = _scan_old_sessions(archived_dir, set())
+            if not old_sessions:
+                print(f"  {archived_dir.name}: [ARCHIVED] (no session HTML left)")
+                continue
+
+            # last_modified는 보통 JSONL mtime의 최댓값인데 여기엔 JSONL이 없다.
+            # 남은 세션 HTML의 mtime을 대신 쓴다 — 0.0으로 두면 카드에 1970년이
+            # 찍히고 정렬도 맨 아래로 밀린다.
+            html_files = list(archived_dir.glob("session-*.html"))
+            archived_last_modified = (
+                max(h.stat().st_mtime for h in html_files) if html_files else 0.0
+            )
+
+            project_summaries.append(
+                {
+                    "name": archived_dir.name,
+                    "path": archived_dir,
+                    "html_file": f"{archived_dir.name}/combined_transcripts.html",
+                    "jsonl_count": 0,
+                    "message_count": cached_project_data.total_message_count,
+                    "last_modified": archived_last_modified,
+                    "total_input_tokens": cached_project_data.total_input_tokens,
+                    "total_output_tokens": cached_project_data.total_output_tokens,
+                    "total_cache_creation_tokens": cached_project_data.total_cache_creation_tokens,
+                    "total_cache_read_tokens": cached_project_data.total_cache_read_tokens,
+                    "latest_timestamp": cached_project_data.latest_timestamp,
+                    "earliest_timestamp": cached_project_data.earliest_timestamp,
+                    "working_directories": cache_manager.get_working_directories(),
+                    "is_archived": True,
+                    # 살아있는 JSONL이 없으므로 활성 세션 목록은 비고,
+                    # 남은 HTML 전부가 old session이 된다.
+                    "sessions": [],
+                    "old_sessions": old_sessions,
+                }
+            )
             print(
-                f"  {archived_dir.name}: [ARCHIVED] ({len(cached_project_data.sessions)} sessions)"
+                f"  {archived_dir.name}: [ARCHIVED] ({len(old_sessions)} session HTML)"
             )
         except Exception as e:
             print(f"Warning: Failed to process archived project {archived_dir}: {e}")

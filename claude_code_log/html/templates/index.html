@@ -66,7 +66,9 @@
 
     <div class='project-list'>
         {% for project in projects %}
-        {% if project.sessions %}
+        {# archived 프로젝트는 JSONL 이 전부 사라져 sessions 가 비어 있고
+           old_sessions(남은 세션 HTML)만 있다. 둘 중 하나라도 있으면 카드를 그린다. #}
+        {% if project.sessions or project.old_sessions %}
         <div class='project-card{% if project.is_archived %} archived{% endif %}'>
             <div class='project-name'>
                 <a href='{{ project.html_file }}'>{{ project.display_name }}</a>
@@ -95,12 +97,16 @@
                 {% endif %}
             </div>
 
-            {% if project.sessions and project.sessions|length > 0 %}
+            {# Old Sessions 는 Sessions 안에 중첩하지 않는다 — archived 프로젝트는
+               sessions 가 비어 있어서, 중첩하면 남은 HTML 목록까지 통째로 사라진다. #}
+            {% if project.sessions or project.old_sessions %}
             <div class='project-sessions'>
+                {% if project.sessions and project.sessions|length > 0 %}
                 <details>
                     <summary>Sessions ({{ project.sessions|length }})</summary>
                     {{ render_session_nav(project.sessions, "expandable", project.name + "/") }}
                 </details>
+                {% endif %}
                 {% if project.old_sessions and project.old_sessions|length > 0 %}
                 <details class='old-sessions'>
                     <summary>Old Sessions ({{ project.old_sessions|length }}) <span class='old-sessions-hint'>JSONL 삭제됨, HTML만 잔존</span></summary>

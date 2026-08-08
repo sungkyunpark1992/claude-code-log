@@ -2082,6 +2082,8 @@
           
           
           
+          
+          
           <div class='project-card'>
               <div class='project-name'>
                   <a href='-Users-test-project-alpha/combined_transcripts.html'>alpha</a>
@@ -2107,7 +2109,9 @@
               </div>
   
               
+              
               <div class='project-sessions'>
+                  
                   <details>
                       <summary>Sessions (1)</summary>
                       
@@ -2146,6 +2150,7 @@
   
   
                   </details>
+                  
                   
               </div>
               

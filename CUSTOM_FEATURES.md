@@ -1813,8 +1813,12 @@ span.appendChild(pin);
 1. 대시보드 프로젝트 카드의 **Sessions** 토글 아래 **Old Sessions (N)** 토글 표시 (JSONL 없는 HTML이 있을 때만)
 2. 목록 클릭 → 정적 HTML 파일 서빙 (JSONL 없어도 브라우저에서 열람 가능)
 3. 각 항목: HTML `<title>` 태그에서 요약 추출 + 파일 mtime을 타임스탬프로 표시
+4. 프로젝트의 JSONL이 **전부** 사라진 경우도 `Archived` 배지를 달아 카드로 표시 → [23-6](#23-6-확장--프로젝트-전체가-archived-인-경우)
 
-### 수정 파일 (5개)
+### 수정 파일 (5개 + 확장 3개)
+
+> 23-1~5 는 JSONL이 일부라도 남은 프로젝트를 다룬다.
+> 프로젝트 전체가 비는 경우는 [23-6](#23-6-확장--프로젝트-전체가-archived-인-경우) 에서 별도로 처리한다.
 
 #### 23-1. `claude_code_log/converter.py`
 
@@ -1867,6 +1871,127 @@ if jsonl_file is not None and jsonl_file.stem == session_id:
 ```
 
 > 이 조건이 없으면 `_find_session_jsonl`의 2차 content 검색이 다른 파일을 반환해 빈 세션 페이지가 동적으로 생성됨.
+
+---
+
+### 23-6. 확장 — 프로젝트 **전체**가 archived 인 경우
+
+23-1~5 는 "JSONL 이 일부라도 남은 프로젝트" 안에서만 동작한다.
+프로젝트의 JSONL 이 **전부** 사라지면 카드 자체가 안 만들어져 Old Sessions 도 함께 묻힌다.
+
+실제로 이 상태의 프로젝트가 5개, 갇힌 세션 HTML 이 22개 있었다.
+
+#### 막힌 곳이 3중이었다
+
+archived 프로젝트가 화면에 나오려면 관문을 셋 지나야 하는데, 셋 다 막혀 있었다.
+
+```
+① 데이터 만들기        →  ② 카드 그리기         →  ③ 목록 그리기
+   converter.py             index.html 카드 조건      index.html Old Sessions 위치
+```
+
+**하나만 뚫어서는 아무 변화가 없다.** ① 만 고쳤을 때 로그에는
+`[ARCHIVED] (7 session HTML)` 이 정상 출력되는데 화면은 그대로였고,
+②③ 은 실제로 돌려보고 단계별로 짚어야 드러났다.
+
+**① 데이터 자체가 안 만들어짐** — `converter.py` archived 루프
+
+```python
+for archived_dir in ...:
+    archived_project_count += 1      # 개수만 세고
+    print("[ARCHIVED] ...")          # 출력만 하고 끝
+    # 화면에 넘길 project_summaries 에 안 넣는다
+```
+
+세어놓고 버렸다. 렌더러에는 애초에 데이터가 가지 않았다.
+
+**② 카드를 안 그림** — `index.html` 카드 조건
+
+```jinja
+{% if project.sessions %}     ← 활성 세션이 있어야만 카드를 그림
+```
+
+archived 는 JSONL 이 전부 없어서 `sessions` 가 빈 목록이다. 조건에 걸려 카드가 통째로 빠진다.
+
+**③ 목록을 안 그림** — `index.html` 의 Old Sessions 위치
+
+```jinja
+{% if project.sessions %}              ← 바깥 조건
+    <details>Sessions ...</details>
+    {% if project.old_sessions %}      ← Old Sessions 가 이 안에 갇혀 있었다
+        <details>Old Sessions ...</details>
+    {% endif %}
+{% endif %}
+```
+
+바깥이 거짓이면 안쪽은 평가될 기회조차 없다.
+
+#### ③ 이 여태 안 드러난 이유
+
+| | `sessions` | 바깥 조건 | Old Sessions |
+|---|---|---|---|
+| 활성 프로젝트 | 있음 | 참 | 잘 보임 |
+| archived 프로젝트 | **비어 있음** | **거짓** | 통째로 사라짐 |
+
+`sessions` 가 비는 상황은 archived 프로젝트뿐이다. 활성 프로젝트는 언제나 바깥 조건이
+참이라 중첩돼 있어도 멀쩡히 보였고, 그래서 이 중첩이 문제라는 걸 알 수 없었다.
+① 을 고쳐 archived 데이터가 처음 흘러들어온 순간에야 표면화됐다.
+
+> 자물쇠가 이중으로 걸려 있는데 바깥 자물쇠가 늘 열려 있어서 안쪽의 존재를 몰랐던 상황이다.
+> 바깥이 처음 잠기자 안쪽도 함께 드러났다.
+
+#### 23-6-1. `claude_code_log/converter.py` — archived 루프에서 요약 추가
+
+`archived_project_count += 1` 만 하고 버리던 자리에서 `project_summaries.append(...)` 한다.
+
+```python
+old_sessions = _scan_old_sessions(archived_dir, set())   # 유효 JSONL 이 없으므로 빈 집합
+if not old_sessions:
+    continue                                             # 열 것이 없으면 카드도 만들지 않음
+
+# JSONL 이 없으니 last_modified 를 남은 세션 HTML 의 mtime 으로 대신한다.
+# 0.0 으로 두면 카드에 1970년이 찍히고 정렬도 맨 아래로 밀린다.
+html_files = list(archived_dir.glob("session-*.html"))
+archived_last_modified = max(h.stat().st_mtime for h in html_files) if html_files else 0.0
+
+project_summaries.append({
+    ...,
+    "jsonl_count": 0,
+    "last_modified": archived_last_modified,
+    "is_archived": True,
+    "sessions": [],                # 살아있는 JSONL 이 없음
+    "old_sessions": old_sessions,  # 남은 HTML 전부
+})
+```
+
+#### 23-6-2. `claude_code_log/renderer.py` — `is_archived` 필드 추가
+
+템플릿이 `project.is_archived` 를 참조하는데 `TemplateProject` 에 **없어서 항상 거짓**이었다.
+Jinja2 는 없는 속성을 Undefined(=falsy)로 처리하므로 조용히 배지가 안 떴다.
+
+```python
+self.is_archived = project_data.get("is_archived", False)
+```
+
+#### 23-6-3. `claude_code_log/html/templates/index.html` — 표시 조건 2곳
+
+```jinja
+{# 카드: sessions 가 비어도 old_sessions 가 있으면 그린다 #}
+{% if project.sessions or project.old_sessions %}
+
+{# Old Sessions: Sessions 안에 중첩하지 않고 형제로 둔다 #}
+<div class='project-sessions'>
+    {% if project.sessions %}   <details>Sessions ...</details>   {% endif %}
+    {% if project.old_sessions %} <details class='old-sessions'>...</details> {% endif %}
+</div>
+```
+
+#### 결과
+
+대시보드 카드 **2개 → 7개**, 세션 HTML 링크 26개. archived 카드에는 `Archived` 배지가 붙는다.
+세션 HTML 이 하나도 없는 프로젝트는 카드를 만들지 않는다(`no session HTML left`).
+
+> 스냅샷 diff 는 5줄 추가이나 `git diff -w` 로 보면 변경 0 — 들여쓰기 변화뿐이다.
 
 ---
 
