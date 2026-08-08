@@ -23,7 +23,6 @@ from .utils import (
 from .cache import (
     CacheManager,
     SessionCacheData,
-    get_all_cached_projects,
     get_library_version,
 )
 from .parser import parse_timestamp
@@ -1771,14 +1770,19 @@ def process_projects_hierarchy(
         if child.is_dir() and list(child.glob("*.jsonl")):
             project_dirs.append(child)
 
-    # Find archived projects (projects in cache but without JSONL files)
+    # Find archived projects: JSONL all gone, but session HTML still on disk.
+    #
+    # Deliberately filesystem-based rather than cache-based. The cache is
+    # disposable — deleting it (e.g. to apply a migration) must never lose
+    # information. A project with no JSONL is invisible to the scan above, so
+    # if its only record lived in the cache it could never be rediscovered.
+    active_project_dirs = set(project_dirs)
     archived_project_dirs: list[Path] = []
-    if use_cache:
-        cached_projects = get_all_cached_projects(projects_path)
-        active_project_paths = {str(p) for p in project_dirs}
-        for project_path_str, is_archived in cached_projects:
-            if is_archived and project_path_str not in active_project_paths:
-                archived_project_dirs.append(Path(project_path_str))
+    for child in projects_path.iterdir():
+        if not child.is_dir() or child in active_project_dirs:
+            continue
+        if list(child.glob("session-*.html")):
+            archived_project_dirs.append(child)
 
     if not project_dirs and not archived_project_dirs:
         raise FileNotFoundError(
@@ -2100,16 +2104,15 @@ def process_projects_hierarchy(
             )
             continue
 
-    # Process archived projects (projects in cache but without JSONL files)
-    # Archived projects have no JSONL files, so they have no displayable sessions.
-    # Just log them for awareness but don't add to index.
+    # Process archived projects (no JSONL left, only session HTML on disk)
     archived_project_count = 0
     for archived_dir in sorted(archived_project_dirs):
         try:
+            # 캐시가 있으면 메시지 수·토큰 통계를 얹지만, 없어도 카드는 만든다.
+            # 캐시는 언제든 지워질 수 있고 이 프로젝트들은 JSONL 이 없어 재생성되지
+            # 않으므로, 캐시 유무로 표시 여부를 가르면 지우는 순간 사라진다.
             cache_manager = CacheManager(archived_dir, library_version)
             cached_project_data = cache_manager.get_cached_project_data()
-            if cached_project_data is None:
-                continue
             archived_project_count += 1
 
             # JSONL이 전부 사라진 프로젝트라 남은 세션 HTML이 유일한 흔적이다.
@@ -2133,14 +2136,43 @@ def process_projects_hierarchy(
                     "path": archived_dir,
                     "html_file": f"{archived_dir.name}/combined_transcripts.html",
                     "jsonl_count": 0,
-                    "message_count": cached_project_data.total_message_count,
+                    # 캐시가 없으면 통계는 0/빈 값으로 두고 세션 목록만 보여준다.
+                    "message_count": (
+                        cached_project_data.total_message_count
+                        if cached_project_data
+                        else 0
+                    ),
                     "last_modified": archived_last_modified,
-                    "total_input_tokens": cached_project_data.total_input_tokens,
-                    "total_output_tokens": cached_project_data.total_output_tokens,
-                    "total_cache_creation_tokens": cached_project_data.total_cache_creation_tokens,
-                    "total_cache_read_tokens": cached_project_data.total_cache_read_tokens,
-                    "latest_timestamp": cached_project_data.latest_timestamp,
-                    "earliest_timestamp": cached_project_data.earliest_timestamp,
+                    "total_input_tokens": (
+                        cached_project_data.total_input_tokens
+                        if cached_project_data
+                        else 0
+                    ),
+                    "total_output_tokens": (
+                        cached_project_data.total_output_tokens
+                        if cached_project_data
+                        else 0
+                    ),
+                    "total_cache_creation_tokens": (
+                        cached_project_data.total_cache_creation_tokens
+                        if cached_project_data
+                        else 0
+                    ),
+                    "total_cache_read_tokens": (
+                        cached_project_data.total_cache_read_tokens
+                        if cached_project_data
+                        else 0
+                    ),
+                    "latest_timestamp": (
+                        cached_project_data.latest_timestamp
+                        if cached_project_data
+                        else ""
+                    ),
+                    "earliest_timestamp": (
+                        cached_project_data.earliest_timestamp
+                        if cached_project_data
+                        else ""
+                    ),
                     "working_directories": cache_manager.get_working_directories(),
                     "is_archived": True,
                     # 살아있는 JSONL이 없으므로 활성 세션 목록은 비고,
