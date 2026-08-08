@@ -83,5 +83,9 @@ def create_system_message(
 
     # Create structured system content
     meta = create_meta(transcript)
-    level = getattr(transcript, "level", "info")
+    # `level` is declared Optional on the model, so getattr's default never
+    # fires — the attribute exists and is simply None. Newer Claude Code writes
+    # system entries without it (subtype "turn_duration", "away_summary"), and
+    # a None here crashes the renderer's `content.level.title()`.
+    level = getattr(transcript, "level", None) or "info"
     return SystemMessage(level=level, text=transcript.content, meta=meta)
