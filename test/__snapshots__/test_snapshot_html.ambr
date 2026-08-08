@@ -2127,6 +2127,7 @@
           
           <div class='session-link' data-session-id='session-abc12345'>
               <div class='session-link-title'>
+                  
                   <span class='session-title' data-title='Test session summary'>
                   
                   Test session summary •
@@ -19929,6 +19930,7 @@
           
           <div class='session-link' data-session-id='session_b'>
               <div class='session-link-title'>
+                  
                   <span class='session-title' data-title=''>
                   
                   session_
@@ -19950,6 +19952,7 @@
           
           <div class='session-link' data-session-id='test_session'>
               <div class='session-link-title'>
+                  
                   <span class='session-title' data-title='User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator.'>
                   
                   User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator. •

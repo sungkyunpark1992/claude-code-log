@@ -192,6 +192,19 @@ class CustomTitleTranscriptEntry(BaseModel):
     sessionId: str
 
 
+class AiTitleTranscriptEntry(BaseModel):
+    """Session title Claude Code generates by summarising the conversation.
+
+    Written repeatedly as the session grows, so the last entry wins. Unlike
+    SummaryTranscriptEntry this carries its own sessionId and needs no
+    leafUuid mapping.
+    """
+
+    type: Literal["ai-title"]
+    aiTitle: str
+    sessionId: str
+
+
 class SystemTranscriptEntry(BaseTranscriptEntry):
     """System messages like warnings, notifications, hook summaries, etc."""
 
@@ -233,6 +246,7 @@ TranscriptEntry = Union[
     SystemTranscriptEntry,
     QueueOperationTranscriptEntry,
     CustomTitleTranscriptEntry,
+    AiTitleTranscriptEntry,
 ]
 
 

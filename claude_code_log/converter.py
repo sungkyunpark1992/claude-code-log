@@ -30,6 +30,7 @@ from .factories import create_transcript_entry
 from .models import (
     TranscriptEntry,
     AssistantTranscriptEntry,
+    AiTitleTranscriptEntry,
     CustomTitleTranscriptEntry,
     SummaryTranscriptEntry,
     SystemTranscriptEntry,
@@ -90,8 +91,8 @@ def filter_messages_by_date(
             filtered_messages.append(message)
             continue
 
-        # Handle CustomTitleTranscriptEntry which doesn't have timestamp
-        if isinstance(message, CustomTitleTranscriptEntry):
+        # Title entries carry no timestamp, so they can't be date-filtered
+        if isinstance(message, (CustomTitleTranscriptEntry, AiTitleTranscriptEntry)):
             continue
 
         timestamp_str = message.timestamp
@@ -209,6 +210,7 @@ def load_transcript(
                         "system",
                         "queue-operation",
                         "custom-title",
+                        "ai-title",
                     ]:
                         # Parse using Pydantic models
                         entry = create_transcript_entry(entry_dict)
@@ -218,7 +220,6 @@ def load_transcript(
                         "progress",  # Real-time progress updates (hook_progress, bash_progress)
                         "last-prompt",  # Stores the last prompt text for UI display
                         "attachment",  # IDE diagnostics, todo reminders, edited file snapshots, etc.
-                        "ai-title",  # Auto-generated session title by Claude
                     }:
                         # Silently skip internal message types we don't render
                         pass
@@ -1252,6 +1253,7 @@ def _update_cache_with_session_data(
     # Group messages by session and calculate session data
     sessions_cache_data: dict[str, SessionCacheData] = {}
     custom_titles: dict[str, str] = {}
+    ai_titles: dict[str, str] = {}
 
     # Track token usage and timestamps for project aggregates
     total_input_tokens = 0
@@ -1267,6 +1269,11 @@ def _update_cache_with_session_data(
         # Handle custom-title entries (Ctrl+R session renames)
         if isinstance(message, CustomTitleTranscriptEntry):
             custom_titles[message.sessionId] = message.customTitle
+            continue
+
+        # Claude Code 가 자동 생성하는 세션 제목. 여러 번 기록되므로 마지막 값이 최신.
+        if isinstance(message, AiTitleTranscriptEntry):
+            ai_titles[message.sessionId] = message.aiTitle
             continue
 
         # Update project-level timestamp tracking
@@ -1366,6 +1373,11 @@ def _update_cache_with_session_data(
         if session_id in sessions_cache_data:
             sessions_cache_data[session_id].custom_title = custom_title
 
+    # Apply auto-generated titles (Claude Code 가 요약해 쓰는 ai-title)
+    for session_id, ai_title in ai_titles.items():
+        if session_id in sessions_cache_data:
+            sessions_cache_data[session_id].ai_title = ai_title
+
     # Update cache with filtered session data
     cache_manager.update_session_cache(sessions_cache_data)
 
@@ -1423,16 +1435,25 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
 
     # Collect custom titles from custom-title entries (Ctrl+R session renames)
     custom_titles: dict[str, str] = {}
+    # Claude Code 가 대화를 요약해 쓰는 자동 제목. 세션이 길어지며 여러 번
+    # 기록되므로 마지막 값이 최신이다 (custom_titles 와 같은 방식).
+    ai_titles: dict[str, str] = {}
     for message in messages:
         if isinstance(message, CustomTitleTranscriptEntry):
             custom_titles[message.sessionId] = message.customTitle
+        elif isinstance(message, AiTitleTranscriptEntry):
+            ai_titles[message.sessionId] = message.aiTitle
 
     # Group messages by session (excluding warmup-only sessions)
     sessions: dict[str, dict[str, Any]] = {}
     for message in messages:
-        if hasattr(message, "sessionId") and not isinstance(
-            message, SummaryTranscriptEntry
-        ) and not isinstance(message, CustomTitleTranscriptEntry):
+        if (
+            hasattr(message, "sessionId")
+            and not isinstance(message, SummaryTranscriptEntry)
+            and not isinstance(
+                message, (CustomTitleTranscriptEntry, AiTitleTranscriptEntry)
+            )
+        ):
             session_id = getattr(message, "sessionId", "")
             if not session_id or session_id in warmup_session_ids:
                 continue
@@ -1442,6 +1463,7 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
                     "id": session_id,
                     "summary": session_summaries.get(session_id),
                     "custom_title": custom_titles.get(session_id),
+                    "ai_title": ai_titles.get(session_id),
                     "first_timestamp": getattr(message, "timestamp", ""),
                     "last_timestamp": getattr(message, "timestamp", ""),
                     "message_count": 0,
@@ -1476,6 +1498,7 @@ def _collect_project_sessions(messages: list[TranscriptEntry]) -> list[dict[str,
             "id": session_data["id"],
             "summary": session_data["summary"],
             "custom_title": session_data.get("custom_title"),
+            "ai_title": session_data.get("ai_title"),
             "timestamp_range": timestamp_range,
             "message_count": session_data["message_count"],
             "first_user_message": session_data["first_user_message"]
@@ -1973,6 +1996,7 @@ def process_projects_hierarchy(
                                     "id": session_data.session_id,
                                     "summary": session_data.summary,
                                     "custom_title": session_data.custom_title,
+                                    "ai_title": session_data.ai_title,
                                     "timestamp_range": format_timestamp_range(
                                         session_data.first_timestamp,
                                         session_data.last_timestamp,

@@ -38,6 +38,7 @@
 29. [메시지 선택 후 HTML 내보내기 (체크박스 + 슬라이드 패널)](#29-메시지-선택-후-html-내보내기-체크박스--슬라이드-패널)
 30. [대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼](#30-대시보드에-원본-jsonl-디렉토리-경로-표시--복사-버튼)
 31. [JSONL 자동 삭제 막기 (환경 설정)](#31-jsonl-자동-삭제-막기-환경-설정)
+32. [세션 자동 제목 (ai-title) 표시](#32-세션-자동-제목-ai-title-표시)
 
 ---
 
@@ -2723,6 +2724,148 @@ function fallbackCopy(text, onSuccess) {
 - 상주 프로세스 없음. 실행 시간 1초 미만
 
 **상세: [JSONL_RETENTION.md](JSONL_RETENTION.md)**
+
+---
+
+## 32. 세션 자동 제목 (ai-title) 표시
+
+**목적**: VSCode 의 Claude Code 가 대화를 요약해 자동 생성하는 제목을 대시보드 세션 목록에 표시.
+
+### 배경 — 제목이 첫 질문으로 나오던 문제
+
+대시보드 세션 제목의 우선순위는 `custom_title → summary → 첫 질문` 이었는데, 두 값이 모두 비어
+첫 질문이 그대로 제목이 되고 있었다.
+
+| 값 | 출처 | 이 프로젝트 세션에서 |
+|---|---|---|
+| `custom_title` | 대시보드에서 직접 수정하거나 Ctrl+R 로 이름 변경 | 수정한 세션만 |
+| `summary` | `/compact` 로 대화를 압축할 때 생기는 옛 형식 | **0건** |
+| `ai-title` | Claude Code 가 자동 생성 | **세션마다 존재** |
+
+`ai-title` 은 JSONL 에 실제로 들어있었는데 `converter.py` 가 **의도적으로 버리고 있었다**.
+
+```python
+elif entry_type in {
+    "file-history-snapshot", "progress", "last-prompt", "attachment",
+    "ai-title",          # ← 여기서 스킵되고 있었다
+}:
+    pass
+```
+
+```json
+{"type": "ai-title", "aiTitle": "CSS selector :not(.slash-command) 추가 이유 확인", "sessionId": "ba1ea00b-..."}
+```
+
+`custom-title` 과 구조가 같아서 `sessionId` 를 직접 갖는다 — `summary` 처럼 `leafUuid` 매핑이 필요 없다.
+세션이 길어지며 여러 번 기록되므로 **마지막 값이 최신**이다 (`custom_titles` 와 동일한 규칙).
+
+### 설계 — `summary` 재활용 대신 별도 컬럼
+
+두 방법을 놓고 골랐다.
+
+| | A: `summary` 자리에 얹기 | B: `ai_title` 컬럼 추가 |
+|---|---|---|
+| 수정 범위 | 2개 파일 | 6개 파일 + 마이그레이션 |
+| DB 스키마 | 변경 없음 | `ALTER TABLE` 한 줄 |
+| `/compact` 를 쓰기 시작하면 | 진짜 요약과 같은 칸을 두고 충돌 | 문제없음 |
+
+**B 를 택했다.** 커밋 `0ba8e22`(`custom_title` 도입)가 정확히 같은 7단계를 이미 밟았고,
+변경 규모도 그때(+78/-6)와 비슷한 수준(+66/-13)이다. 새 패턴이 아니라 기존 패턴을 따른 것.
+
+### 수정 파일 (6개 + 마이그레이션)
+
+값이 지나는 길목을 순서대로 손봐야 한다.
+
+```
+JSONL 파싱 → 모델 → 수집 → DB 컬럼 → DB 읽기 → 화면 전달 → 템플릿
+```
+
+#### 32-1. `claude_code_log/models.py`
+
+```python
+class AiTitleTranscriptEntry(BaseModel):
+    type: Literal["ai-title"]
+    aiTitle: str
+    sessionId: str
+```
+
+`TranscriptEntry` union 에도 추가한다.
+
+#### 32-2. `claude_code_log/factories/transcript_factory.py`
+
+```python
+ENTRY_CREATORS = {
+    ...,
+    "ai-title": lambda data: AiTitleTranscriptEntry.model_validate(data),
+}
+```
+
+#### 32-3. `claude_code_log/migrations/005_ai_title.sql` (신규)
+
+```sql
+ALTER TABLE sessions ADD COLUMN ai_title TEXT;
+```
+
+#### 32-4. `claude_code_log/cache.py`
+
+`SessionCacheData.ai_title` 필드 + INSERT 컬럼/값 + `SELECT *` 결과 매핑 2곳.
+`row["ai_title"] if "ai_title" in row.keys() else None` 형태로 옛 DB 도 견딘다.
+
+#### 32-5. `claude_code_log/converter.py`
+
+- **파싱 허용 목록에 `"ai-title"` 추가** (스킵 목록에서 빼는 것만으로는 부족 — 아래 함정 참고)
+- 날짜 필터에서 제외 (timestamp 가 없는 항목)
+- `ai_titles` 수집 2곳 + 캐시/화면 전달 3곳
+
+#### 32-6. `claude_code_log/renderer.py`
+
+렌더 대상에서 제외 2곳. 빼먹으면 아래 함정 ②가 터진다.
+
+#### 32-7. `components/session_nav.html`
+
+```jinja
+{# 제목 우선순위: 직접 수정 > Claude Code 자동 생성 > 압축 요약 > 첫 질문 #}
+{% if session.custom_title %} ... {% elif session.ai_title %} ... {% elif session.summary %} ...
+```
+
+### 함정 2가지
+
+둘 다 실제로 돌려보고서야 드러났다.
+
+**① 허용 목록과 스킵 목록이 따로 있다**
+
+`converter.py` 에는 "파싱할 타입" 목록과 "조용히 버릴 타입" 목록이 **각각** 있다.
+스킵 목록에서 `ai-title` 을 빼도 허용 목록에 없으면 여전히 파싱되지 않는다.
+(빼기만 했을 때 `AiTitle 파싱됨: 0` 이었다.)
+
+**② 새 엔트리 타입은 렌더러도 알아야 한다**
+
+```
+AttributeError: 'AiTitleTranscriptEntry' object has no attribute 'message'
+```
+
+`renderer.py` 의 `_filter_messages()` 가 모르는 타입을 만나 터졌고, **대시보드가 통째로 비었다.**
+`CustomTitleTranscriptEntry` 를 걸러내던 2곳에 함께 넣어야 한다.
+
+> 새 `TranscriptEntry` 타입을 추가할 때는 `grep -rn "CustomTitleTranscriptEntry" claude_code_log/`
+> 로 기존 타입이 다뤄지는 모든 지점을 훑는 것이 안전하다.
+
+### 결과
+
+```
+7caad578  →  C:\a 폴더 내용 확인 및 설치 내역 파악
+23a08897  →  VSCode Claude 확장 프로그램 알림 설정 복구
+ba1ea00b  →  (직접 수정한 제목 유지 — custom_title 이 우선)
+```
+
+### 캐시 재생성이 필요하다
+
+마이그레이션은 기존 DB 에 컬럼만 추가하므로 값은 비어 있다. `ai_title` 을 채우려면 JSONL 을
+다시 읽어야 한다.
+
+> ⚠️ **캐시 DB 를 지워서 재생성하면 안 된다.** archived 프로젝트([23-6](#23-6-확장--프로젝트-전체가-archived-인-경우))는
+> 캐시에만 기록돼 있어서, 지우면 대시보드에서 사라진다. JSONL 이 없어 재스캔으로도 복구되지 않는다.
+> 실제로 이 작업 중에 그렇게 잃었다.
 
 ---
 
