@@ -8,7 +8,7 @@ import time as time_module
 import webbrowser
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Optional
+from typing import Any, Optional, cast
 
 from flask import Flask, Response, abort, jsonify, request, send_file
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -56,16 +56,38 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
     """Find the JSONL file containing the given session ID.
 
     Tries filename match first (e.g. {session_id}.jsonl), then falls back
-    to content search for sessions embedded in other JSONL files.
+    to searching for entries whose `sessionId` field actually equals the id —
+    a session can live inside another file (agent/sidechain transcripts).
+
+    The fallback matches on the parsed field, never on a raw substring. A
+    transcript that merely *mentions* a session id in its message text would
+    otherwise match, and callers act on the result: the delete endpoint once
+    removed a live transcript because that transcript discussed the id of the
+    session being deleted.
     """
     # 1차: 파일명으로 검색 (가장 빠르고 정확)
     for jsonl_file in projects_dir.rglob(f"{session_id}.jsonl"):
         return jsonl_file
 
-    # 2차: 파일 내용으로 검색 (sessionId 필드가 있는 경우)
+    # 2차: sessionId 필드가 실제로 일치하는 파일 검색
     for jsonl_file in projects_dir.rglob("*.jsonl"):
-        if session_id in jsonl_file.read_text(encoding="utf-8"):
-            return jsonl_file
+        try:
+            text = jsonl_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            # 값이 어디에도 없는 줄은 파싱하지 않고 건너뛴다 (대부분 여기서 걸러짐)
+            if session_id not in line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            entry = cast("dict[str, Any]", raw)
+            if entry.get("sessionId") == session_id:
+                return jsonl_file
 
     return None
 
@@ -289,6 +311,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         jsonl_file = _find_session_jsonl(projects_dir, session_id)
         if jsonl_file is None:
             return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+        # 이 엔드포인트는 JSONL 을 다시 쓴다. 삭제와 같은 이유로 파일명을 확인한다.
+        if jsonl_file.stem != session_id:
+            return jsonify({"error": "filename does not match session id"}), 409  # type: ignore[return-value]
 
         _update_custom_title(jsonl_file, session_id, new_title)
 
@@ -316,7 +341,11 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
             return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
 
         # 2) 소스 파일 삭제: JSONL + 세션 HTML
+        # 파일명이 정확히 일치할 때만 지운다. _find_session_jsonl 이 필드로
+        # 매칭하도록 고쳤지만, 삭제는 되돌릴 수 없으므로 한 겹 더 확인한다.
         if jsonl_file is not None:
+            if jsonl_file.stem != session_id:
+                return jsonify({"error": "filename does not match session id"}), 409  # type: ignore[return-value]
             jsonl_file.unlink()
         session_html = project_dir / f"session-{session_id}.html"
         if session_html.exists():

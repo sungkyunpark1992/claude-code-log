@@ -272,7 +272,10 @@ def delete_session(session_id: str) -> Response:
         return jsonify({"error": "session not found"}), 404
 
     # 2) JSONL + 세션 HTML 삭제
+    # 파일명이 정확히 일치할 때만 지운다 (아래 "사고" 절 참고)
     if jsonl_file is not None:
+        if jsonl_file.stem != session_id:
+            return jsonify({"error": "filename does not match session id"}), 409
         jsonl_file.unlink()
     session_html = project_dir / f"session-{session_id}.html"
     if session_html.exists():
@@ -326,6 +329,66 @@ document.querySelectorAll('.session-delete-btn').forEach(function (btn) {
     });
 });
 ```
+
+### 사고 — 엉뚱한 세션이 삭제된 문제
+
+Old Session([23번](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회)) 하나를 X 버튼으로 지웠더니,
+**전혀 다른, 진행 중이던 대화의 JSONL 이 삭제됐다.** 4.9 MB 짜리가 18 KB 로 잘려 나갔다.
+
+#### 원인 — 내용 검색이 "언급"만으로 매치했다
+
+`_find_session_jsonl()` 의 2차 검색이 파일 전체 텍스트를 문자열로 훑고 있었다.
+
+```python
+# 문제의 코드
+for jsonl_file in projects_dir.rglob("*.jsonl"):
+    if session_id in jsonl_file.read_text(encoding="utf-8"):
+        return jsonl_file          # 그냥 언급만 해도 매치
+```
+
+지우려던 세션은 JSONL 이 이미 없어(Old Session) 1차 파일명 검색이 실패했고, 2차로 넘어갔다.
+그런데 **진행 중이던 대화가 마침 그 세션 ID 를 화면에 출력한 적이 있어서**, 그 대화의 JSONL 이
+"이 세션을 담은 파일"로 오인됐다.
+
+실측:
+
+| 판정 방식 | 결과 |
+|---|---|
+| 단순 문자열 포함 (기존) | `True` — 대화 본문에 ID 가 적혀 있다는 이유만으로 |
+| `sessionId` 필드 일치 | **0건** — 실제로는 무관한 파일 |
+
+`project_dir = jsonl_file.parent` 도 함께 틀어진다. 다른 프로젝트의 파일이 매치됐다면
+**그 프로젝트의 캐시와 `combined_transcripts.html` 까지** 지워졌을 것이다.
+
+#### 수정 1 — 필드로 매칭
+
+```python
+for line in text.splitlines():
+    if session_id not in line:      # 빠른 사전 필터 (대부분 여기서 걸러짐)
+        continue
+    raw = json.loads(line)
+    if isinstance(raw, dict) and raw.get("sessionId") == session_id:
+        return jsonl_file
+```
+
+#### 수정 2 — 파괴적 동작에 파일명 가드
+
+되돌릴 수 없는 동작이므로 한 겹 더 확인한다. **제목 수정(`PUT /title`)도 JSONL 을 다시 쓰므로
+같은 위험**이 있어 함께 막았다.
+
+```python
+if jsonl_file.stem != session_id:
+    return jsonify({"error": "filename does not match session id"}), 409
+```
+
+#### 발동 조건 — 평소엔 드러나지 않는다
+
+지우려는 세션 ID 가 **다른 JSONL 본문에 텍스트로 적혀 있어야** 터진다.
+그래서 대부분의 삭제는 멀쩡히 동작하고, 하필 그 세션을 화제로 삼은 대화가 있을 때만 사고가 난다.
+
+> 수정 후 실제로 Old Session 을 하나 더 삭제해 확인했다. 해당 HTML 만 지워지고
+> 다른 JSONL 은 그대로였다.
+
 
 ---
 
@@ -1871,6 +1934,13 @@ if jsonl_file is not None and jsonl_file.stem == session_id:
 ```
 
 > 이 조건이 없으면 `_find_session_jsonl`의 2차 content 검색이 다른 파일을 반환해 빈 세션 페이지가 동적으로 생성됨.
+
+> ⚠️ **여기서 조회 쪽에만 가드를 넣고 삭제 쪽에는 넣지 않았다.** 나중에 X 버튼으로 Old Session 을
+> 지웠을 때 진행 중이던 다른 대화의 JSONL 이 삭제되는 사고로 이어졌다 →
+> [3번 "사고 — 엉뚱한 세션이 삭제된 문제"](#사고--엉뚱한-세션이-삭제된-문제)
+>
+> 같은 함수를 쓰는 곳이 6군데였고, 그중 파일을 **쓰는** 것이 삭제와 제목 수정 2곳이었다.
+> 한 곳만 막으면 나머지가 남는다.
 
 ---
 
