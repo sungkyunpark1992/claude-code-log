@@ -189,19 +189,53 @@ exit /b 0
 
 ### 3. 예약 작업 등록
 
+트리거는 **두 개**를 건다 — 로그온 시, 그리고 매일 1회.
+
 ```powershell
-$action  = New-ScheduledTaskAction -Execute "C:\claude-backup\backup-jsonl.bat"
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-$trigger.Delay = "PT1M"
+$action = New-ScheduledTaskAction -Execute "C:\claude-backup\backup-jsonl.bat"
+
+$logon = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$logon.Delay = "PT1M"
+$daily = New-ScheduledTaskTrigger -Daily -At "00:00"
+
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries `
             -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
 
 Register-ScheduledTask -TaskName "ClaudeCodeJsonlBackup" `
-  -Action $action -Trigger $trigger -Settings $settings `
+  -Action $action -Trigger @($logon, $daily) -Settings $settings `
   -Description "Claude Code JSONL transcripts backup (one-way additive copy)"
 ```
 
-관리자 권한 불필요. 로그온 1분 뒤 실행되며, 실행 시간은 1초 미만이다.
+관리자 권한 불필요. 실행 시간은 1초 미만이다.
+
+#### 왜 로그온 트리거만으로는 부족한가
+
+처음엔 로그온 트리거 하나만 걸었는데, **5일간 한 번도 실행되지 않았다.**
+
+```
+백업 마지막 실행 : 2026-08-06 11:27   (수동 테스트)
+마지막 부팅      : 2026-08-03 12:46   (가동 120시간)
+```
+
+작업은 `Ready` 상태로 정상 등록돼 있었고 오류도 없었다. 단지 **로그오프/로그온이 한 번도 일어나지 않아 발동 조건이 성립하지 않았을 뿐**이다. PC를 켜둔 채로 지내면 백업이 조용히 멈춘다.
+
+그래서 매일 1회 트리거를 함께 건다. 그 시각에 PC 가 꺼져 있어도 `-StartWhenAvailable` 이
+다음에 켤 때 따라잡으므로 시각 자체는 크게 중요하지 않다.
+
+> 두 트리거가 겹쳐 실행돼도 문제없다. robocopy 는 바뀐 파일만 복사하고,
+> 변경이 없으면 1초 안에 끝난다.
+
+#### 이미 등록한 작업에 매일 트리거를 추가하려면
+
+```powershell
+$logon = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$logon.Delay = "PT1M"
+$daily = New-ScheduledTaskTrigger -Daily -At "00:00"
+Set-ScheduledTask -TaskName "ClaudeCodeJsonlBackup" -Trigger @($logon, $daily)
+```
+
+`Set-ScheduledTask` 의 `-Trigger` 는 **기존 트리거를 교체**한다. 추가가 아니므로
+로그온 트리거도 함께 넘겨야 한다.
 
 #### `-AtStartup`이 아니라 `-AtLogOn`인 이유
 
@@ -217,12 +251,36 @@ Register-ScheduledTask -TaskName "ClaudeCodeJsonlBackup" `
 
 ```powershell
 $t = Get-ScheduledTask -TaskName "ClaudeCodeJsonlBackup"
-$t.Triggers.CimClass.CimClassName   # MSFT_TaskLogonTrigger 여야 함
+$t.Triggers.CimClass.CimClassName   # LogonTrigger + DailyTrigger 두 개여야 함
 $t.Triggers.UserId                  # 본인 계정
-(Get-ScheduledTaskInfo -TaskName "ClaudeCodeJsonlBackup").LastTaskResult   # 0
+$i = Get-ScheduledTaskInfo -TaskName "ClaudeCodeJsonlBackup"
+$i.LastTaskResult                   # 0
+$i.LastRunTime                      # 최근이어야 함
+$i.NextRunTime                      # 비어 있으면 매일 트리거가 없다는 뜻
 ```
 
 `MSFT_TaskBootTrigger`가 나오면 위의 SYSTEM 계정 문제가 발생한다.
+
+**`NextRunTime` 이 비어 있으면 로그온 트리거만 있는 상태**다. 재부팅하지 않으면
+영영 실행되지 않으므로 매일 트리거를 추가해야 한다.
+
+### 백업이 실제로 돌고 있는지
+
+작업 등록 상태만 보면 멈춘 걸 못 알아챈다. **로그의 마지막 실행 시각**을 본다.
+
+```powershell
+Select-String "=====" C:\claude-backup\backup.log | Select-Object -Last 3
+```
+
+며칠 전에서 멈춰 있다면 트리거가 발동하지 않고 있다는 뜻이다.
+백업본과 원본의 크기를 비교하는 것도 빠른 확인법이다.
+
+```powershell
+Get-ChildItem "$env:USERPROFILE\.claude\projects" -Recurse -Filter *.jsonl |
+  Measure-Object Length -Sum
+Get-ChildItem "C:\claude-backup\jsonl" -Recurse -Filter *.jsonl |
+  Measure-Object Length -Sum
+```
 
 ### 핵심 속성 — 원본 삭제 후 백업 생존
 
