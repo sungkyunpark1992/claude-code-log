@@ -1569,8 +1569,15 @@ def _generate_individual_session_files(
         # Create session-specific title using cache data if available
         if session_id in session_data:
             session_cache = session_data[session_id]
-            if session_cache.summary:
-                session_title = f"{project_title}: {session_cache.summary}"
+            # 대시보드(session_nav.html)와 같은 우선순위를 쓴다:
+            # 직접 수정 > Claude Code 자동 생성 > 압축 요약 > 첫 질문 > 세션 ID
+            chosen_title = (
+                session_cache.custom_title
+                or session_cache.ai_title
+                or session_cache.summary
+            )
+            if chosen_title:
+                session_title = f"{project_title}: {chosen_title}"
             else:
                 # Fall back to first user message preview
                 preview = session_cache.first_user_message

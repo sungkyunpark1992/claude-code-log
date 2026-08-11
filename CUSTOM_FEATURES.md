@@ -2848,13 +2848,16 @@ elif entry_type in {
 **B 를 택했다.** 커밋 `0ba8e22`(`custom_title` 도입)가 정확히 같은 7단계를 이미 밟았고,
 변경 규모도 그때(+78/-6)와 비슷한 수준(+66/-13)이다. 새 패턴이 아니라 기존 패턴을 따른 것.
 
-### 수정 파일 (6개 + 마이그레이션)
+### 수정 파일 (7개 + 마이그레이션)
 
 값이 지나는 길목을 순서대로 손봐야 한다.
 
 ```
 JSONL 파싱 → 모델 → 수집 → DB 컬럼 → DB 읽기 → 화면 전달 → 템플릿
 ```
+
+`server.py` 는 이 흐름을 타지 않고 JSONL 을 직접 읽는 별도 경로다
+([세션 페이지에도 같은 우선순위](#세션-페이지에도-같은-우선순위를-적용-후속) 참고).
 
 #### 32-1. `claude_code_log/models.py`
 
@@ -2904,6 +2907,71 @@ ALTER TABLE sessions ADD COLUMN ai_title TEXT;
 {% if session.custom_title %} ... {% elif session.ai_title %} ... {% elif session.summary %} ...
 ```
 
+### 세션 페이지에도 같은 우선순위를 적용 (후속)
+
+위까지만 하면 **대시보드 목록에만** 반영된다. 개별 세션 페이지(`session-*.html`)의
+`<h1 id="title">` 과 브라우저 탭 제목은 별도 경로라서 그대로 첫 질문이나 세션 ID 가 나온다.
+
+**제목을 만드는 경로가 세 군데다.** 하나만 고치면 나머지가 어긋난다.
+
+| 경로 | 파일 | 언제 쓰이나 |
+|---|---|---|
+| 대시보드 목록 | `session_nav.html` | `index.html` 의 세션 목록 |
+| 정적 세션 HTML | `converter.py` | `claude-code-log` 로 파일 생성할 때 |
+| **동적 세션 렌더** | `server.py` | **브라우저가 `localhost:5678` 로 볼 때** |
+
+#### `converter.py` — 정적 생성
+
+`summary` 만 보고 있어서 요즘 세션(=`summary` 가 없는)은 전부 폴백으로 떨어졌다.
+
+```python
+chosen_title = (
+    session_cache.custom_title
+    or session_cache.ai_title
+    or session_cache.summary
+)
+if chosen_title:
+    session_title = f"{project_title}: {chosen_title}"
+else:
+    ...  # 첫 질문 → 그것도 없으면 f"Session {session_id[:8]}"
+```
+
+#### `server.py` — 동적 렌더 (실제로 브라우저가 받는 것)
+
+`_get_custom_title()` 만 읽어서 넘기고 있었다. 직접 수정한 적 없는 세션은 `None` 이 되고,
+`generate_session()` 이 곧바로 `f"Session {session_id[:8]}"` — **해시**로 떨어진다.
+
+```python
+def _get_title_entry(jsonl_file, session_id, entry_type, field): ...  # 공통 헬퍼
+def _get_custom_title(...):  # "custom-title" / "customTitle"
+def _get_ai_title(...):      # "ai-title"     / "aiTitle"
+def _get_session_title(...): return _get_custom_title(...) or _get_ai_title(...)
+```
+
+두 곳에 적용한다 — `serve_file`(브라우저 직접 접근)과 `/api/sessions/<id>/render`.
+
+> ⚠️ **`localhost:5678` 의 세션 페이지는 정적 파일이 아니다.** `serve_file` 이 요청마다
+> JSONL 을 다시 읽어 렌더한다. 정적 `session-*.html` 을 열어 확인하면 고쳐진 것처럼
+> 보이지만 브라우저에는 반영되지 않는다. **검증은 반드시 서버 응답으로 해야 한다.**
+>
+> ```python
+> app = create_app(PROJECTS)
+> html = app.test_client().get(f"/{proj}/session-{sid}.html").get_data(as_text=True)
+> re.search(r'<h1 id="title">(.*?)</h1>', html, re.S)
+> ```
+
+#### 캐시된 HTML 이 갱신되지 않는 경우
+
+정적 경로에서 세션 HTML 이 JSONL 보다 오래됐는데도 다시 만들어지지 않는 일이 있었다.
+
+```
+JSONL   15:57:03   ← 제목 수정으로 갱신
+HTML    15:42:24   ← 더 오래됐는데 그대로
+```
+
+해당 HTML 을 지우고 재생성하면 반영된다. 캐시 신선도 판정에 빈틈이 있는 것으로 보이나
+원인은 아직 확인하지 않았다.
+
 ### 함정 2가지
 
 둘 다 실제로 돌려보고서야 드러났다.
@@ -2928,10 +2996,14 @@ AttributeError: 'AiTitleTranscriptEntry' object has no attribute 'message'
 
 ### 결과
 
+대시보드 목록, 정적 세션 HTML, 서버가 렌더하는 세션 페이지 셋 다 같은 제목을 쓴다.
+`<h1 id="title">` 과 브라우저 탭 제목도 포함된다.
+
 ```
-7caad578  →  C:\a 폴더 내용 확인 및 설치 내역 파악
-23a08897  →  VSCode Claude 확장 프로그램 알림 설정 복구
-ba1ea00b  →  (직접 수정한 제목 유지 — custom_title 이 우선)
+dab3147c  →  회사 프로젝트 코드 구조 및 스택 분석          (이전: Session dab3147c)
+23a08897  →  VSCode Claude 확장 프로그램 알림 설정 복구    (이전: 첫 질문)
+7caad578  →  C:\a 폴더 내용 확인 및 설치 내역 파악 - fuz사 프린트   (custom_title 우선)
+ba1ea00b  →  (직접 수정한 제목 유지 — custom_title 우선)
 ```
 
 ### 캐시 재생성이 필요하다
