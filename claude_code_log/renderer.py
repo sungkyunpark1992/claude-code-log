@@ -416,6 +416,10 @@ class TemplateProject:
         self.earliest_timestamp = project_data.get("earliest_timestamp", "")
         self.sessions = project_data.get("sessions", [])
         self.old_sessions = project_data.get("old_sessions", [])
+        # 세션마다 원본 JSONL / 생성된 HTML 의 절대 경로를 붙인다 (표시 + 복사용).
+        # old_sessions 는 JSONL 이 이미 지워진 세션이라 HTML 경로만 준다.
+        self._attach_session_paths(self.sessions, with_jsonl=True)
+        self._attach_session_paths(self.old_sessions, with_jsonl=False)
         # JSONL이 전부 사라지고 세션 HTML만 남은 프로젝트.
         # index.html이 'Archived' 배지를 띄우는 데 쓴다.
         self.is_archived = project_data.get("is_archived", False)
@@ -468,6 +472,24 @@ class TemplateProject:
             if self.total_cache_read_tokens > 0:
                 token_parts.append(f"Cache Read: {self.total_cache_read_tokens}")
             self.token_summary = " | ".join(token_parts)
+
+    def _attach_session_paths(
+        self, sessions: list[dict[str, Any]], with_jsonl: bool
+    ) -> None:
+        """Add absolute jsonl_path / html_path to each session dict.
+
+        Derived from jsonl_dir at render time, so the paths always match the
+        machine and OS actually running the tool. `with_jsonl=False` is for
+        archived sessions whose JSONL is already gone — only the HTML exists.
+        """
+        base = Path(self.jsonl_dir)
+        for session in sessions:
+            session_id = session.get("id")
+            if not session_id:
+                continue
+            session["html_path"] = str(base / f"session-{session_id}.html")
+            if with_jsonl:
+                session["jsonl_path"] = str(base / f"{session_id}.jsonl")
 
 
 class TemplateSummary:

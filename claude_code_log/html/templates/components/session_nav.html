@@ -44,6 +44,26 @@
             {% elif session.first_user_message %}
             <a href='{{ session_href }}'><pre class='session-preview'>{{- session.first_user_message|e -}}</pre></a>
             {% endif %}
+            {# 원본 JSONL / 생성된 HTML 의 절대 경로. 복사 버튼은 .jsonl-path-copy 위임 핸들러가 처리한다.
+               old session 은 JSONL 이 이미 지워졌으므로 HTML 만 나온다. #}
+            {% if session.jsonl_path or session.html_path %}
+            <div class='session-file-paths'>
+                {% if session.jsonl_path %}
+                <div class='session-file-path'>
+                    <span class='session-file-label'>JSONL</span>
+                    <code class='jsonl-path'>{{ session.jsonl_path }}</code>
+                    <button class='jsonl-path-copy' type='button' title='JSONL 경로 복사' data-copy='{{ session.jsonl_path }}'>📋</button>
+                </div>
+                {% endif %}
+                {% if session.html_path %}
+                <div class='session-file-path'>
+                    <span class='session-file-label'>HTML</span>
+                    <code class='jsonl-path'>{{ session.html_path }}</code>
+                    <button class='jsonl-path-copy' type='button' title='HTML 경로 복사' data-copy='{{ session.html_path }}'>📋</button>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

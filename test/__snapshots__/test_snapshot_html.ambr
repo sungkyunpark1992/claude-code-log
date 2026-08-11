@@ -649,6 +649,40 @@
       color: #666;
   }
   
+  /* 세션 목록 각 항목의 JSONL / HTML 절대 경로.
+     경로는 복사해서 쓰라고 있는 것이므로 줄여서 감추지 않는다 — 좁으면 가로 스크롤. */
+  .session-file-paths {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+  }
+  
+  .session-file-path {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72em;
+      color: #888;
+      overflow-x: auto;
+  }
+  
+  .session-file-label {
+      flex-shrink: 0;
+      min-width: 3.2em;
+      font-weight: 600;
+      color: #999;
+      letter-spacing: 0.02em;
+  }
+  
+  .session-file-path .jsonl-path {
+      background: transparent;
+      padding: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #666;
+      white-space: nowrap;
+  }
+  
   .jsonl-path-copy {
       background: none;
       border: 1px solid #00000022;
@@ -2152,6 +2186,25 @@
               </div>
               
               <a href='-Users-test-project-alpha/session-session-abc12345.html'><pre class='session-preview'>Test session summary</pre></a>
+              
+              
+              
+              <div class='session-file-paths'>
+                  
+                  <div class='session-file-path'>
+                      <span class='session-file-label'>JSONL</span>
+                      <code class='jsonl-path'>\tmp\project-alpha\session-abc12345.jsonl</code>
+                      <button class='jsonl-path-copy' type='button' title='JSONL 경로 복사' data-copy='\tmp\project-alpha\session-abc12345.jsonl'>📋</button>
+                  </div>
+                  
+                  
+                  <div class='session-file-path'>
+                      <span class='session-file-label'>HTML</span>
+                      <code class='jsonl-path'>\tmp\project-alpha\session-session-abc12345.html</code>
+                      <button class='jsonl-path-copy' type='button' title='HTML 경로 복사' data-copy='\tmp\project-alpha\session-session-abc12345.html'>📋</button>
+                  </div>
+                  
+              </div>
               
           </div>
           
@@ -19974,6 +20027,8 @@
               
               <a href='#msg-d-0'><pre class='session-preview'>This is from a different session file to test multi-session handling.</pre></a>
               
+              
+              
           </div>
           
           
@@ -19997,6 +20052,8 @@
               </div>
               
               <a href='#msg-d-2'><pre class='session-preview'>User learned about Python decorators, including basic decorators and parameterized decorators. Created and ran examples showing how decorators work with functions. User is now ready to implement their own timing decorator.</pre></a>
+              
+              
               
           </div>
           

@@ -2558,7 +2558,9 @@ html += `
 
 ## 30. 대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼
 
-**목적**: 대시보드에서 각 프로젝트의 실제 JSONL 파일 위치를 바로 확인·복사할 수 있게 하기. 파일 탐색기에 붙여넣어서 원본 JSONL 파일을 열람하거나 백업할 때 유용.
+**목적**: 대시보드에서 실제 파일 위치를 바로 확인·복사할 수 있게 하기. 파일 탐색기에 붙여넣어서 원본 JSONL 을 열람하거나 백업할 때 유용.
+
+**범위**: 프로젝트 디렉토리 경로 → 이후 **세션별 JSONL / HTML 파일 경로**까지 확장했다([아래](#확장--세션별-jsonl--html-경로-session-navigation)).
 
 ### 배경
 
@@ -2601,7 +2603,10 @@ html += `
 | macOS | `/Users/john/.claude/projects/-Users-john-Desktop-my-proj` |
 | Linux | `/home/alice/.claude/projects/-home-alice-work-repo` |
 
-### 수정 파일 (4개)
+### 수정 파일 (3개)
+
+프로젝트 단위 경로 표시까지의 변경. 세션 단위 확장은 [아래](#확장--세션별-jsonl--html-경로-session-navigation)에서
+같은 3개 파일을 다시 손댄다 (30-4 ~ 30-6).
 
 #### 30-1. `claude_code_log/renderer.py`
 
@@ -2769,6 +2774,80 @@ function fallbackCopy(text, onSuccess) {
 | 이벤트 등록 | body 이벤트 위임 | project-card N개 + summary 1개에 리스너 하나로 처리. SSE로 카드가 재렌더링돼도 자동 동작 |
 | 하드코딩 | 없음 — 모두 `Path` 객체 → `str()` | 다른 컴퓨터/OS 어디서 실행해도 그 환경 실제 경로 자동 반영 |
 | 경로 표기 | Windows `\`, macOS/Linux `/` | `str(Path)` 가 OS별 구분자 자동 사용 |
+
+### 확장 — 세션별 JSONL / HTML 경로 (Session Navigation)
+
+프로젝트 **디렉토리** 경로만으로는 특정 대화의 파일을 찾으려면 여전히 세션 ID 를 조합해야
+했다. Session Navigation 의 각 세션 항목 아래에 **파일 두 개의 절대 경로**를 직접 표시한다.
+
+```
+💬 회사 프로젝트 코드 구조 및 스택 분석  #dab3147c
+   2026-08-05 09:16 · 1075 messages
+   JSONL  C:\Users\user\.claude\projects\c--kyo-prj-chicken-proj2\dab3147c-….jsonl        [📋]
+   HTML   C:\Users\user\.claude\projects\c--kyo-prj-chicken-proj2\session-dab3147c-….html [📋]
+```
+
+#### 30-4. `claude_code_log/renderer.py` — 세션 dict 에 경로 주입
+
+`TemplateProject` 가 이미 `jsonl_dir` 을 알고 있으므로 파일명만 붙이면 된다.
+프로젝트 경로와 마찬가지로 **런타임 파생**이라 하드코딩이 없다.
+
+```python
+def _attach_session_paths(self, sessions, with_jsonl: bool) -> None:
+    base = Path(self.jsonl_dir)
+    for session in sessions:
+        session_id = session.get("id")
+        if not session_id:
+            continue
+        session["html_path"] = str(base / f"session-{session_id}.html")
+        if with_jsonl:
+            session["jsonl_path"] = str(base / f"{session_id}.jsonl")
+
+self._attach_session_paths(self.sessions, with_jsonl=True)
+self._attach_session_paths(self.old_sessions, with_jsonl=False)
+```
+
+**`old_sessions` 는 `with_jsonl=False`** — JSONL 이 이미 지워지고 HTML 만 남은 세션
+([23번](#23-old-sessions--jsonl-삭제-후-html만-잔존하는-세션-조회))이라 없는 파일 경로를
+보여주면 안 된다.
+
+#### 30-5. `components/session_nav.html` — 표시
+
+```jinja
+{% if session.jsonl_path %}
+<div class='session-file-path'>
+    <span class='session-file-label'>JSONL</span>
+    <code class='jsonl-path'>{{ session.jsonl_path }}</code>
+    <button class='jsonl-path-copy' type='button' data-copy='{{ session.jsonl_path }}'>📋</button>
+</div>
+{% endif %}
+```
+
+> **복사 기능은 새로 만들지 않았다.** `index.html` 의 body 이벤트 위임 핸들러가
+> `.jsonl-path-copy` 를 잡으므로, 같은 클래스와 `data-copy` 만 붙이면 클립보드 복사와
+> `✓` 피드백이 그대로 동작한다. 위임을 쓴 원래 설계 덕분에 얻은 것.
+
+#### 30-6. `components/project_card_styles.css` — 스타일
+
+경로는 복사해서 쓰라고 있는 것이므로 **줄이거나 감추지 않는다.** 좁으면 그 줄만 가로
+스크롤한다 (`overflow-x: auto` + `white-space: nowrap`). 페이지 전체가 가로로 밀리지
+않는지 확인했다.
+
+#### 검증
+
+`index.html` 에 렌더된 경로가 **실제 파일을 가리키는지** 전수 확인했다.
+
+| 항목 | 결과 |
+|---|---|
+| 경로 31건이 실제 존재 | 31/31 |
+| 활성 세션 (JSONL + HTML) | 5개 |
+| archived 세션 (HTML 만) | 21개 |
+| 복사 버튼 — 클립보드 내용 일치 | PASS |
+| 복사 피드백 (`✓` + 초록) | PASS |
+| 페이지 가로 스크롤 없음 | PASS |
+
+복사 검증은 Playwright 로 실제 클릭 후 `navigator.clipboard.readText()` 와 표시된 경로를
+대조했다. 세션 목록이 `<details>` 안에 있으므로 `el.open = true` 로 펼친 뒤 확인해야 한다.
 
 ---
 
