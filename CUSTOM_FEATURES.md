@@ -3100,18 +3100,130 @@ ba1ea00b  →  (직접 수정한 제목 유지 — custom_title 우선)
 
 ### `_find_session_jsonl()` — 세션 JSONL 파일 탐색
 
-`server.py` 상단. 삭제/수정/스트리밍 모든 API에서 공용:
+`server.py` 상단. 삭제/수정/스트리밍/렌더 6곳에서 공용이라, 여기가 틀리면 그 6곳이 함께
+틀어진다. 실제로 두 번 사고가 났고 그때마다 한 겹씩 늘었다.
+
 ```python
-def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
-    # 1차: 파일명으로 검색 (빠름)
-    for jsonl_file in projects_dir.rglob(f"{session_id}.jsonl"):
-        return jsonl_file
-    # 2차: 파일 내용으로 검색 (sessionId 필드)
-    for jsonl_file in projects_dir.rglob("*.jsonl"):
-        if session_id in jsonl_file.read_text(encoding="utf-8"):
-            return jsonl_file
-    return None
+def _find_session_jsonl(projects_dir, session_id, prefer_dir=None) -> Optional[Path]:
+    # 0차: 요청 URL 이 프로젝트를 알려준 경우 그 폴더를 먼저 본다
+    if prefer_dir is not None:
+        candidate = prefer_dir / f"{session_id}.jsonl"
+        if candidate.is_file():
+            return candidate
+
+    # 1차: 파일명으로 검색
+    named = sorted(projects_dir.rglob(f"{session_id}.jsonl"))
+    if len(named) == 1:
+        return named[0]
+    if named:
+        # 같은 이름이 여러 폴더에 — 빈 껍데기를 집지 않도록 내용을 본다
+        for jsonl_file in named:
+            if _has_conversation(jsonl_file):
+                return jsonl_file
+        return max(named, key=lambda p: p.stat().st_size)
+
+    # 2차: sessionId 필드가 실제로 일치하는 파일 (문자열 포함이 아니라 필드 비교)
+    ...
 ```
+
+#### 세 겹이 각각 다른 사고를 막는다
+
+| 겹 | 막는 것 | 유래 |
+|---|---|---|
+| 0차 `prefer_dir` | 같은 세션이 두 폴더에 있을 때 엉뚱한 쪽 선택 | 아래 "복사해서 이어가기" |
+| 1차 내용 확인 | Claude Code 가 만든 200바이트 껍데기 선택 | 아래 "복사해서 이어가기" |
+| 2차 필드 비교 | 대화 본문에 ID 를 언급했을 뿐인 파일 선택 | [3번 사고](#사고--엉뚱한-세션이-삭제된-문제) |
+
+### 시나리오 — JSONL 을 복사해 다른 폴더에서 대화 이어가기
+
+Claude Code 는 **현재 작업 디렉토리를 슬러그로 바꾼 폴더**에 세션을 저장한다
+(`:` 와 `\` 를 `-` 로 치환. `c:\kyo-prj\chicken-proj2` → `c--kyo-prj-chicken-proj2`).
+
+그래서 다른 프로젝트 폴더에서 같은 대화를 이어가려면 JSONL 을 그쪽 슬러그 폴더로
+복사하면 된다. 실제로 동작한다 — 기억이 그대로 이어지는 것을 확인했다.
+
+```powershell
+$src = "...\projects\c--kyo-prj-chicken-proj2"
+$dst = "...\projects\C--kyo-prj-kyochon"
+Copy-Item "$src\<세션ID>.jsonl" $dst              # 대화 본문
+Copy-Item "$src\<세션ID>"       $dst -Recurse     # tool-results (JSONL 밖의 대용량 출력)
+Copy-Item "$src\memory"         $dst -Recurse     # 프로젝트 메모리 (원하면)
+```
+
+> `<세션ID>.jsonl` 파일 옆에 **확장자 없는 같은 이름의 폴더**가 따로 있다. 그 안의
+> `tool-results/` 에 JSONL 에 담기엔 큰 출력물이 빠져 있으므로 함께 옮겨야 한다.
+
+#### 그 결과 대시보드가 깨진다 — 두 단계로
+
+**① 같은 이름의 JSONL 이 두 폴더에 생긴다**
+
+`rglob` 은 알파벳 순으로 훑고 첫 번째를 반환하므로, 어느 쪽이 걸릴지는 폴더명 순서가
+정한다. 새 대화가 쌓이는 쪽이 뒤에 오면 **어떤 URL 로 들어가도 옛 내용만** 보인다.
+
+```
+c--kyo-prj-chicken-proj2/<세션ID>.jsonl   48.5 MB   ← 먼저 걸림 (옛 대화)
+C--kyo-prj-kyochon/<세션ID>.jsonl         49.2 MB   ← 새 대화. 안 보임
+```
+
+URL 의 프로젝트 폴더는 무시되므로 `/C--kyo-prj-kyochon/session-….html` 로 들어가도
+같은 결과다.
+
+**② 원본을 치워도 껍데기가 되살아난다**
+
+옛 폴더의 JSONL 을 옮겨서 해결했는데, **그 프로젝트를 VSCode 로 열었다 닫자 다시 생겼다.**
+
+```json
+{"type":"ai-title","aiTitle":"회사 프로젝트 코드 구조 및 스택 분석","sessionId":"dab3147c-…"}
+{"type":"mode","mode":"normal","sessionId":"dab3147c-…"}
+```
+
+218바이트. 제목과 모드만 있고 **대화가 하나도 없다.** Claude Code 는 폴더를 여는 것만으로
+이 껍데기를 쓴다. 알파벳 순으로 먼저 오니 이번에도 이겼고, 화면에는 **제목만 뜨고 본문이
+텅 빈** 페이지가 나왔다.
+
+> 증상이 "아무것도 안 보인다" 라서 렌더링 실패로 오해하기 쉽다. 실제로는 **올바른 파일을
+> 렌더링하고 있지 않았다.** 서버 응답 크기가 27 MB 인지 수십 KB 인지 보면 바로 갈린다.
+
+#### 수정 — URL 우선 + 내용 확인
+
+두 가지가 필요하다. 하나만으로는 부족하다.
+
+**`prefer_dir` (URL 우선)** — 정확하지만 URL 을 아는 곳에서만 쓸 수 있다.
+6개 호출부 중 `serve_file` 하나뿐이고, 나머지 5개(`/api/sessions/<id>/…`)는 세션 ID 만 받는다.
+
+```python
+session_match = re.match(r"(.+)/session-([a-f0-9-]+)\.html$", filepath)
+prefer_dir = (projects_dir / session_match.group(1)).resolve()
+if not str(prefer_dir).startswith(str(projects_dir.resolve())):
+    prefer_dir = None          # 경로 탈출 시도는 무시
+jsonl_file = _find_session_jsonl(projects_dir, session_id, prefer_dir)
+```
+
+**`_has_conversation()` (내용 확인)** — 나머지 5곳을 위한 그물.
+
+```python
+def _has_conversation(jsonl_file: Path, probe_lines: int = 400) -> bool:
+    """앞부분만 읽어 user/assistant 항목이 있는지 본다."""
+```
+
+파일 **앞 400줄만** 읽는다. 진짜 대화는 앞쪽에 user/assistant 가 나오고, 이 파일들은 수십
+MB 라 전부 읽으면 안 된다.
+
+#### 검증 — 껍데기를 실제로 만들어 확인
+
+| 케이스 | 결과 |
+|---|---|
+| `prefer_dir` 없음 (API 5곳) | 대화가 있는 쪽 선택 |
+| `prefer_dir` = 껍데기 폴더 | 지정을 존중 |
+| `/C--kyo-prj-kyochon/…` | 대화 있음, message 2334개 |
+| `/c--kyo-prj-chicken-proj2/…` | 껍데기 그대로 (URL 존중) |
+
+#### 남는 함정
+
+- **두 폴더에서 각각 대화를 이어가면 내용이 갈라진다.** 옛 프로젝트 창은 닫는 편이 안전하다.
+- JSONL 안에 옛 절대경로가 그대로 박혀 있다(한 세션에서 1,846회). 기억은 이어지지만 그
+  경로로 파일을 읽으려 하면 실패하므로, 재개 후 새 경로를 한 줄 알려주는 게 좋다.
+- `~/.claude/history.jsonl`(↑ 키 프롬프트 이력)은 프로젝트 경로별로 기록되어 따라오지 않는다.
 
 ### Cache-Control 헤더
 

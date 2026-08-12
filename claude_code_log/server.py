@@ -52,7 +52,40 @@ class _SSEFileWatcher(FileSystemEventHandler):
             self._queue.put(tag)
 
 
-def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
+def _has_conversation(jsonl_file: Path, probe_lines: int = 400) -> bool:
+    """True if the file holds actual conversation, not just metadata.
+
+    Claude Code writes a ~200 byte stub (ai-title + mode, no messages) into a
+    project's slug folder merely from opening that folder. If a session's JSONL
+    was moved elsewhere, that stub shares its filename and can win the lookup,
+    producing a page with a title and no content.
+
+    Only the head of the file is read — a real transcript has user/assistant
+    entries near the start, and these files reach tens of megabytes.
+    """
+    try:
+        with jsonl_file.open(encoding="utf-8", errors="replace") as handle:
+            for _, line in zip(range(probe_lines), handle):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    raw = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(raw, dict):
+                    continue
+                entry = cast("dict[str, Any]", raw)
+                if entry.get("type") in ("user", "assistant"):
+                    return True
+    except OSError:
+        return False
+    return False
+
+
+def _find_session_jsonl(
+    projects_dir: Path, session_id: str, prefer_dir: Optional[Path] = None
+) -> Optional[Path]:
     """Find the JSONL file containing the given session ID.
 
     Tries filename match first (e.g. {session_id}.jsonl), then falls back
@@ -64,10 +97,29 @@ def _find_session_jsonl(projects_dir: Path, session_id: str) -> Optional[Path]:
     otherwise match, and callers act on the result: the delete endpoint once
     removed a live transcript because that transcript discussed the id of the
     session being deleted.
+
+    `prefer_dir` resolves the case where the same filename exists under two
+    project folders — copying a JSONL to continue a conversation from another
+    directory does exactly that. Callers that know the project from the request
+    URL should pass it; the others fall back to picking whichever candidate
+    actually contains a conversation.
     """
+    # 0차: 요청 URL 이 프로젝트를 알려준 경우 그 폴더를 먼저 본다
+    if prefer_dir is not None:
+        candidate = prefer_dir / f"{session_id}.jsonl"
+        if candidate.is_file():
+            return candidate
+
     # 1차: 파일명으로 검색 (가장 빠르고 정확)
-    for jsonl_file in projects_dir.rglob(f"{session_id}.jsonl"):
-        return jsonl_file
+    named = sorted(projects_dir.rglob(f"{session_id}.jsonl"))
+    if len(named) == 1:
+        return named[0]
+    if named:
+        # 같은 이름이 여러 폴더에 있다 — 빈 껍데기를 집지 않도록 내용을 확인한다.
+        for jsonl_file in named:
+            if _has_conversation(jsonl_file):
+                return jsonl_file
+        return max(named, key=lambda p: p.stat().st_size)
 
     # 2차: sessionId 필드가 실제로 일치하는 파일 검색
     for jsonl_file in projects_dir.rglob("*.jsonl"):
@@ -290,10 +342,17 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         import re
 
         # 세션 페이지는 동적 렌더링 (항상 JSONL에서 최신 내용 생성)
-        session_match = re.match(r".+/session-([a-f0-9-]+)\.html$", filepath)
+        session_match = re.match(r"(.+)/session-([a-f0-9-]+)\.html$", filepath)
         if session_match:
-            session_id = session_match.group(1)
-            jsonl_file = _find_session_jsonl(projects_dir, session_id)
+            project_slug = session_match.group(1)
+            session_id = session_match.group(2)
+            # URL 이 프로젝트를 알려주므로 그 폴더를 먼저 본다. 같은 세션 JSONL 이
+            # 두 폴더에 있을 때(대화를 다른 디렉토리로 이어가려고 복사한 경우)
+            # 엉뚱한 쪽 — 특히 Claude Code 가 만든 빈 껍데기 — 을 집지 않는다.
+            prefer_dir = (projects_dir / project_slug).resolve()
+            if not str(prefer_dir).startswith(str(projects_dir.resolve())):
+                prefer_dir = None  # 경로 탈출 시도는 무시하고 일반 검색으로
+            jsonl_file = _find_session_jsonl(projects_dir, session_id, prefer_dir)
             # Only render dynamically when the JSONL filename matches the session_id.
             # Content-only matches (another JSONL that mentions this ID) must not be used
             # because they produce empty pages — fall through to serve the static HTML instead.
