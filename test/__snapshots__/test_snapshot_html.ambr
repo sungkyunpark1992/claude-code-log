@@ -2714,6 +2714,12 @@
           if (kind) el.classList.add(kind);
       }
   
+      function setStatus(text, kind) {
+          if (!statusEl) return;
+          statusEl.className = 'fork-status' + (kind ? ' ' + kind : '');
+          statusEl.textContent = text;
+      }
+  
       function refresh() {
           var tgt = tgtInput.value.trim();
           if (!tgt) {
@@ -2724,11 +2730,8 @@
   
           var problem = sourceProblem(srcInput.value) || (tgt ? null : '대상 프로젝트 경로를 입력하세요.');
           submitBtn.disabled = !!problem;
-          if (statusEl) {
-              // 입력 중에는 실패 사유만 조용히 안내한다
-              statusEl.className = 'fork-status';
-              statusEl.textContent = srcInput.value.trim() && problem ? problem : '';
-          }
+          // 입력 중에는 실패 사유만 조용히 안내한다
+          setStatus(srcInput.value.trim() && problem ? problem : '', null);
       }
   
       srcInput.addEventListener('input', refresh);
@@ -2736,10 +2739,43 @@
       refresh();
   
       submitBtn.addEventListener('click', function () {
-          if (statusEl) {
-              statusEl.className = 'fork-status';
-              statusEl.textContent = '화면만 구현된 상태입니다 — 복제 API는 아직 연결되지 않았습니다.';
-          }
+          if (submitBtn.disabled) return;
+          var body = {
+              source: srcInput.value.trim(),
+              target_project: tgtInput.value.trim(),
+              title: (document.getElementById('forkTitle') || {}).value || '',
+              copy_side: !!(document.getElementById('forkCopySide') || {}).checked,
+              copy_memory: !!(document.getElementById('forkCopyMemory') || {}).checked
+          };
+  
+          submitBtn.disabled = true;
+          setStatus('복제 중… 파일이 크면 시간이 걸립니다.', null);
+  
+          fetch('/api/sessions/fork', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+          }).then(function (r) {
+              return r.json().then(function (j) { return { ok: r.ok, data: j }; });
+          }).then(function (res) {
+              if (!res.ok) {
+                  setStatus(res.data.error || '복제에 실패했습니다.', 'error');
+                  refresh();
+                  return;
+              }
+              var d = res.data;
+              var mb = (d.size / 1048576).toFixed(1);
+              setStatus(
+                  '완료 — ' + d.slug + ' 에 ' + d.new_session_id.slice(0, 8) +
+                  ' 생성 (' + mb + ' MB, sessionId ' + d.replaced.toLocaleString() +
+                  '곳 치환, ' + d.copied.join(' + ') + '). 새로고침하면 목록에 나타납니다.',
+                  'success'
+              );
+              submitBtn.disabled = false;
+          }).catch(function (err) {
+              setStatus('요청 실패: ' + err, 'error');
+              refresh();
+          });
       });
   })();
   

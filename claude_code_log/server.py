@@ -144,6 +144,77 @@ def _find_session_jsonl(
     return None
 
 
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _project_path_to_slug(project_path: str) -> str:
+    """Claude Code's slug for a working directory.
+
+    It replaces ':' and both slashes with '-', so c:\\kyo-prj\\app becomes
+    c--kyo-prj-app. Verified against every existing project folder.
+    """
+    return re.sub(r"[:\\/]", "-", project_path.strip().rstrip("\\/"))
+
+
+def _session_id_in_file(jsonl_file: Path) -> Optional[str]:
+    """The sessionId this file's entries claim, or None if they disagree/absent."""
+    found: Optional[str] = None
+    try:
+        with jsonl_file.open(encoding="utf-8", errors="replace") as handle:
+            for _, line in zip(range(400), handle):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    raw = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(raw, dict):
+                    continue
+                entry = cast("dict[str, Any]", raw)
+                sid = entry.get("sessionId")
+                if isinstance(sid, str) and sid:
+                    if found is None:
+                        found = sid
+                    elif found != sid:
+                        return None
+    except OSError:
+        return None
+    return found
+
+
+def _fork_session_file(
+    src: Path, dst: Path, old_id: str, new_id: str, new_title: Optional[str]
+) -> int:
+    """Copy the JSONL, rewriting only the sessionId values. Returns the count.
+
+    Deliberately a string replacement rather than parse -> re-serialise: these
+    files reach tens of megabytes and re-serialising would rewrite every byte
+    (key order, separators, escaping), making the copy needlessly different
+    from the original. Both spacings are handled — the compact form dominates
+    but Claude Code emits the spaced one occasionally.
+    """
+    text = src.read_text(encoding="utf-8", errors="replace")
+    replaced = 0
+    for pattern, replacement in (
+        (f'"sessionId":"{old_id}"', f'"sessionId":"{new_id}"'),
+        (f'"sessionId": "{old_id}"', f'"sessionId": "{new_id}"'),
+    ):
+        replaced += text.count(pattern)
+        text = text.replace(pattern, replacement)
+
+    if new_title:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += json.dumps(
+            {"type": "custom-title", "customTitle": new_title, "sessionId": new_id},
+            ensure_ascii=False,
+        ) + "\n"
+
+    dst.write_text(text, encoding="utf-8", newline="")
+    return replaced
+
+
 _CLAUDE_SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
 # Anthropic's current default model (used when settings.json has no "model" key,
 # which is what Claude Code writes when the user picks /model default).
@@ -406,6 +477,127 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
 
         return jsonify({"status": "ok", "title": new_title})  # type: ignore[return-value]
+
+    @app.route("/api/sessions/fork", methods=["POST"])
+    def fork_session_api() -> Response:
+        """Copy a session's JSONL under a fresh session id, for another project.
+
+        Copy-only: the source is read and never modified, so a mistake is
+        undone by deleting the result. See CUSTOM_FEATURES.md for why the id
+        must change — two folders holding the same session id makes lookups
+        ambiguous and lets Claude Code's empty stub win.
+        """
+        import shutil
+        import uuid
+
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+        raw_source = str(data.get("source") or "").strip().strip('"')
+        raw_target = str(data.get("target_project") or "").strip().strip('"')
+        new_title = str(data.get("title") or "").strip() or None
+        copy_side = bool(data.get("copy_side", True))
+        copy_memory = bool(data.get("copy_memory", True))
+
+        def fail(message: str, status: int = 400) -> Response:
+            return jsonify({"error": message}), status  # type: ignore[return-value]
+
+        if not raw_source:
+            return fail("원본 JSONL 경로가 필요합니다.")
+        if not raw_target:
+            return fail("대상 프로젝트 경로가 필요합니다.")
+
+        # --- 원본 검증 -------------------------------------------------
+        try:
+            src = Path(raw_source).resolve()
+        except OSError:
+            return fail("원본 경로를 해석할 수 없습니다.")
+
+        root = projects_dir.resolve()
+        if not str(src).startswith(str(root)):
+            return fail("원본은 projects 디렉토리 안에 있어야 합니다.")
+        if src.suffix.lower() != ".jsonl" or not src.is_file():
+            return fail("원본 .jsonl 파일을 찾을 수 없습니다.")
+
+        old_id = src.stem
+        if not _UUID_RE.match(old_id):
+            return fail("원본 파일명이 세션 ID(UUID) 형식이 아닙니다.")
+
+        # 파일명과 내용이 어긋난 파일(200바이트 껍데기 등)을 복제하면 그대로 깨진다
+        inner_id = _session_id_in_file(src)
+        if inner_id is None:
+            return fail("원본에서 sessionId 를 확인할 수 없습니다.")
+        if inner_id != old_id:
+            return fail(f"파일명과 내용의 sessionId 가 다릅니다 (내용: {inner_id[:8]}).")
+
+        # --- 대상 결정 -------------------------------------------------
+        slug = _project_path_to_slug(raw_target)
+        if not slug or slug in (".", ".."):
+            return fail("대상 프로젝트 경로가 올바르지 않습니다.")
+        dst_dir = (root / slug).resolve()
+        if not str(dst_dir).startswith(str(root)) or dst_dir == root:
+            return fail("대상 경로가 projects 디렉토리를 벗어납니다.")
+        if dst_dir == src.parent:
+            return fail("원본과 같은 프로젝트로는 복제할 수 없습니다.")
+
+        # --- 새 세션 ID ------------------------------------------------
+        new_id = ""
+        for _ in range(10):
+            candidate = str(uuid.uuid4())
+            if not list(root.rglob(f"{candidate}.jsonl")):
+                new_id = candidate
+                break
+        if not new_id:
+            return fail("새 세션 ID 를 만들지 못했습니다.", 500)
+
+        dst = dst_dir / f"{new_id}.jsonl"
+        if dst.exists():
+            return fail("대상 파일이 이미 존재합니다.", 409)
+
+        # --- 복제 ------------------------------------------------------
+        copied: "list[str]" = []
+        try:
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            replaced = _fork_session_file(src, dst, old_id, new_id, new_title)
+            copied.append("jsonl")
+
+            if copy_side:
+                side = src.parent / old_id
+                if side.is_dir():
+                    shutil.copytree(side, dst_dir / new_id)
+                    copied.append("tool-results")
+
+            if copy_memory:
+                memory = src.parent / "memory"
+                if memory.is_dir() and not (dst_dir / "memory").exists():
+                    shutil.copytree(memory, dst_dir / "memory")
+                    copied.append("memory")
+        except OSError as exc:
+            # 만들다 만 결과를 남기지 않는다
+            for leftover in (dst, dst_dir / new_id):
+                try:
+                    if leftover.is_dir():
+                        shutil.rmtree(leftover)
+                    elif leftover.exists():
+                        leftover.unlink()
+                except OSError:
+                    pass
+            return fail(f"복제 중 오류: {exc}", 500)
+
+        from .converter import process_projects_hierarchy
+
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+
+        return jsonify(  # type: ignore[return-value]
+            {
+                "status": "ok",
+                "new_session_id": new_id,
+                "slug": slug,
+                "target_dir": str(dst_dir),
+                "replaced": replaced,
+                "copied": copied,
+                "size": dst.stat().st_size,
+            }
+        )
 
     @app.route("/api/sessions/<session_id>", methods=["DELETE"])
     def delete_session(session_id: str) -> Response:
