@@ -854,6 +854,174 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
   }
+  /* JSONL 세션 복제 폼 (summary 아래, 기본 접힘) */
+  
+  .fork-panel {
+      max-width: 1200px;
+      margin: 0 auto 30px auto;
+      background-color: #ffffffdd;
+      border-radius: 8px;
+      box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+      border-left: #ffffff66 1px solid;
+      border-top: #ffffff66 1px solid;
+      border-bottom: #00000017 1px solid;
+      overflow: hidden;
+  }
+  
+  .fork-summary {
+      cursor: pointer;
+      padding: 12px 18px;
+      font-weight: 600;
+      font-size: 0.95em;
+      color: #555;
+      user-select: none;
+  }
+  
+  .fork-summary:hover {
+      background: #00000008;
+  }
+  
+  .fork-body {
+      padding: 4px 18px 18px 18px;
+      text-align: left;
+  }
+  
+  .fork-intro {
+      margin: 0 0 14px 0;
+      font-size: 0.85em;
+      color: #777;
+      line-height: 1.5;
+  }
+  
+  .fork-field {
+      display: block;
+      margin-bottom: 14px;
+  }
+  
+  .fork-label {
+      display: block;
+      font-size: 0.8em;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 4px;
+  }
+  
+  /* 필수/선택 배지 */
+  .fork-label em {
+      font-style: normal;
+      font-size: 0.85em;
+      font-weight: 500;
+      color: #c2410c;
+      background: #fb923c22;
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-left: 4px;
+  }
+  
+  .fork-label em.opt {
+      color: #666;
+      background: #00000010;
+  }
+  
+  .fork-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 10px;
+      border: 1px solid #00000022;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.85em;
+      color: #333;
+      background: #fff;
+  }
+  
+  .fork-input:focus {
+      outline: none;
+      border-color: #3b82f6aa;
+      box-shadow: 0 0 0 2px #3b82f622;
+  }
+  
+  .fork-hint {
+      display: block;
+      font-size: 0.75em;
+      color: #999;
+      margin-top: 4px;
+      line-height: 1.4;
+  }
+  
+  /* 슬러그 미리보기: 유효할 때만 색이 붙는다 */
+  .fork-hint.ok {
+      color: #16a34a;
+  }
+  
+  .fork-hint.warn {
+      color: #c2410c;
+  }
+  
+  .fork-hint code,
+  .fork-intro code {
+      background: #00000008;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  
+  .fork-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 6px 0 16px 0;
+      font-size: 0.82em;
+      color: #555;
+  }
+  
+  .fork-options label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+  }
+  
+  .fork-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+  }
+  
+  .fork-submit {
+      padding: 7px 18px;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 0.85em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+  }
+  
+  .fork-submit:hover:not(:disabled) {
+      background: #2563eb;
+  }
+  
+  .fork-submit:disabled {
+      background: #9ca3af;
+      border-color: #9ca3af;
+      cursor: not-allowed;
+  }
+  
+  .fork-status {
+      font-size: 0.8em;
+      color: #777;
+  }
+  
+  .fork-status.error {
+      color: #dc2626;
+  }
+  
+  .fork-status.success {
+      color: #16a34a;
+  }
   /* Search Bar Styles */
   .search-container {
       position: relative;
@@ -2120,6 +2288,48 @@
           
       </div>
   
+      <!-- JSONL 세션 복제 폼 — 원본은 절대 건드리지 않는 복사 전용 -->
+      <details class='fork-panel' id='forkPanel'>
+          <summary class='fork-summary'>📄 .jsonl 대화기록 복제하기</summary>
+          <div class='fork-body'>
+              <p class='fork-intro'>
+                  기존 대화를 <strong>새 세션 ID</strong>로 복제해 다른 프로젝트에서 이어갑니다.
+                  원본은 그대로 남습니다.
+              </p>
+  
+              <label class='fork-field'>
+                  <span class='fork-label'>원본 JSONL 경로 <em>필수</em></span>
+                  <input type='text' id='forkSource' class='fork-input' spellcheck='false'
+                         placeholder='C:\Users\...\.claude\projects\프로젝트\세션ID.jsonl'>
+                  <span class='fork-hint'>세션 목록의 <code>JSONL</code> 줄 옆 📋 버튼으로 복사해 붙여넣으세요.</span>
+              </label>
+  
+              <label class='fork-field'>
+                  <span class='fork-label'>대상 프로젝트 경로 <em>필수</em></span>
+                  <input type='text' id='forkTarget' class='fork-input' spellcheck='false'
+                         placeholder='C:\kyo-prj\kyochon-prac'>
+                  <span class='fork-hint' id='forkSlugPreview'>실제 작업 폴더 경로를 넣으면 저장 위치를 미리 보여줍니다.</span>
+              </label>
+  
+              <label class='fork-field'>
+                  <span class='fork-label'>새 세션 제목 <em class='opt'>선택</em></span>
+                  <input type='text' id='forkTitle' class='fork-input'
+                         placeholder='비워두면 원본 제목을 그대로 씁니다'>
+                  <span class='fork-hint'>복제본은 제목이 같아 목록에서 구분되지 않습니다. 지금 정해두면 편합니다.</span>
+              </label>
+  
+              <div class='fork-options'>
+                  <label><input type='checkbox' id='forkCopySide' checked> <code>tool-results</code> 폴더도 복사</label>
+                  <label><input type='checkbox' id='forkCopyMemory' checked> <code>memory/</code> 폴더도 복사</label>
+              </div>
+  
+              <div class='fork-actions'>
+                  <button type='button' class='fork-submit' id='forkSubmit'>복제하기</button>
+                  <span class='fork-status' id='forkStatus'></span>
+              </div>
+          </div>
+      </details>
+  
       <div class='project-list'>
           
           
@@ -2466,6 +2676,72 @@
           });
       });
   });
+              // JSONL 세션 복제 폼 — 화면단 (검증 + 슬러그 미리보기). 전송은 아직 미구현.
+  (function () {
+      'use strict';
+  
+      var srcInput = document.getElementById('forkSource');
+      var tgtInput = document.getElementById('forkTarget');
+      var slugHint = document.getElementById('forkSlugPreview');
+      var submitBtn = document.getElementById('forkSubmit');
+      var statusEl = document.getElementById('forkStatus');
+      if (!srcInput || !tgtInput || !submitBtn) return;
+  
+      // Claude Code 의 슬러그 규칙: 경로의 ':' 와 '\' 를 '-' 로 바꾼다.
+      // 예) C:\kyo-prj\kyochon-prac  ->  C--kyo-prj-kyochon-prac
+      function toSlug(projectPath) {
+          // RegExp 문자열 안에서는 백슬래시를 두 번 써야 리터럴 한 글자가 된다.
+          var BS = String.fromCharCode(92);
+          var SEP = new RegExp('[:' + BS + BS + '/]', 'g');   // 수량자 없음 — 한 글자당 '-' 하나
+          return projectPath.trim().replace(SEP, '-');
+      }
+  
+      // 원본은 <projects>/<슬러그>/<세션ID>.jsonl 형태여야 한다.
+      var _BS = String.fromCharCode(92);
+      var SESSION_FILE = new RegExp('[' + _BS + _BS + '/]([0-9a-fA-F-]{36})[.]jsonl$');
+  
+      function sourceProblem(value) {
+          var v = value.trim();
+          if (!v) return '경로를 입력하세요.';
+          if (!/[.]jsonl$/i.test(v)) return '.jsonl 파일 경로여야 합니다.';
+          if (!SESSION_FILE.test(v)) return '파일명이 세션 ID(UUID) 형식이 아닙니다.';
+          return null;
+      }
+  
+      function setHint(el, text, kind) {
+          el.textContent = text;
+          el.classList.remove('ok', 'warn');
+          if (kind) el.classList.add(kind);
+      }
+  
+      function refresh() {
+          var tgt = tgtInput.value.trim();
+          if (!tgt) {
+              setHint(slugHint, '실제 작업 폴더 경로를 넣으면 저장 위치를 미리 보여줍니다.', null);
+          } else {
+              setHint(slugHint, '저장 위치: ' + toSlug(tgt) + '  폴더', 'ok');
+          }
+  
+          var problem = sourceProblem(srcInput.value) || (tgt ? null : '대상 프로젝트 경로를 입력하세요.');
+          submitBtn.disabled = !!problem;
+          if (statusEl) {
+              // 입력 중에는 실패 사유만 조용히 안내한다
+              statusEl.className = 'fork-status';
+              statusEl.textContent = srcInput.value.trim() && problem ? problem : '';
+          }
+      }
+  
+      srcInput.addEventListener('input', refresh);
+      tgtInput.addEventListener('input', refresh);
+      refresh();
+  
+      submitBtn.addEventListener('click', function () {
+          if (statusEl) {
+              statusEl.className = 'fork-status';
+              statusEl.textContent = '화면만 구현된 상태입니다 — 복제 API는 아직 연결되지 않았습니다.';
+          }
+      });
+  })();
   
               // JSONL 경로 복사 버튼 (project-card + summary-stats 공용) — 이벤트 위임
               document.body.addEventListener('click', function(e) {

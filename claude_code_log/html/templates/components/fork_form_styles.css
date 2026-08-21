@@ -1,0 +1,168 @@
+/* JSONL 세션 복제 폼 (summary 아래, 기본 접힘) */
+
+.fork-panel {
+    max-width: 1200px;
+    margin: 0 auto 30px auto;
+    background-color: #ffffffdd;
+    border-radius: 8px;
+    box-shadow: -7px -7px 10px #eeeeee44, 7px 7px 10px #00000011;
+    border-left: #ffffff66 1px solid;
+    border-top: #ffffff66 1px solid;
+    border-bottom: #00000017 1px solid;
+    overflow: hidden;
+}
+
+.fork-summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #555;
+    user-select: none;
+}
+
+.fork-summary:hover {
+    background: #00000008;
+}
+
+.fork-body {
+    padding: 4px 18px 18px 18px;
+    text-align: left;
+}
+
+.fork-intro {
+    margin: 0 0 14px 0;
+    font-size: 0.85em;
+    color: #777;
+    line-height: 1.5;
+}
+
+.fork-field {
+    display: block;
+    margin-bottom: 14px;
+}
+
+.fork-label {
+    display: block;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+/* 필수/선택 배지 */
+.fork-label em {
+    font-style: normal;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: #c2410c;
+    background: #fb923c22;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+}
+
+.fork-label em.opt {
+    color: #666;
+    background: #00000010;
+}
+
+.fork-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: 1px solid #00000022;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    color: #333;
+    background: #fff;
+}
+
+.fork-input:focus {
+    outline: none;
+    border-color: #3b82f6aa;
+    box-shadow: 0 0 0 2px #3b82f622;
+}
+
+.fork-hint {
+    display: block;
+    font-size: 0.75em;
+    color: #999;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+/* 슬러그 미리보기: 유효할 때만 색이 붙는다 */
+.fork-hint.ok {
+    color: #16a34a;
+}
+
+.fork-hint.warn {
+    color: #c2410c;
+}
+
+.fork-hint code,
+.fork-intro code {
+    background: #00000008;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.fork-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 6px 0 16px 0;
+    font-size: 0.82em;
+    color: #555;
+}
+
+.fork-options label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.fork-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fork-submit {
+    padding: 7px 18px;
+    border: 1px solid #3b82f6;
+    border-radius: 4px;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fork-submit:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.fork-submit:disabled {
+    background: #9ca3af;
+    border-color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.fork-status {
+    font-size: 0.8em;
+    color: #777;
+}
+
+.fork-status.error {
+    color: #dc2626;
+}
+
+.fork-status.success {
+    color: #16a34a;
+}
