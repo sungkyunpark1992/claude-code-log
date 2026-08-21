@@ -39,6 +39,7 @@
 30. [대시보드에 원본 JSONL 디렉토리 경로 표시 + 복사 버튼](#30-대시보드에-원본-jsonl-디렉토리-경로-표시--복사-버튼)
 31. [JSONL 자동 삭제 막기 (환경 설정)](#31-jsonl-자동-삭제-막기-환경-설정)
 32. [세션 자동 제목 (ai-title) 표시](#32-세션-자동-제목-ai-title-표시)
+33. [메시지별 복사 버튼 (📋)](#33-메시지별-복사-버튼-)
 
 ---
 
@@ -3093,6 +3094,105 @@ ba1ea00b  →  (직접 수정한 제목 유지 — custom_title 우선)
 > ⚠️ **캐시 DB 를 지워서 재생성하면 안 된다.** archived 프로젝트([23-6](#23-6-확장--프로젝트-전체가-archived-인-경우))는
 > 캐시에만 기록돼 있어서, 지우면 대시보드에서 사라진다. JSONL 이 없어 재스캔으로도 복구되지 않는다.
 > 실제로 이 작업 중에 그렇게 잃었다.
+
+---
+
+## 33. 메시지별 복사 버튼 (📋)
+
+**목적**: 말풍선 내용을 드래그 없이 한 번의 클릭으로 클립보드에 복사.
+
+### 동작
+
+- 각 메시지 헤더 **오른쪽 끝**에 📋 버튼. 평소 흐릿(opacity 0.25) → 말풍선 hover 시 0.7 → 버튼 hover 시 1.0
+- 클릭 시 그 말풍선 `.content` 의 텍스트를 복사하고 1.2초간 `✓`(초록)로 바뀜
+- **접힌 `<details>` 안까지 복사된다** — 펼치지 않아도 전문이 들어온다
+- user / assistant / tool 모든 말풍선에 붙는다. 세션 헤더와 빈 프롬프트는 제외
+- SSE 로 새로 온 메시지에도 자동으로 붙는다
+
+### 설계 — 템플릿이 아니라 JS 주입 ([29번](#29-메시지-선택-후-html-내보내기-체크박스--슬라이드-패널)과 같은 패턴)
+
+메시지 마크업은 `transcript.html` 과 `messages_fragment.html` **두 곳**에 있다. 템플릿에
+버튼을 넣으면 둘을 동기화해야 하고, 한쪽을 빠뜨리면 **SSE 로 온 메시지만 버튼이 없는**
+증상이 나온다([20번](#20-user-말풍선-간-이동-버튼-)에서 실제로 겪은 실수).
+
+그래서 헤더에 JS 로 주입한다. 멱등하게 만들고 전역으로 노출해 SSE 후 다시 부른다.
+
+```javascript
+window.addCopyButtons = function () {
+    document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+        var header = msg.querySelector('.header');
+        if (!header) return;
+        if (header.querySelector('.msg-copy-btn')) return;   // 멱등
+        …버튼 생성 후 header.appendChild…
+    });
+};
+```
+
+`.header` 가 `display:flex; justify-content:space-between` 이라 `appendChild` 만으로
+오른쪽 끝에 놓인다. 별도 정렬 CSS 가 필요 없다.
+
+### 수정 파일 (2개 신규 + 1개 3줄)
+
+#### 33-1. `components/message_copy.html` (신규)
+
+버튼 주입 + 복사 로직. 클릭은 **body 이벤트 위임**이라 SSE 로 추가된 버튼도 재바인딩 없이 동작한다.
+
+```javascript
+// 접힌 <details> 안까지 들어오는 것이 이 버튼의 요점
+function messageText(msg) {
+    var content = msg.querySelector('.content');
+    return content ? content.textContent.replace(/\u00a0/g, ' ').trim() : '';
+}
+
+document.body.addEventListener('click', function (e) {
+    var btn = e.target.closest('.msg-copy-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();   // fold 토글·빈 프롬프트 활성화로 번지지 않게
+    …clipboard.writeText → 실패 시 execCommand fallback…
+});
+```
+
+> `stopPropagation()` 이 없으면 클릭이 fold-bar 나 `.empty-prompt` 핸들러까지 올라간다.
+
+#### 33-2. `components/message_copy_styles.css` (신규)
+
+```css
+.msg-copy-btn { opacity: 0.25; }              /* 헤더에 이미 이모지·제목·시각·토큰이 있다 */
+.message:hover .msg-copy-btn { opacity: 0.7; }
+.msg-copy-btn.copied { background: #22c55e33; border-color: #22c55e; }
+```
+
+성공 피드백은 [30번 경로 복사 버튼](#30-대시보드에-원본-jsonl-디렉토리-경로-표시--복사-버튼)과 같은 모양(`✓` + 초록 1.2초)으로 맞췄다.
+
+#### 33-3. `transcript.html` — 3줄
+
+```jinja
+{% include 'components/message_copy_styles.css' %}   {# <style> 안 #}
+{% include 'components/message_copy.html' %}         {# 스크립트 #}
+```
+```javascript
+if (typeof window.addCopyButtons === 'function') window.addCopyButtons();   // SSE 후처리
+```
+
+### 검증 (Playwright)
+
+| 항목 | 결과 |
+|---|---|
+| 버튼 개수 == 메시지 개수 | 68 / 68 |
+| 세션헤더·빈프롬프트 제외 | 0건 |
+| 클립보드 == 본문 텍스트 | 일치 |
+| 피드백 `✓` + `.copied` | PASS |
+| **접힌 `<details>` 포함** | 복사 1,474자 / 화면 308자 |
+| fold 상태 미변경 | 0 → 0 |
+| 빈 프롬프트 미활성 | 0건 |
+
+> 검증할 때 **정적 `session-*.html` 을 열면 안 된다.** 그 파일은 낡아 있을 수 있고
+> 브라우저가 보는 것은 서버가 매번 렌더한 결과다([32번](#32-세션-자동-제목-ai-title-표시) 의 동적 렌더 경고).
+> 서버 응답을 파일로 떨군 뒤 Playwright 로 열어야 실제와 같다.
+
+> 접힌 메시지는 fold 로 `display:none` 이라 Playwright 클릭이 타임아웃 난다.
+> `is_visible()` 로 걸러서 보이는 것만 클릭해야 한다.
 
 ---
 

@@ -19,6 +19,7 @@
 {% include 'components/pygments_styles.css' %}
 {% include 'components/page_nav_styles.css' %}
 {% include 'components/export_styles.css' %}
+{% include 'components/message_copy_styles.css' %}
     </style>
 </head>
 
@@ -1316,6 +1317,7 @@
 
     <!-- Message selection & export script -->
     {% include 'components/message_export.html' %}
+    {% include 'components/message_copy.html' %}
 
     <!-- Live update via SSE -->
     <script>
@@ -1466,6 +1468,7 @@
                             if (typeof convertTimestamps === 'function') convertTimestamps();
                             if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
                             if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
+                            if (typeof window.addCopyButtons === 'function') window.addCopyButtons();
 
                             // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                             // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크

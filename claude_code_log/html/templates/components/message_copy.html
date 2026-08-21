@@ -1,0 +1,80 @@
+<!-- Per-message copy button: copies that bubble's content text to the clipboard -->
+<script>
+(function () {
+    'use strict';
+
+    // Same set as the export feature — real bubbles only, no session headers or live prompt
+    var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+
+    // Inject a copy button into every message header.
+    // Idempotent + exposed globally so SSE-added messages get one too.
+    window.addCopyButtons = function () {
+        document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+            var header = msg.querySelector('.header');
+            if (!header) return;
+            if (header.querySelector('.msg-copy-btn')) return;
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'msg-copy-btn';
+            btn.title = '이 메시지 내용 복사';
+            btn.textContent = '📋';
+            header.appendChild(btn);
+        });
+    };
+
+    // Text of the bubble body. textContent reaches inside collapsed <details>,
+    // so folded content is copied too — that is the point of the button.
+    function messageText(msg) {
+        var content = msg.querySelector('.content');
+        if (!content) return '';
+        return content.textContent.replace(/\u00a0/g, ' ').trim();
+    }
+
+    function flashCopied(btn) {
+        var original = btn.textContent;
+        btn.classList.add('copied');
+        btn.textContent = '✓';
+        setTimeout(function () {
+            btn.classList.remove('copied');
+            btn.textContent = original;
+        }, 1200);
+    }
+
+    // Clipboard API needs a secure context; fall back for plain HTTP on a LAN address.
+    function fallbackCopy(text, onSuccess) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            if (document.execCommand('copy')) onSuccess();
+        } catch (err) { /* nothing else to try */ }
+        document.body.removeChild(ta);
+    }
+
+    // Delegation: SSE-added buttons work without rebinding.
+    document.body.addEventListener('click', function (e) {
+        var btn = e.target.closest('.msg-copy-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();   // don't toggle folds or trip the empty-prompt handler
+        var msg = btn.closest('.message');
+        if (!msg) return;
+        var text = messageText(msg);
+        if (!text) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                flashCopied(btn);
+            }).catch(function () {
+                fallbackCopy(text, function () { flashCopied(btn); });
+            });
+        } else {
+            fallbackCopy(text, function () { flashCopied(btn); });
+        }
+    });
+
+    window.addCopyButtons();
+})();
+</script>

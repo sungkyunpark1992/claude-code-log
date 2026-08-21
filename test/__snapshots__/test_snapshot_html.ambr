@@ -5769,6 +5769,41 @@
       background: rgba(0, 0, 0, 0.08);
       color: #d33;
   }
+  /* Per-message copy button (📋 in each bubble header) */
+  
+  .msg-copy-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      line-height: 1;
+      flex-shrink: 0;
+      /* Quiet until the bubble is hovered — the header already carries
+         an emoji, a title, a timestamp and token counts. */
+      opacity: 0.25;
+      transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  
+  .message:hover .msg-copy-btn {
+      opacity: 0.7;
+  }
+  
+  .msg-copy-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Success flash — same feedback as the JSONL path copy button */
+  .msg-copy-btn.copied {
+      opacity: 1;
+      background: #22c55e33;
+      border-color: #22c55e;
+      color: #16a34a;
+  }
       </style>
   </head>
   
@@ -9089,6 +9124,86 @@
       });
   })();
   </script>
+      <!-- Per-message copy button: copies that bubble's content text to the clipboard -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // Same set as the export feature — real bubbles only, no session headers or live prompt
+      var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+  
+      // Inject a copy button into every message header.
+      // Idempotent + exposed globally so SSE-added messages get one too.
+      window.addCopyButtons = function () {
+          document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+              var header = msg.querySelector('.header');
+              if (!header) return;
+              if (header.querySelector('.msg-copy-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'msg-copy-btn';
+              btn.title = '이 메시지 내용 복사';
+              btn.textContent = '📋';
+              header.appendChild(btn);
+          });
+      };
+  
+      // Text of the bubble body. textContent reaches inside collapsed <details>,
+      // so folded content is copied too — that is the point of the button.
+      function messageText(msg) {
+          var content = msg.querySelector('.content');
+          if (!content) return '';
+          return content.textContent.replace(/\u00a0/g, ' ').trim();
+      }
+  
+      function flashCopied(btn) {
+          var original = btn.textContent;
+          btn.classList.add('copied');
+          btn.textContent = '✓';
+          setTimeout(function () {
+              btn.classList.remove('copied');
+              btn.textContent = original;
+          }, 1200);
+      }
+  
+      // Clipboard API needs a secure context; fall back for plain HTTP on a LAN address.
+      function fallbackCopy(text, onSuccess) {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try {
+              if (document.execCommand('copy')) onSuccess();
+          } catch (err) { /* nothing else to try */ }
+          document.body.removeChild(ta);
+      }
+  
+      // Delegation: SSE-added buttons work without rebinding.
+      document.body.addEventListener('click', function (e) {
+          var btn = e.target.closest('.msg-copy-btn');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();   // don't toggle folds or trip the empty-prompt handler
+          var msg = btn.closest('.message');
+          if (!msg) return;
+          var text = messageText(msg);
+          if (!text) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                  flashCopied(btn);
+              }).catch(function () {
+                  fallbackCopy(text, function () { flashCopied(btn); });
+              });
+          } else {
+              fallbackCopy(text, function () { flashCopied(btn); });
+          }
+      });
+  
+      window.addCopyButtons();
+  })();
+  </script>
   
       <!-- Live update via SSE -->
       <script>
@@ -9239,6 +9354,7 @@
                               if (typeof convertTimestamps === 'function') convertTimestamps();
                               if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
                               if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
+                              if (typeof window.addCopyButtons === 'function') window.addCopyButtons();
   
                               // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                               // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크
@@ -12551,6 +12667,41 @@
   .export-item-remove:hover {
       background: rgba(0, 0, 0, 0.08);
       color: #d33;
+  }
+  /* Per-message copy button (📋 in each bubble header) */
+  
+  .msg-copy-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      line-height: 1;
+      flex-shrink: 0;
+      /* Quiet until the bubble is hovered — the header already carries
+         an emoji, a title, a timestamp and token counts. */
+      opacity: 0.25;
+      transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  
+  .message:hover .msg-copy-btn {
+      opacity: 0.7;
+  }
+  
+  .msg-copy-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Success flash — same feedback as the JSONL path copy button */
+  .msg-copy-btn.copied {
+      opacity: 1;
+      background: #22c55e33;
+      border-color: #22c55e;
+      color: #16a34a;
   }
       </style>
   </head>
@@ -15969,6 +16120,86 @@
       });
   })();
   </script>
+      <!-- Per-message copy button: copies that bubble's content text to the clipboard -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // Same set as the export feature — real bubbles only, no session headers or live prompt
+      var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+  
+      // Inject a copy button into every message header.
+      // Idempotent + exposed globally so SSE-added messages get one too.
+      window.addCopyButtons = function () {
+          document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+              var header = msg.querySelector('.header');
+              if (!header) return;
+              if (header.querySelector('.msg-copy-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'msg-copy-btn';
+              btn.title = '이 메시지 내용 복사';
+              btn.textContent = '📋';
+              header.appendChild(btn);
+          });
+      };
+  
+      // Text of the bubble body. textContent reaches inside collapsed <details>,
+      // so folded content is copied too — that is the point of the button.
+      function messageText(msg) {
+          var content = msg.querySelector('.content');
+          if (!content) return '';
+          return content.textContent.replace(/\u00a0/g, ' ').trim();
+      }
+  
+      function flashCopied(btn) {
+          var original = btn.textContent;
+          btn.classList.add('copied');
+          btn.textContent = '✓';
+          setTimeout(function () {
+              btn.classList.remove('copied');
+              btn.textContent = original;
+          }, 1200);
+      }
+  
+      // Clipboard API needs a secure context; fall back for plain HTTP on a LAN address.
+      function fallbackCopy(text, onSuccess) {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try {
+              if (document.execCommand('copy')) onSuccess();
+          } catch (err) { /* nothing else to try */ }
+          document.body.removeChild(ta);
+      }
+  
+      // Delegation: SSE-added buttons work without rebinding.
+      document.body.addEventListener('click', function (e) {
+          var btn = e.target.closest('.msg-copy-btn');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();   // don't toggle folds or trip the empty-prompt handler
+          var msg = btn.closest('.message');
+          if (!msg) return;
+          var text = messageText(msg);
+          if (!text) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                  flashCopied(btn);
+              }).catch(function () {
+                  fallbackCopy(text, function () { flashCopied(btn); });
+              });
+          } else {
+              fallbackCopy(text, function () { flashCopied(btn); });
+          }
+      });
+  
+      window.addCopyButtons();
+  })();
+  </script>
   
       <!-- Live update via SSE -->
       <script>
@@ -16119,6 +16350,7 @@
                               if (typeof convertTimestamps === 'function') convertTimestamps();
                               if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
                               if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
+                              if (typeof window.addCopyButtons === 'function') window.addCopyButtons();
   
                               // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                               // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크
@@ -19431,6 +19663,41 @@
   .export-item-remove:hover {
       background: rgba(0, 0, 0, 0.08);
       color: #d33;
+  }
+  /* Per-message copy button (📋 in each bubble header) */
+  
+  .msg-copy-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      line-height: 1;
+      flex-shrink: 0;
+      /* Quiet until the bubble is hovered — the header already carries
+         an emoji, a title, a timestamp and token counts. */
+      opacity: 0.25;
+      transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  
+  .message:hover .msg-copy-btn {
+      opacity: 0.7;
+  }
+  
+  .msg-copy-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Success flash — same feedback as the JSONL path copy button */
+  .msg-copy-btn.copied {
+      opacity: 1;
+      background: #22c55e33;
+      border-color: #22c55e;
+      color: #16a34a;
   }
       </style>
   </head>
@@ -22906,6 +23173,86 @@
       });
   })();
   </script>
+      <!-- Per-message copy button: copies that bubble's content text to the clipboard -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // Same set as the export feature — real bubbles only, no session headers or live prompt
+      var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+  
+      // Inject a copy button into every message header.
+      // Idempotent + exposed globally so SSE-added messages get one too.
+      window.addCopyButtons = function () {
+          document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+              var header = msg.querySelector('.header');
+              if (!header) return;
+              if (header.querySelector('.msg-copy-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'msg-copy-btn';
+              btn.title = '이 메시지 내용 복사';
+              btn.textContent = '📋';
+              header.appendChild(btn);
+          });
+      };
+  
+      // Text of the bubble body. textContent reaches inside collapsed <details>,
+      // so folded content is copied too — that is the point of the button.
+      function messageText(msg) {
+          var content = msg.querySelector('.content');
+          if (!content) return '';
+          return content.textContent.replace(/\u00a0/g, ' ').trim();
+      }
+  
+      function flashCopied(btn) {
+          var original = btn.textContent;
+          btn.classList.add('copied');
+          btn.textContent = '✓';
+          setTimeout(function () {
+              btn.classList.remove('copied');
+              btn.textContent = original;
+          }, 1200);
+      }
+  
+      // Clipboard API needs a secure context; fall back for plain HTTP on a LAN address.
+      function fallbackCopy(text, onSuccess) {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try {
+              if (document.execCommand('copy')) onSuccess();
+          } catch (err) { /* nothing else to try */ }
+          document.body.removeChild(ta);
+      }
+  
+      // Delegation: SSE-added buttons work without rebinding.
+      document.body.addEventListener('click', function (e) {
+          var btn = e.target.closest('.msg-copy-btn');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();   // don't toggle folds or trip the empty-prompt handler
+          var msg = btn.closest('.message');
+          if (!msg) return;
+          var text = messageText(msg);
+          if (!text) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                  flashCopied(btn);
+              }).catch(function () {
+                  fallbackCopy(text, function () { flashCopied(btn); });
+              });
+          } else {
+              fallbackCopy(text, function () { flashCopied(btn); });
+          }
+      });
+  
+      window.addCopyButtons();
+  })();
+  </script>
   
       <!-- Live update via SSE -->
       <script>
@@ -23056,6 +23403,7 @@
                               if (typeof convertTimestamps === 'function') convertTimestamps();
                               if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
                               if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
+                              if (typeof window.addCopyButtons === 'function') window.addCopyButtons();
   
                               // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                               // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크
@@ -26368,6 +26716,41 @@
   .export-item-remove:hover {
       background: rgba(0, 0, 0, 0.08);
       color: #d33;
+  }
+  /* Per-message copy button (📋 in each bubble header) */
+  
+  .msg-copy-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      line-height: 1;
+      flex-shrink: 0;
+      /* Quiet until the bubble is hovered — the header already carries
+         an emoji, a title, a timestamp and token counts. */
+      opacity: 0.25;
+      transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  
+  .message:hover .msg-copy-btn {
+      opacity: 0.7;
+  }
+  
+  .msg-copy-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Success flash — same feedback as the JSONL path copy button */
+  .msg-copy-btn.copied {
+      opacity: 1;
+      background: #22c55e33;
+      border-color: #22c55e;
+      color: #16a34a;
   }
       </style>
   </head>
@@ -29689,6 +30072,86 @@
       });
   })();
   </script>
+      <!-- Per-message copy button: copies that bubble's content text to the clipboard -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // Same set as the export feature — real bubbles only, no session headers or live prompt
+      var MSG_SELECTOR = '.message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt)';
+  
+      // Inject a copy button into every message header.
+      // Idempotent + exposed globally so SSE-added messages get one too.
+      window.addCopyButtons = function () {
+          document.querySelectorAll(MSG_SELECTOR).forEach(function (msg) {
+              var header = msg.querySelector('.header');
+              if (!header) return;
+              if (header.querySelector('.msg-copy-btn')) return;
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'msg-copy-btn';
+              btn.title = '이 메시지 내용 복사';
+              btn.textContent = '📋';
+              header.appendChild(btn);
+          });
+      };
+  
+      // Text of the bubble body. textContent reaches inside collapsed <details>,
+      // so folded content is copied too — that is the point of the button.
+      function messageText(msg) {
+          var content = msg.querySelector('.content');
+          if (!content) return '';
+          return content.textContent.replace(/\u00a0/g, ' ').trim();
+      }
+  
+      function flashCopied(btn) {
+          var original = btn.textContent;
+          btn.classList.add('copied');
+          btn.textContent = '✓';
+          setTimeout(function () {
+              btn.classList.remove('copied');
+              btn.textContent = original;
+          }, 1200);
+      }
+  
+      // Clipboard API needs a secure context; fall back for plain HTTP on a LAN address.
+      function fallbackCopy(text, onSuccess) {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          try {
+              if (document.execCommand('copy')) onSuccess();
+          } catch (err) { /* nothing else to try */ }
+          document.body.removeChild(ta);
+      }
+  
+      // Delegation: SSE-added buttons work without rebinding.
+      document.body.addEventListener('click', function (e) {
+          var btn = e.target.closest('.msg-copy-btn');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();   // don't toggle folds or trip the empty-prompt handler
+          var msg = btn.closest('.message');
+          if (!msg) return;
+          var text = messageText(msg);
+          if (!text) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                  flashCopied(btn);
+              }).catch(function () {
+                  fallbackCopy(text, function () { flashCopied(btn); });
+              });
+          } else {
+              fallbackCopy(text, function () { flashCopied(btn); });
+          }
+      });
+  
+      window.addCopyButtons();
+  })();
+  </script>
   
       <!-- Live update via SSE -->
       <script>
@@ -29839,6 +30302,7 @@
                               if (typeof convertTimestamps === 'function') convertTimestamps();
                               if (typeof window.numberUserMessages === 'function') window.numberUserMessages();
                               if (typeof window.addSelectionCheckboxes === 'function') window.addSelectionCheckboxes();
+                              if (typeof window.addCopyButtons === 'function') window.addCopyButtons();
   
                               // sticky-bottom 도크 padding 재계산 — 사용자가 그동안 textarea에
                               // 타이핑해서 도크가 세로로 커졌을 수 있으므로 padding을 현재 도크

@@ -1,0 +1,35 @@
+/* Per-message copy button (📋 in each bubble header) */
+
+.msg-copy-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    flex-shrink: 0;
+    /* Quiet until the bubble is hovered — the header already carries
+       an emoji, a title, a timestamp and token counts. */
+    opacity: 0.25;
+    transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.message:hover .msg-copy-btn {
+    opacity: 0.7;
+}
+
+.msg-copy-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Success flash — same feedback as the JSONL path copy button */
+.msg-copy-btn.copied {
+    opacity: 1;
+    background: #22c55e33;
+    border-color: #22c55e;
+    color: #16a34a;
+}
