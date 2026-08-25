@@ -166,3 +166,409 @@
 .fork-status.success {
     color: #16a34a;
 }
+
+/* ── 세션 유지용 자동 메시지 ─────────────────────────────── */
+
+.ka-row {
+    display: flex;
+    gap: 14px;
+}
+
+.ka-row .ka-narrow {
+    flex: 1;
+    min-width: 0;
+}
+
+.ka-add {
+    padding-bottom: 14px;
+    border-bottom: 1px solid #00000011;
+}
+
+.ka-list-wrap {
+    margin-top: 14px;
+}
+
+.ka-list-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+}
+
+.ka-note {
+    font-weight: 400;
+    font-size: 0.9em;
+    color: #999;
+}
+
+.ka-empty {
+    font-size: 0.82em;
+    color: #aaa;
+    padding: 10px 0;
+}
+
+.ka-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px;
+    border: 1px solid #00000012;
+    border-radius: 5px;
+    margin-bottom: 6px;
+    background: #00000004;
+    font-size: 0.82em;
+}
+
+/* 남은 시간 — 눈에 띄어야 하므로 빨강 고정폭 */
+.ka-countdown {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 1.15em;
+    color: #dc2626;
+    min-width: 4.6em;
+    flex-shrink: 0;
+}
+
+.ka-item.paused .ka-countdown,
+.ka-item.done .ka-countdown {
+    color: #9ca3af;
+}
+
+.ka-item.error {
+    border-color: #dc262655;
+    background: #dc262608;
+}
+
+.ka-item.error .ka-countdown {
+    color: #dc2626;
+}
+
+.ka-meta {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.5;
+}
+
+.ka-meta-main {
+    font-weight: 600;
+    color: #444;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ka-meta-sub {
+    color: #888;
+    font-size: 0.92em;
+}
+
+.ka-sid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #666;
+}
+
+.ka-btns {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.ka-btns button {
+    padding: 3px 9px;
+    border: 1px solid #00000022;
+    border-radius: 4px;
+    background: #fff;
+    color: #555;
+    font-size: 0.92em;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ka-btns button:hover {
+    background: #00000008;
+    border-color: #00000044;
+}
+
+.ka-btns button.danger:hover {
+    background: #dc262611;
+    border-color: #dc262655;
+    color: #b91c1c;
+}
+
+/* 이미 주기가 지나 전송을 기다리는 상태 */
+.ka-item.due .ka-countdown {
+    color: #c2410c;
+    font-size: 0.95em;
+}
+
+/* 분/초 입력 */
+.ka-duration {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ka-duration .fork-input {
+    width: 4.5em;
+    text-align: right;
+}
+
+.ka-unit {
+    font-size: 0.8em;
+    color: #777;
+    flex-shrink: 0;
+}
+
+/* 항목이 2단(요약 + 사용량)으로 바뀌었다 */
+.ka-item {
+    display: block;
+}
+
+.ka-item-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* 소비 토큰 표시 (현재는 목업) */
+.ka-usage {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #00000018;
+    font-size: 0.92em;
+}
+
+.ka-usage-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.ka-usage-title {
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* 제목 옆에 붙는 한 줄 요약 */
+.ka-usage-summary {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.ka-mock {
+    font-weight: 400;
+    font-size: 0.85em;
+    color: #b45309;
+    background: #fbbf2433;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+}
+
+.ka-usage-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    color: #777;
+    line-height: 1.6;
+}
+
+.ka-usage-label {
+    color: #999;
+    min-width: 3.4em;
+    flex-shrink: 0;
+}
+
+.ka-usage-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    color: #444;
+    flex-shrink: 0;
+}
+
+/* '= 736K' 가 식 바로 옆에 붙어야 읽힌다.
+   flex: 1 을 주면 남는 폭을 전부 차지해 합계가 오른쪽 끝으로 밀린다. */
+.ka-usage-detail {
+    flex: 0 1 auto;
+    min-width: 0;
+    color: #999;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 남는 공간은 행 끝에서 흡수한다 */
+.ka-usage-row::after {
+    content: '';
+    flex: 1;
+}
+
+
+/* 상태와 버튼은 둘째 줄로 — 프로젝트 이름이 길어져도 밀리지 않는다 */
+.ka-item-second {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.ka-status-line {
+    flex: 1;
+    min-width: 0;
+    color: #888;
+}
+
+/* 재생/일시정지 토글 */
+.ka-btns button.ka-toggle {
+    font-size: 1em;
+    line-height: 1;
+    padding: 3px 8px;
+    min-width: 2.2em;
+}
+
+/* 제목이 왼쪽, 카운트다운이 오른쪽 — 제목이 남는 폭을 차지한다 */
+.ka-item-main .ka-meta {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 카운트다운은 프로젝트명 바로 옆 — 오른쪽으로 밀지 않는다 */
+.ka-meta-sub .ka-countdown {
+    min-width: 0;
+    margin-left: 8px;
+}
+
+/* 일시정지 표식 — 멈춘 숫자 옆에 붙는다 */
+.ka-countdown-note {
+    color: #9ca3af;
+    font-size: 0.92em;
+    flex-shrink: 0;
+}
+
+/* 중지 상태 — 회색으로 죽여 진행 중과 구분한다 */
+.ka-item.stopped .ka-countdown {
+    color: #9ca3af;
+    font-size: 0.95em;
+}
+
+/* 캐시 만료 — 일시정지 중에 0 에 닿은 상태 */
+.ka-item.expired .ka-countdown {
+    color: #9ca3af;
+}
+
+.ka-item.expired .ka-countdown-note {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* 세션 유지 패널은 접지 않는다 — 카운트다운을 늘 보고 있어야 하기 때문이다 */
+.ka-heading {
+    cursor: default;
+    border-bottom: 1px solid #00000011;
+}
+
+.ka-heading:hover {
+    background: none;
+}
+
+/* 세션 유지 기능의 주의사항 — 읽고 넘어가야 하므로 눈에 띄되 본문을 가리지 않게 */
+.ka-caution {
+    margin: 0 0 14px 0;
+    padding: 7px 12px;
+    border-left: 3px solid #f59e0b;
+    background: #fbbf2415;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.8em;
+    color: #78350f;
+    line-height: 1.65;
+}
+
+.ka-caution strong {
+    color: #b45309;
+}
+
+.ka-caution em {
+    font-style: normal;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.ka-caution code {
+    background: #00000010;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.95em;
+}
+
+/* 접힌 상태에서는 한 줄만 — 매번 다 읽을 내용은 아니다 */
+.ka-caution-head {
+    cursor: pointer;
+    list-style: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.ka-caution-head::-webkit-details-marker {
+    display: none;
+}
+
+/* 직접 그린 화살표 — 기본 마커는 위치가 제각각이다 */
+.ka-caution-head::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: 6px;
+    color: #b45309;
+    transition: transform 0.15s ease;
+}
+
+.ka-caution[open] .ka-caution-head::before {
+    transform: rotate(90deg);
+}
+
+.ka-caution-body {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid #f59e0b33;
+}
+
+/* 사용량 표시 옆의 빈 공간에 경고 배지를 놓는다 */
+.ka-usage {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.ka-usage-rows {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 자동 메시지가 나간 뒤 VS Code 를 새로고침하라는 알림.
+   놓치면 대화가 갈라지므로 눈에 띄게 둔다. */
+.ka-reload-badge {
+    flex-shrink: 0;
+    align-self: center;
+    padding: 10px 18px;
+    background: #dc2626;
+    color: #fff;
+    border-radius: 5px;
+    font-size: 1.05em;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    letter-spacing: 0.01em;
+    box-shadow: 0 1px 3px #dc262655;
+}

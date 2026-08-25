@@ -107,6 +107,84 @@
         </div>
     </details>
 
+    <!-- 세션 유지용 자동 메시지 — 화면단 (전송 로직 미구현) -->
+    <div class='fork-panel keepalive-panel' id='kaPanel'>
+        <div class='fork-summary ka-heading'>⏱ 세션 유지용 자동 메시지</div>
+        <div class='fork-body'>
+            <p class='fork-intro'>
+                마지막 응답으로부터 설정한 시간이 지나면 짧은 메시지를 보내
+                <strong>프롬프트 캐시를 유지</strong>합니다. 캐시가 만료되면 이전 대화를
+                다시 캐시에 쓰느라 토큰이 크게 드는데, 그 비용을 줄이기 위한 기능입니다.
+            </p>
+            <details class='ka-caution'>
+                <summary class='ka-caution-head'>
+                    <strong>주의</strong> — 자동 메시지 직후 VS Code 에서 새로고침 없이 질문하면 대화가 갈라집니다 …
+                </summary>
+                <div class='ka-caution-body'>
+                    VS Code 는 세션을 메모리에 들고 있어, 파일에 새로 추가된 줄을 모른 채 이전 지점에서
+                    이어갑니다. 그래서 <em>새로고침 없이</em> 바로 질문하면 그 자동 메시지가 대화 흐름에서
+                    빠지고 <strong>캐시도 한 번 어긋납니다</strong>.
+                    <br>
+                    기록이 사라지지는 않습니다 — JSONL 에는 그대로 남고 이 대시보드에서도 보입니다.
+                    다만 갈라진 그 한 건은 <strong>되돌릴 수 없고</strong> Claude 가 이후 참조하지
+                    않습니다. 다음 자동 메시지부터는 살아있는 줄기에 다시 붙고 캐시도 정상으로 돌아옵니다.
+                    <br>
+                    자동 메시지 직후 질문하실 때는 <code>Ctrl+Shift+P → Developer: Reload Window</code>
+                    로 먼저 새로고침하세요.
+                </div>
+            </details>
+
+            <div class='ka-add'>
+                <label class='fork-field'>
+                    <span class='fork-label'>세션 ID <em>필수</em></span>
+                    <input type='text' id='kaSessionId' class='fork-input' spellcheck='false'
+                           placeholder='세션 ID 또는 JSONL 경로를 붙여넣으세요'>
+                    <span class='fork-hint' id='kaSessionHint'>세션 ID · 앞 8자리 · JSONL 전체 경로 모두 인식합니다.</span>
+                </label>
+
+                <div class='ka-row'>
+                    <div class='fork-field ka-narrow'>
+                        <span class='fork-label'>전송 주기 <em>필수</em></span>
+                        <div class='ka-duration'>
+                            <input type='number' id='kaIntervalMin' class='fork-input' min='0' max='180' value='58'>
+                            <span class='ka-unit'>분</span>
+                            <input type='number' id='kaIntervalSec' class='fork-input' min='0' max='59' value='0'>
+                            <span class='ka-unit'>초</span>
+                        </div>
+                        <span class='fork-hint' id='kaIntervalHint'>캐시는 1시간 유지되므로 58분을 권합니다.</span>
+                    </div>
+                    <label class='fork-field ka-narrow'>
+                        <span class='fork-label'>최대 횟수 <em>필수</em></span>
+                        <input type='number' id='kaMaxCount' class='fork-input' min='1' max='99' value='12'>
+                        <span class='fork-hint'>12회면 약 11.6시간</span>
+                    </label>
+                </div>
+
+                <label class='fork-field'>
+                    <span class='fork-label'>보낼 메시지 <em>필수</em></span>
+                    <input type='text' id='kaMessage' class='fork-input'
+                           value='토큰을 아끼기 위한 세션 유지용 메세지니깐 대답하거나 추론하지 말고 ok라고만 대답할 것'>
+                    <span class='fork-hint'>추론 없이 짧게 답하도록 지시해야 출력 토큰이 적게 듭니다.</span>
+                </label>
+
+                <div class='fork-actions'>
+                    <button type='button' class='fork-submit' id='kaAdd'>등록</button>
+                    <span class='fork-status' id='kaStatus'></span>
+                </div>
+            </div>
+
+            <div class='ka-list-wrap'>
+                <div class='ka-list-head'>
+                    <span>등록된 세션 <span id='kaCount'>0</span></span>
+                    <span class='ka-note' id='kaNote'>전송 로직은 아직 연결되지 않았습니다 — 카운트다운만 동작합니다.</span>
+                </div>
+                <div id='kaList' class='ka-list'>
+                    <div class='ka-empty'>등록된 세션이 없습니다.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class='project-list'>
         {% for project in projects %}
         {# archived 프로젝트는 JSONL 이 전부 사라져 sessions 가 비어 있고
@@ -174,6 +252,7 @@
             {% include 'components/timezone_converter.js' %}
             {% include 'components/session_edit_script.js' %}
             {% include 'components/fork_form_script.js' %}
+            {% include 'components/keepalive_script.js' %}
 
             // JSONL 경로 복사 버튼 (project-card + summary-stats 공용) — 이벤트 위임
             document.body.addEventListener('click', function(e) {
