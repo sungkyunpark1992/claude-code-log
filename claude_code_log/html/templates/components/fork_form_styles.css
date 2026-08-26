@@ -272,10 +272,26 @@
     color: #666;
 }
 
+/* 조작 버튼은 항상 행의 오른쪽 끝에 붙는다.
+   margin-left: auto 가 핵심이다 — 왼쪽 내용(상태 문구, 만료 버튼)이 나타나거나
+   사라져도, 또 좁은 창에서 줄이 바뀌어도 버튼들의 위치가 변하지 않는다.
+   버튼이 밀리면 방금 누르려던 자리에 다른 버튼(삭제 등)이 들어와 위험하다. */
 .ka-btns {
     display: flex;
     gap: 5px;
     flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* 만료 버튼은 조작 버튼 그룹 바깥의 자기 자리에 둔다.
+   나타나고 사라져도 그룹 폭에 영향을 주지 않는다. */
+.ka-prime-slot {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.ka-prime-slot:empty {
+    display: none;
 }
 
 .ka-btns button {
@@ -298,6 +314,17 @@
     background: #dc262611;
     border-color: #dc262655;
     color: #b91c1c;
+}
+
+/* 이미 정지된 세션의 ⏹ — 자리는 지키되 누를 수 없음을 보인다 */
+.ka-btns button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.ka-btns button:disabled:hover {
+    background: #fff;
+    border-color: #00000022;
 }
 
 /* 이미 주기가 지나 전송을 기다리는 상태 */
@@ -335,7 +362,7 @@
     gap: 12px;
 }
 
-/* 소비 토큰 표시 (현재는 목업) */
+/* 직전 문답에서 실제로 쓴 토큰 (JSONL 의 usage 실측값) */
 .ka-usage {
     margin-top: 8px;
     padding-top: 8px;
@@ -361,6 +388,21 @@
 .ka-usage-summary {
     color: #b45309;
     font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* 캐시를 맞혔는지가 이 기능의 성패다 — 색으로 바로 구분되게 한다.
+   적중이면 생성이 100 토큰 안쪽, 빗나가면 수십만 토큰이 든다. */
+.ka-verdict-good {
+    color: #16a34a;
+}
+
+.ka-verdict-warn {
+    color: #b45309;
+}
+
+.ka-verdict-bad {
+    color: #dc2626;
 }
 
 .ka-mock {
@@ -427,12 +469,15 @@
     color: #888;
 }
 
-/* 재생/일시정지 토글 */
+/* 재생/일시정지 토글.
+   ▶ 와 ⏸ 는 글자 폭이 2px 다르다. 폭을 고정하지 않으면 상태가 바뀔 때마다
+   버튼이 조금씩 움직여, 같은 자리를 다시 누르기 어려워진다. */
 .ka-btns button.ka-toggle {
     font-size: 1em;
     line-height: 1;
-    padding: 3px 8px;
-    min-width: 2.2em;
+    padding: 3px 0;
+    width: 2.6em;
+    text-align: center;
 }
 
 /* 제목이 왼쪽, 카운트다운이 오른쪽 — 제목이 남는 폭을 차지한다 */
@@ -571,4 +616,26 @@
     text-align: center;
     letter-spacing: 0.01em;
     box-shadow: 0 1px 3px #dc262655;
+}
+
+/* 캐시 만료 상태에서만 나타나는 복구 버튼.
+   한 번에 큰 비용이 드는 동작이라 다른 버튼과 구분되게 둔다. */
+.ka-prime-slot button.ka-prime {
+    background: #b45309;
+    border-color: #b45309;
+    color: #fff;
+    font-weight: 600;
+}
+
+.ka-prime-slot button.ka-prime:hover:not(:disabled) {
+    background: #92400e;
+    border-color: #92400e;
+    color: #fff;
+}
+
+.ka-prime-slot button.ka-prime:disabled {
+    background: #d6d3d1;
+    border-color: #d6d3d1;
+    color: #78716c;
+    cursor: progress;
 }

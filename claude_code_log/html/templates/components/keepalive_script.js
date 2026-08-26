@@ -1,10 +1,10 @@
-// 세션 유지용 자동 메시지 — 화면단.
-// 등록/해제/카운트다운과 상태 표시까지 담당하고, 실제 전송은 서버가 맡는다(아직 미구현).
-// 서버 API 가 붙기 전까지 설정은 localStorage 에 두고, 전송 이력은 목업으로 보여준다.
+// 세션 유지용 자동 메시지 — 화면.
+//
+// 설정과 전송 이력은 서버(keepalive.json)가 가진다. 이 스크립트는 그것을 읽어 그리고,
+// 등록·토글·정지·초기화·삭제를 API 로 넘긴다. 실제 전송은 서버 워커가 한다.
 (function () {
     'use strict';
 
-    var STORE = 'ccl:keepalive';
     var listEl = document.getElementById('kaList');
     var addBtn = document.getElementById('kaAdd');
     if (!listEl || !addBtn) return;
@@ -25,23 +25,8 @@
     var PATH_SEP = new RegExp('[' + BS + BS + '/]');
     var MIN_INTERVAL = 20;
 
-    function load() {
-        try {
-            var raw = localStorage.getItem(STORE);
-            var arr = raw ? JSON.parse(raw) : [];
-            return Array.isArray(arr) ? arr : [];
-        } catch (e) {
-            return [];
-        }
-    }
-
-    function save(items) {
-        try {
-            localStorage.setItem(STORE, JSON.stringify(items));
-        } catch (e) {
-            /* 용량 초과 등 — 저장 실패는 조용히 넘긴다 */
-        }
-    }
+    // 서버가 준 마지막 목록. tick 이 매초 이 값으로 숫자만 갱신한다.
+    var items = [];
 
     function setStatus(text, kind) {
         if (!statusEl) return;
@@ -58,24 +43,19 @@
     }
 
     // 입력값에서 세션 ID 를 뽑는다. 셋 다 받는다:
-    //   1) 전체 UUID
-    //   2) JSONL 전체 경로 (목록의 📋 버튼으로 복사한 것)
-    //   3) 앞 8자리 (목록에 표시되는 짧은 형태)
+    //   1) 전체 UUID   2) JSONL 전체 경로   3) 앞 8자리
     // 손으로 UUID 를 골라 복사하는 수고를 없애려는 것이다.
     function extractSessionId(raw) {
         var v = String(raw || '').trim().replace(/^["']|["']$/g, '');
         if (!v) return null;
-
         if (UUID_RE.test(v)) return v;
 
-        // 경로 → 마지막 조각에서 .jsonl 을 떼어낸다
         if (PATH_SEP.test(v)) {
             var parts = v.split(PATH_SEP);
             var base = parts[parts.length - 1].replace(/\.jsonl$/i, '');
             if (UUID_RE.test(base)) return base;
         }
 
-        // 앞 8자리 → 화면의 세션 목록에서 찾아 완성한다
         if (/^[0-9a-fA-F]{8}$/.test(v)) {
             var nodes = document.querySelectorAll('.session-link[data-session-id]');
             for (var i = 0; i < nodes.length; i++) {
@@ -86,39 +66,12 @@
         return null;
     }
 
-    // 대시보드에 이미 렌더된 세션 목록에서 정보를 찾는다.
-    // 서버 API 없이도 "실제로 있는 세션인가"를 확인할 수 있다.
-    function lookupSession(sid) {
+    // 대시보드에 이미 렌더된 세션 목록에서 제목을 찾는다.
+    function lookupTitle(sid) {
         var el = document.querySelector('.session-link[data-session-id="' + sid + '"]');
         if (!el) return null;
         var titleEl = el.querySelector('.session-title');
-        var metaEl = el.querySelector('.session-link-meta');
-        var stamps = el.querySelectorAll('.timestamp[data-timestamp]');
-        var card = el.closest('.project-card');
-        var pathEl = card ? card.querySelector('.project-jsonl-dir .jsonl-path') : null;
-        var project = '';
-        if (pathEl) {
-            var parts = pathEl.textContent.trim().split(PATH_SEP);
-            project = parts[parts.length - 1] || '';
-        }
-        // 카운트다운의 기준점은 "마지막 응답 시각"이다.
-        // 질문 시각을 쓰면 도구를 많이 쓴 긴 작업에서 최대 15분 일찍 발동한다.
-        var last = null;
-        if (stamps.length) {
-            var el2 = stamps[stamps.length - 1];
-            last = el2.getAttribute('data-timestamp-end') || el2.getAttribute('data-timestamp');
-        }
-        var msgCount = 0;
-        if (metaEl) {
-            var m = metaEl.textContent.match(/(\d[\d,]*)\s*messages/);
-            if (m) msgCount = parseInt(m[1].replace(/,/g, ''), 10);
-        }
-        return {
-            title: (titleEl && titleEl.dataset.title) || '',
-            project: project,
-            messages: msgCount,
-            lastAt: last
-        };
+        return (titleEl && titleEl.dataset.title) || '';
     }
 
     function fmtDuration(sec) {
@@ -137,10 +90,26 @@
         return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
     }
 
+    // 토큰 수는 자릿수만 맞으면 된다. 89,231 보다 89.2K 가 한눈에 들어온다.
     function fmtTokens(n) {
+        n = n || 0;
         if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
-        if (n >= 1000) return Math.round(n / 1000) + 'K';
+        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
         return String(n);
+    }
+
+    // 이 기능의 성패는 직전 문답이 캐시를 맞혔는지 하나로 갈린다.
+    // 맞히면 생성이 100 토큰 안쪽, 틀리면 수십만 토큰이 든다.
+    function usageVerdict(u) {
+        if (!u) return null;
+        var read = u.cache_read || 0;
+        var made = u.cache_creation || 0;
+        if (!read && !made && !(u.output || 0)) {
+            return { cls: 'bad', text: '응답 실패 · 한도 초과' };
+        }
+        if (made > read) return { cls: 'bad', text: '캐시 재작성 — 비쌈' };
+        if (made > 5000) return { cls: 'warn', text: '일부 재작성' };
+        return { cls: 'good', text: '캐시 적중' };
     }
 
     function readInterval() {
@@ -178,9 +147,9 @@
             idHint.className = 'fork-hint warn';
             problem = '세션 ID 형식이 올바르지 않습니다.';
         } else {
-            var info = lookupSession(sid);
-            var already = load().some(function (x) { return x.id === sid; });
-            if (!info) {
+            var title = lookupTitle(sid);
+            var already = items.some(function (x) { return x.session_id === sid; });
+            if (title === null) {
                 idHint.textContent = '이 대시보드에서 찾을 수 없는 세션입니다. 새로고침 후 다시 확인하세요.';
                 idHint.className = 'fork-hint warn';
                 problem = '존재하지 않는 세션입니다.';
@@ -189,9 +158,7 @@
                 idHint.className = 'fork-hint warn';
                 problem = '이미 등록되어 있습니다.';
             } else {
-                idHint.textContent = sid.slice(0, 8) + ' · ' +
-                    (info.project ? info.project + ' · ' : '') +
-                    (info.title || '(제목 없음)');
+                idHint.textContent = sid.slice(0, 8) + ' · ' + (title || '(제목 없음)');
                 idHint.className = 'fork-hint ok';
             }
         }
@@ -204,161 +171,120 @@
         setStatus(raw && problem ? problem : '', null);
     }
 
-    // ── 목업 데이터 ──────────────────────────────────────────
-    // 서버 API 가 붙으면 JSONL 의 usage 를 읽어 실제값으로 바뀐다.
-    // 지금은 세션 크기(메시지 수)에 비례한 그럴듯한 값을 만들어 화면 구성을 확인한다.
-    //
-    // 각 값은 "프롬프트 1개에 딸린 모든 응답의 합"이다. 응답 하나하나가 아니다.
-    function mockUsage(info, seedStr) {
-        var seed = 0;
-        for (var i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) % 100000;
-        var base = Math.max(20000, (info.messages || 20) * 9000);
-        var rows = [];
-        for (var k = 0; k < 3; k++) {
-            var jitter = 0.75 + (((seed + k * 7919) % 1000) / 1000) * 0.5;
-            var cacheRead = Math.round(base * jitter);
-            rows.push({
-                cacheRead: cacheRead,
-                output: 1200 + ((seed + k * 13) % 4000)
-            });
-        }
-        return rows;
-    }
-
-    function usageHtml(it, info) {
-        var rows = mockUsage(info, it.id);
-        var perCycle = rows[0].cacheRead;
-        var left = Math.max(it.max - it.count, 0);
-
-        var cells = rows.map(function (r, i) {
-            var total = r.cacheRead + r.output;
-            return '<div class="ka-usage-row">' +
-                '<span class="ka-usage-label">직전 ' + (i + 1) + '</span>' +
-                '<span class="ka-usage-detail">이전 대화 다시 읽기 ' + fmtTokens(r.cacheRead) +
-                    ' + 답변 생성 ' + fmtTokens(r.output) + ' = </span>' +
-                '<span class="ka-usage-val">' + fmtTokens(total) + '</span>' +
-            '</div>';
-        }).join('');
-
-        var badge = it.needsReload
-            ? '<div class="ka-reload-badge" title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 ' +
-              '대화가 갈라지지 않습니다">VS Code<br>재실행 필요</div>'
-            : '';
-
-        return '<div class="ka-usage">' +
-            '<div class="ka-usage-rows">' +
-            '<div class="ka-usage-head">' +
-                '<span class="ka-usage-title">최근 프롬프트별 소비 토큰 <span class="ka-mock">목업</span> :</span>' +
-                '<span class="ka-usage-summary">자동 메시지 1회당 이전 대화 다시 읽기 약 ' +
-                    fmtTokens(perCycle) + ' · 남은 횟수 ' + left + '회면 약 ' +
-                    fmtTokens(perCycle * left) + '</span>' +
-            '</div>' +
-            cells +
-            '</div>' +
-            badge +
-        '</div>';
-    }
-
-    // 사용자가 실제로 질문을 보내면 자동 메시지 예산을 되돌린다.
-    //
-    // 횟수 상한은 "사람이 없는 동안 몇 번까지 캐시를 지킬까"를 정한 것이다.
-    // 사람이 돌아와 대화를 이어갔다면 그 전제가 사라지므로 처음부터 다시 센다.
-    //
-    // 판별은 대시보드가 보여주는 세션의 마지막 응답 시각(info.lastAt)이
-    // 우리가 마지막으로 본 값과 달라졌는지로 한다. 자동 메시지는 우리가
-    // 직접 lastAt 을 갱신하므로 seenAt 과 함께 맞춰 두어 구분된다.
-    function syncWithRealActivity(items) {
-        var changed = false;
-        for (var i = 0; i < items.length; i++) {
-            var it = items[i];
-            var info = lookupSession(it.id);
-            if (!info || !info.lastAt) continue;
-            if (it.seenAt === undefined) {
-                it.seenAt = info.lastAt;
-                changed = true;
-                continue;
-            }
-            if (info.lastAt !== it.seenAt) {
-                it.seenAt = info.lastAt;
-                it.lastAt = info.lastAt;   // 카운트다운도 그 시각부터 다시
-                it.count = 0;              // 예산 원복
-                delete it.needsReload;     // 사람이 이미 대화를 이어갔다
-                changed = true;
-            }
-        }
-        if (changed) save(items);
-        // 호출자가 "다시 그려야 하는지"를 알 수 있어야 한다.
-        // 횟수 초기화는 글자뿐 아니라 버튼·요약까지 바꾸기 때문이다.
-        syncWithRealActivity.changed = changed;
-        return items;
-    }
-
-    // 상태 계산은 render() 와 tick() 이 공유한다 — 매초 다시 그리지 않기 위해서다.
-    function computeState(it, info) {
+    // ── 상태 계산 — render() 와 tick() 이 함께 쓴다 ─────────
+    function computeState(it) {
         var now = Date.now();
-        var base = it.lastAt ? Date.parse(it.lastAt) : now;
-        var nextAt = base + it.interval * 1000;
+        var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+        var nextAt = base + (it.interval || 0) * 1000;
         var left = Math.round((nextAt - now) / 1000);
-        var done = it.count >= it.max;
+        var done = (it.count || 0) >= (it.max || 0);
 
-        if (!info) return { cls: 'error', text: '오류', note: '', nextAt: nextAt };
+        if (it.missing || it.error) return { cls: 'error', text: '오류', note: '', nextAt: nextAt };
         if (done) return { cls: 'done', text: '완료', note: '', nextAt: nextAt };
-        // 중지: 기능을 끈 상태. 남은 시간이 의미 없으므로 숫자를 보여주지 않는다.
         if (it.stopped) return { cls: 'stopped', text: '중지', note: '', nextAt: nextAt };
         if (!it.enabled) {
             // 일시정지해도 시계는 계속 간다. 우리가 전송을 멈춘다고 캐시가 남아 있는 것은
-            // 아니기 때문이다. 숫자를 얼려두면 "아직 여유가 있다"고 오해하게 된다.
-            // 0 에 닿으면 그 시점부터 캐시가 사라졌다는 뜻이므로 표식을 바꾼다.
+            // 아니기 때문이다. 0 에 닿으면 그 시점부터 캐시가 사라졌다는 뜻이다.
             if (left <= 0) return { cls: 'expired', text: '00:00', note: '(캐시만료)', nextAt: nextAt };
             return { cls: 'paused', text: fmtDuration(left), note: '(일시정지)', nextAt: nextAt };
         }
-        // 이미 주기가 지났다. 오래 손대지 않은 세션을 등록하면 바로 이 상태가 된다.
-        // 00:00 으로 두면 "곧 0이 된다"는 뜻으로 오해되므로 상태를 글자로 보여준다.
         if (left <= 0) return { cls: 'due', text: '전송 대기', note: '', nextAt: nextAt };
         return { cls: '', text: fmtDuration(left), note: '', nextAt: nextAt };
     }
 
-    function statusLine(it, info, st) {
-        if (!info) return '세션을 찾을 수 없습니다 — 삭제되었을 수 있습니다';
+    function statusLine(it, st) {
+        if (it.missing) return '세션을 찾을 수 없습니다 — 삭제되었을 수 있습니다';
+        if (it.error) return '오류: ' + it.error;
+        // 대화 기록에 남은 마지막 실패(주로 사용 한도). 우리가 보낸 것이 아니어도
+        // 캐시가 안 만들어진 상태이므로 알려야 한다.
+        if (it.last_error) return '마지막 응답이 막힘 — ' + it.last_error;
         // 소진량이 아니라 남은 양을 보여준다 — 판단에 필요한 값은 "앞으로 몇 번"이다
-        var remaining = Math.max(it.max - it.count, 0);
+        var remaining = Math.max((it.max || 0) - (it.count || 0), 0);
         var parts = ['남은 횟수 ' + remaining + '/' + it.max, '주기 ' + fmtDuration(it.interval)];
-        if (it.enabled && it.count < it.max) parts.push('다음 ' + fmtClock(st.nextAt));
-        if (it.lastSentAt) parts.push('마지막 전송 ' + fmtClock(Date.parse(it.lastSentAt)));
+        if (it.enabled && !it.stopped && remaining > 0) parts.push('다음 ' + fmtClock(st.nextAt));
+        if (it.last_sent_at) parts.push('마지막 전송 ' + fmtClock(Date.parse(it.last_sent_at)));
         return parts.join(' · ');
     }
 
     function itemHtml(it) {
-        var info = lookupSession(it.id);
-        var st = computeState(it, info);
-        var missing = !info;
+        var st = computeState(it);
+        var sid = it.session_id;
+        var project = '';
+        if (it.cwd) {
+            var seg = String(it.cwd).split(PATH_SEP);
+            project = seg[seg.length - 1] || '';
+        }
+
+        // 캐시가 이미 사라진 세션은 워커가 건너뛴다 — 보내봐야 새로 쓰게 되기 때문이다.
+        // 그래서 "지금부터 지키겠다"는 결정은 사람이 이 버튼으로 내린다.
+        // 캐시가 살아있는 동안에는 필요 없으므로 나타나지 않는다.
+        // 조작 버튼(.ka-btns) 바깥에 둔다. 안에 두면 이 버튼이 사라질 때 그룹 폭이
+        // 줄어 나머지 버튼이 통째로 밀리고, 방금 누르려던 자리에 다른 버튼이 온다.
+        var prime = (it.missing || !it.cache_expired) ? '' :
+            '<button data-act="prime" data-id="' + sid + '" class="ka-prime" ' +
+            'title="캐시를 다시 만들기 위해 지금 한 번 보냅니다. 이 한 번은 비용이 큽니다.">' +
+            '캐시 만료 후 메시지 보내기</button>';
 
         // 진행 ↔ 일시정지는 한 버튼으로 토글하고, 기능을 끄는 '정지'는 따로 둔다.
-        // 일시정지는 잠깐 멈추는 것, 정지는 이 세션의 자동 전송을 그만두는 것이다.
         var running = it.enabled && !it.stopped;
-        var toggle = missing ? '' :
-            '<button data-act="toggle" data-id="' + it.id + '" class="ka-toggle" title="' +
+        var toggle = it.missing ? '' :
+            '<button data-act="toggle" data-id="' + sid + '" class="ka-toggle" title="' +
             (running ? '일시정지' : '재개') + '">' + (running ? '⏸' : '▶') + '</button>';
-        var stop = (missing || it.stopped) ? '' :
-            '<button data-act="stop" data-id="' + it.id + '" class="ka-toggle" title="정지">⏹</button>';
-        // TODO: 실제 전송 기능을 붙이면 이 버튼은 지운다 (목업 확인용)
-        var mock = missing ? '' :
-            '<button data-act="mock" data-id="' + it.id + '" title="전송된 것처럼 상태를 갱신합니다">전송 시늉</button>';
-        // 횟수를 다 쓴 뒤에도 되살릴 수단이 필요하다.
-        // 재개(▶)와는 다른 결정이라 — 12회를 새로 쓰겠다는 뜻이므로 — 버튼을 따로 둔다.
-        var reset = missing ? '' :
-            '<button data-act="reset" data-id="' + it.id + '" title="남은 횟수를 ' +
+        // 이미 정지 상태여도 버튼을 없애지 않고 잠근다. 없애면 그룹 폭이 바뀌어
+        // 옆 버튼들이 밀리고, 누르려던 자리에 엉뚱한 버튼이 들어온다.
+        var stop = it.missing ? '' :
+            '<button data-act="stop" data-id="' + sid + '" class="ka-toggle" title="' +
+            (it.stopped ? '이미 정지됨' : '정지') + '"' + (it.stopped ? ' disabled' : '') +
+            '>⏹</button>';
+        var reset = it.missing ? '' :
+            '<button data-act="reset" data-id="' + sid + '" title="남은 횟수를 ' +
             it.max + '회로 되돌립니다">↺ 횟수 초기화</button>';
-        var del = '<button data-act="del" data-id="' + it.id + '" class="danger">삭제</button>';
+        var del = '<button data-act="delete" data-id="' + sid + '" class="danger">삭제</button>';
 
-        return '<div class="ka-item' + (st.cls ? ' ' + st.cls : '') + '" data-ka-id="' + it.id + '">' +
+        // 직전 문답에서 실제로 쓴 토큰. 예상값이 아니라 JSONL 에 기록된 실측이다.
+        var u = it.last_usage;
+        var verdict = usageVerdict(u);
+        var usageRow = '';
+        if (u && verdict) {
+            var total = (u.cache_read || 0) + (u.cache_creation || 0) +
+                (u.input || 0) + (u.output || 0);
+            usageRow =
+                '<div class="ka-usage-row">' +
+                    '<span class="ka-usage-label">직전 문답</span>' +
+                    '<span class="ka-usage-val">' + fmtTokens(total) + '</span>' +
+                    '<span class="ka-usage-detail">' +
+                        '캐시읽기 ' + fmtTokens(u.cache_read) +
+                        ' · 캐시생성 ' + fmtTokens(u.cache_creation) +
+                        ' · 입력 ' + fmtTokens(u.input) +
+                        ' · 출력 ' + fmtTokens(u.output) +
+                    '</span>' +
+                    '<span class="ka-usage-summary ka-verdict-' + verdict.cls + '">' +
+                        escapeHtml(verdict.text) +
+                    '</span>' +
+                '</div>';
+        }
+
+        var reload = it.needs_reload
+            ? '<div class="ka-reload-badge" title="자동 메시지가 나간 뒤 ' +
+              'VS Code 를 새로고침해야 대화가 갈라지지 않습니다">VS Code<br>재실행 필요</div>'
+            : '';
+
+        var badge = (usageRow || reload)
+            ? '<div class="ka-usage"><div class="ka-usage-rows">' + usageRow + '</div>' +
+              reload + '</div>'
+            : '';
+
+        var title = lookupTitle(sid);
+        var modelTag = it.model ? ' · ' + escapeHtml(it.model) : '';
+
+        return '<div class="ka-item' + (st.cls ? ' ' + st.cls : '') + '" data-ka-id="' + sid + '">' +
             '<div class="ka-item-main">' +
                 '<span class="ka-meta">' +
-                    '<span class="ka-meta-main">' + escapeHtml((info && info.title) || '(제목 없음)') + '</span>' +
+                    '<span class="ka-meta-main">' + escapeHtml(title || '(제목 없음)') + '</span>' +
                     '<span class="ka-meta-sub">' +
-                        '<span class="ka-sid">' + escapeHtml(it.id.slice(0, 8)) + '</span>' +
-                        (info && info.project ? ' · ' + escapeHtml(info.project) : '') +
-                        // 카운트다운은 프로젝트명 바로 옆에 둔다 — 멀리 떨어지면 어느 줄의 값인지 읽기 어렵다
+                        '<span class="ka-sid">' + escapeHtml(sid.slice(0, 8)) + '</span>' +
+                        (project ? ' · ' + escapeHtml(project) : '') + modelTag +
+                        // 카운트다운은 프로젝트명 바로 옆 — 멀리 떨어지면 어느 줄의 값인지 읽기 어렵다
                         '<span class="ka-countdown">' + st.text + '</span>' +
                         '<span class="ka-countdown-note">' + st.note + '</span>' +
                     '</span>' +
@@ -366,15 +292,15 @@
             '</div>' +
             // 프로젝트 이름이 길어져도 밀리지 않도록 상태와 버튼은 다음 줄에 둔다
             '<div class="ka-item-second">' +
-                '<span class="ka-status-line">' + escapeHtml(statusLine(it, info, st)) + '</span>' +
-                '<span class="ka-btns">' + toggle + stop + reset + mock + del + '</span>' +
+                '<span class="ka-status-line">' + escapeHtml(statusLine(it, st)) + '</span>' +
+                '<span class="ka-prime-slot">' + prime + '</span>' +
+                '<span class="ka-btns">' + toggle + stop + reset + del + '</span>' +
             '</div>' +
-            (missing ? '' : usageHtml(it, info)) +
+            badge +
         '</div>';
     }
 
     function render() {
-        var items = syncWithRealActivity(load());
         countEl.textContent = String(items.length);
         listEl.innerHTML = items.length
             ? items.map(itemHtml).join('')
@@ -384,20 +310,13 @@
     // 매초 하는 일은 "숫자 갱신"뿐이다.
     // innerHTML 을 다시 쓰면 DOM 이 통째로 교체되어 드래그 선택이 풀리고 복사를 할 수 없다.
     // 그래서 바뀌는 글자만 textContent 로 갈아끼운다.
+    // 상세: TROUBLESHOOT_DOM_REBUILD.md
     function tick() {
-        var items = syncWithRealActivity(load());
-        if (syncWithRealActivity.changed) {
-            // 실제 대화가 감지되어 횟수가 되돌아갔다 — 구조가 바뀌었으므로 전체를 다시 그린다.
-            // 이때만큼은 innerHTML 재작성이 맞다(선택을 잃더라도 화면이 정확해야 한다).
-            render();
-            return;
-        }
         for (var i = 0; i < items.length; i++) {
             var it = items[i];
-            var node = listEl.querySelector('.ka-item[data-ka-id="' + it.id + '"]');
+            var node = listEl.querySelector('.ka-item[data-ka-id="' + it.session_id + '"]');
             if (!node) continue;
-            var info = lookupSession(it.id);
-            var st = computeState(it, info);
+            var st = computeState(it);
 
             var cd = node.querySelector('.ka-countdown');
             if (cd && cd.textContent !== st.text) cd.textContent = st.text;
@@ -406,7 +325,7 @@
             if (note && note.textContent !== st.note) note.textContent = st.note;
 
             var line = node.querySelector('.ka-status-line');
-            var text = statusLine(it, info, st);
+            var text = statusLine(it, st);
             if (line && line.textContent !== text) line.textContent = text;
 
             var want = 'ka-item' + (st.cls ? ' ' + st.cls : '');
@@ -414,28 +333,57 @@
         }
     }
 
+    // ── 서버와 주고받기 ─────────────────────────────────────
+    function applySessions(next) {
+        var before = JSON.stringify(items);
+        items = Array.isArray(next) ? next : [];
+        // 목록이 실제로 달라졌을 때만 다시 그린다 — 선택과 포커스를 지키기 위해서다
+        if (JSON.stringify(items) !== before) render();
+        refreshForm();
+    }
+
+    function fetchSessions() {
+        return fetch('/api/keepalive')
+            .then(function (r) { return r.json(); })
+            .then(function (d) { applySessions(d.sessions); })
+            .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 시도 */ });
+    }
+
+    function post(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, data: j }; });
+        });
+    }
+
     addBtn.addEventListener('click', function () {
         if (addBtn.disabled) return;
         var sid = extractSessionId(idInput.value);
         if (!sid) return;
-        var info = lookupSession(sid);
-        var items = load();
-        items.push({
-            id: sid,
+        addBtn.disabled = true;
+        setStatus('등록 중…', null);
+
+        post('/api/keepalive', {
+            session_id: sid,
             interval: readInterval(),
             max: parseInt(maxInput.value, 10),
-            message: msgInput.value.trim(),
-            enabled: true,
-            count: 0,
-            lastAt: info ? info.lastAt : null,
-            seenAt: info ? info.lastAt : undefined,
-            lastSentAt: null
+            message: msgInput.value.trim()
+        }).then(function (res) {
+            if (!res.ok) {
+                setStatus(res.data.error || '등록에 실패했습니다.', 'error');
+                refreshForm();
+                return;
+            }
+            idInput.value = '';
+            applySessions(res.data.sessions);
+            setStatus('등록했습니다.', 'success');
+        }).catch(function (err) {
+            setStatus('요청 실패: ' + err, 'error');
+            refreshForm();
         });
-        save(items);
-        idInput.value = '';
-        render();
-        refreshForm();
-        setStatus('등록했습니다. 전송 로직이 연결되면 실제로 동작합니다.', 'success');
     });
 
     listEl.addEventListener('click', function (e) {
@@ -443,53 +391,27 @@
         if (!btn) return;
         var id = btn.getAttribute('data-id');
         var act = btn.getAttribute('data-act');
-        var items = load();
-        var idx = -1;
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].id === id) { idx = i; break; }
+        btn.disabled = true;
+        if (act === 'prime') {
+            // 실제 전송이라 7~8초 걸린다. 아무 반응이 없으면 눌린 줄 모른다.
+            btn.textContent = '보내는 중…';
+            setStatus('캐시를 만드는 중입니다 — 잠시 걸립니다.', null);
         }
-        if (idx < 0) return;
-
-        if (act === 'del') {
-            items.splice(idx, 1);
-        } else if (act === 'toggle') {
-            var target = items[idx];
-            if (target.enabled && !target.stopped) {
-                // 일시정지 — 전송만 멈춘다. 카운트다운은 그대로 흐른다.
-                target.enabled = false;
-            } else if (target.stopped) {
-                // 정지 상태에서 재개하면 주기를 처음부터 다시 센다
-                target.stopped = false;
-                target.enabled = true;
-                target.lastAt = new Date().toISOString();
-            } else {
-                // 일시정지에서 재개 — 시계는 멈춘 적이 없으므로 되돌릴 것이 없다
-                target.enabled = true;
+        post('/api/keepalive/' + id, { action: act }).then(function (res) {
+            if (!res.ok) {
+                setStatus(res.data.error || '변경에 실패했습니다.', 'error');
+                if (res.data.sessions) applySessions(res.data.sessions);
+                btn.disabled = false;
+                return;
             }
-        } else if (act === 'reset') {
-            // 예산만 되돌린다. 진행/정지 상태와 주기는 건드리지 않는다.
-            items[idx].count = 0;
-        } else if (act === 'stop') {
-            // 정지: 이 세션의 자동 전송을 그만둔다. 남은 시간도 버린다.
-            items[idx].stopped = true;
-            items[idx].enabled = false;
-        } else if (act === 'mock') {
-            // 목업: 실제로 보내지 않고 "보낸 것처럼" 상태만 갱신한다.
-            // 전송이 일어났다는 것은 곧 동작 중이라는 뜻이므로,
-            // 멈춰 있었더라도 진행 상태로 되돌리고 주기를 다시 센다.
-            var nowIso = new Date().toISOString();
-            items[idx].count = Math.min(items[idx].count + 1, items[idx].max);
-            items[idx].lastAt = nowIso;
-            items[idx].lastSentAt = nowIso;
-            items[idx].enabled = true;
-            items[idx].stopped = false;
-            // 자동 메시지가 나가면 VS Code 의 메모리와 파일이 어긋난다.
-            // 사용자가 다시 대화하기 전에 새로고침해야 대화가 갈라지지 않는다.
-            items[idx].needsReload = true;
-        }
-        save(items);
-        render();
-        refreshForm();
+            // applySessions 안의 refreshForm 이 상태 문구를 지운다.
+            // 알릴 말이 있으면 목록을 갱신한 뒤에 쓴다.
+            applySessions(res.data.sessions);
+            if (act === 'prime') setStatus('캐시를 만들었습니다. 이제 자동으로 유지됩니다.', 'success');
+        }).catch(function (err) {
+            setStatus('요청 실패: ' + err, 'error');
+            btn.disabled = false;
+        });
     });
 
     [idInput, minInput, secInput, maxInput, msgInput].forEach(function (el) {
@@ -498,5 +420,8 @@
 
     render();
     refreshForm();
+    fetchSessions();
     setInterval(tick, 1000);
+    // 서버가 전송하거나 사람이 대화를 이어가면 상태가 바뀐다. 주기적으로 받아온다.
+    setInterval(fetchSessions, 5000);
 })();

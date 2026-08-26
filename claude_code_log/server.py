@@ -478,6 +478,93 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         return jsonify({"status": "ok", "title": new_title})  # type: ignore[return-value]
 
+    # ── 세션 유지용 자동 메시지 ──────────────────────────────
+    # 워커가 주기적으로 만기된 세션에 `claude --resume -p` 를 건다.
+    # 설정 파일은 워커만 쓰고, 화면은 이 API 를 통해서만 건드린다.
+    from .keepalive import KeepaliveWorker, load_config
+
+    keepalive = KeepaliveWorker(projects_dir, _find_session_jsonl)
+    app.config["KEEPALIVE_WORKER"] = keepalive
+
+    @app.route("/api/keepalive")
+    def keepalive_list() -> Response:
+        return jsonify({"sessions": keepalive.snapshot()})  # type: ignore[return-value]
+
+    @app.route("/api/keepalive", methods=["POST"])
+    def keepalive_add() -> Response:
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+
+        session_id = str(data.get("session_id") or "").strip()
+        message = str(data.get("message") or "").strip()
+        try:
+            interval = int(data.get("interval", 3480))
+            max_count = int(data.get("max", 12))
+        except (TypeError, ValueError):
+            return jsonify({"error": "주기와 최대 횟수는 숫자여야 합니다."}), 400  # type: ignore[return-value]
+
+        if not _UUID_RE.match(session_id):
+            return jsonify({"error": "세션 ID 형식이 올바르지 않습니다."}), 400  # type: ignore[return-value]
+        if not message:
+            return jsonify({"error": "보낼 메시지가 필요합니다."}), 400  # type: ignore[return-value]
+        if interval < 20:
+            return jsonify({"error": "전송 주기는 20초 이상이어야 합니다."}), 400  # type: ignore[return-value]
+        if max_count < 1:
+            return jsonify({"error": "최대 횟수는 1 이상이어야 합니다."}), 400  # type: ignore[return-value]
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "존재하지 않는 세션입니다."}), 404  # type: ignore[return-value]
+
+        existing = load_config(projects_dir)
+        if any(s.get("session_id") == session_id for s in existing):
+            return jsonify({"error": "이미 등록된 세션입니다."}), 409  # type: ignore[return-value]
+
+        from .keepalive import read_session_facts
+
+        facts = read_session_facts(jsonl_file)
+        if not facts["cwd"]:
+            return jsonify({"error": "세션의 작업 폴더를 알 수 없습니다."}), 400  # type: ignore[return-value]
+
+        keepalive.add(
+            {
+                "session_id": session_id,
+                "interval": interval,
+                "max": max_count,
+                "message": message,
+                "enabled": True,
+                "stopped": False,
+                "count": 0,
+                "seen_at": facts["last_response_at"],
+                "last_sent_at": None,
+                "needs_reload": False,
+                "error": None,
+            }
+        )
+        return jsonify({"status": "ok", "sessions": keepalive.snapshot()})  # type: ignore[return-value]
+
+    @app.route("/api/keepalive/<session_id>", methods=["POST"])
+    def keepalive_mutate(session_id: str) -> Response:
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+        action = str(data.get("action") or "").strip()
+
+        # prime 은 지금 한 번 보내는 동작이라 시간이 걸린다(실측 7~8초).
+        # 캐시가 없는 세션을 되살리는 용도로, 사람이 버튼을 눌렀을 때만 실행한다.
+        if action == "prime":
+            ok, err = keepalive.prime(session_id)
+            if not ok:
+                return jsonify(  # type: ignore[return-value]
+                    {"error": err or "전송에 실패했습니다.", "sessions": keepalive.snapshot()}
+                ), 502
+            return jsonify({"status": "ok", "sessions": keepalive.snapshot()})  # type: ignore[return-value]
+
+        if action not in ("toggle", "stop", "reset", "delete"):
+            return jsonify({"error": f"알 수 없는 동작: {action}"}), 400  # type: ignore[return-value]
+        if not keepalive.mutate(session_id, action):
+            return jsonify({"error": "등록되지 않은 세션입니다."}), 404  # type: ignore[return-value]
+        return jsonify({"status": "ok", "sessions": keepalive.snapshot()})  # type: ignore[return-value]
+
     @app.route("/api/sessions/fork", methods=["POST"])
     def fork_session_api() -> Response:
         """Copy a session's JSONL under a fresh session id, for another project.
@@ -818,6 +905,17 @@ def run_server(projects_dir: Path, port: int = 5678) -> None:
 
     t = threading.Thread(target=_open_browser, daemon=True)
     t.start()
+
+    # 자동 메시지 워커. 서버가 떠 있는 동안에만 돈다 —
+    # 서버를 끈 상태면 작업 중이 아니라는 뜻이라 세션을 유지할 이유도 없다.
+    from .keepalive import KeepaliveWorker
+
+    worker = cast(
+        Optional[KeepaliveWorker],
+        cast("dict[str, Any]", app.config).get("KEEPALIVE_WORKER"),
+    )
+    if worker is not None:
+        worker.start()
 
     print(f"\nServing claude-code-log at {url}")
     print("Press Ctrl+C to stop\n")
