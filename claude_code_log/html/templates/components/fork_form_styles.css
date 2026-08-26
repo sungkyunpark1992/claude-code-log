@@ -200,12 +200,6 @@
     margin-bottom: 8px;
 }
 
-.ka-note {
-    font-weight: 400;
-    font-size: 0.9em;
-    color: #999;
-}
-
 .ka-empty {
     font-size: 0.82em;
     color: #aaa;
@@ -515,14 +509,16 @@
     font-weight: 600;
 }
 
-/* 세션 유지 패널은 접지 않는다 — 카운트다운을 늘 보고 있어야 하기 때문이다 */
+/* 세션 유지 패널은 접을 수 있다. 다만 새로고침 때마다 닫히면 카운트다운을
+   볼 수 없으므로, 열림 여부는 사람이 기억할 필요 없이 등록된 세션 수로 정한다
+   (JS 가 목록을 받은 뒤 open 을 맞춘다). */
 .ka-heading {
-    cursor: default;
+    cursor: pointer;
     border-bottom: 1px solid #00000011;
 }
 
-.ka-heading:hover {
-    background: none;
+.keepalive-panel[open] .ka-heading {
+    border-bottom: 1px solid #00000011;
 }
 
 /* 세션 유지 기능의 주의사항 — 읽고 넘어가야 하므로 눈에 띄되 본문을 가리지 않게 */

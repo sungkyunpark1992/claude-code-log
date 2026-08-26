@@ -107,9 +107,11 @@
         </div>
     </details>
 
-    <!-- 세션 유지용 자동 메시지 — 화면단 (전송 로직 미구현) -->
-    <div class='fork-panel keepalive-panel' id='kaPanel'>
-        <div class='fork-summary ka-heading'>⏱ 세션 유지용 자동 메시지</div>
+    <!-- 세션 유지용 자동 메시지 -->
+    {# 등록된 세션이 있으면 열린 채로 둔다. 카운트다운을 늘 봐야 하기 때문이다.
+       비어 있으면 접어 자리를 비운다. open 은 JS 가 목록을 받은 뒤 정한다. #}
+    <details class='fork-panel keepalive-panel' id='kaPanel'>
+        <summary class='fork-summary ka-heading'>⏱ 세션 유지용 자동 메시지</summary>
         <div class='fork-body'>
             <p class='fork-intro'>
                 마지막 응답으로부터 설정한 시간이 지나면 짧은 메시지를 보내
@@ -176,14 +178,13 @@
             <div class='ka-list-wrap'>
                 <div class='ka-list-head'>
                     <span>등록된 세션 <span id='kaCount'>0</span></span>
-                    <span class='ka-note' id='kaNote'>전송 로직은 아직 연결되지 않았습니다 — 카운트다운만 동작합니다.</span>
                 </div>
                 <div id='kaList' class='ka-list'>
                     <div class='ka-empty'>등록된 세션이 없습니다.</div>
                 </div>
             </div>
         </div>
-    </div>
+    </details>
 
     <div class='project-list'>
         {% for project in projects %}

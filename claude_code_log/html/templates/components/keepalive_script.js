@@ -18,6 +18,7 @@
     var msgInput = document.getElementById('kaMessage');
     var statusEl = document.getElementById('kaStatus');
     var countEl = document.getElementById('kaCount');
+    var panelEl = document.getElementById('kaPanel');
 
     var UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
     // 경로 구분자. RegExp 문자열 안에서는 백슬래시를 두 번 써야 리터럴 한 글자가 된다.
@@ -334,11 +335,26 @@
     }
 
     // ── 서버와 주고받기 ─────────────────────────────────────
+    // 패널을 열지 닫을지는 등록된 세션 수로 정한다. 하나라도 있으면 카운트다운을
+    // 봐야 하므로 열고, 없으면 접어 자리를 비운다. 새로고침해도 같은 규칙이 다시
+    // 적용되니 사람이 매번 열어줄 필요가 없다.
+    // 다만 "비었다/찼다"가 바뀔 때만 건드린다 — 그 사이에 직접 접은 것은 그대로 둔다.
+    var hadAny = null;
+
+    function syncPanelOpen() {
+        if (!panelEl) return;
+        var any = items.length > 0;
+        if (hadAny === any) return;
+        hadAny = any;
+        panelEl.open = any;
+    }
+
     function applySessions(next) {
         var before = JSON.stringify(items);
         items = Array.isArray(next) ? next : [];
         // 목록이 실제로 달라졌을 때만 다시 그린다 — 선택과 포커스를 지키기 위해서다
         if (JSON.stringify(items) !== before) render();
+        syncPanelOpen();
         refreshForm();
     }
 
