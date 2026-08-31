@@ -1517,6 +1517,72 @@
       color: #78716c;
       cursor: progress;
   }
+  
+  /* 「모든 문답 담기」 선택칸 설명.
+     한 줄로 요약하면 무슨 말인지 알 수 없어 매번 다시 묻게 된다.
+     켰을 때와 껐을 때 무엇이 담기는지 눈으로 견주게 나란히 둔다. */
+  .digest-explain {
+      margin: 4px 0 16px 0;
+      font-size: 0.8em;
+      color: #666;
+      line-height: 1.6;
+  }
+  
+  .digest-case {
+      border-left: 3px solid #00000018;
+      padding: 8px 0 8px 12px;
+      margin-bottom: 10px;
+  }
+  
+  .digest-case-head {
+      font-size: 0.95em;
+      color: #444;
+      margin-bottom: 5px;
+  }
+  
+  .digest-tag {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 0.9em;
+      margin-right: 5px;
+      color: #fff;
+  }
+  
+  .digest-tag.off {
+      background: #16a34a;
+  }
+  
+  .digest-tag.on {
+      background: #b45309;
+  }
+  
+  /* 무엇이 담기는지 한눈에 보여주는 줄 — 고정폭이라야 칸이 맞는다 */
+  .digest-case-map {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      color: #333;
+      background: #00000008;
+      border-radius: 4px;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
+  }
+  
+  .digest-explain p {
+      margin: 0 0 5px 0;
+  }
+  
+  .digest-explain p:last-child {
+      margin-bottom: 0;
+  }
+  
+  .digest-note {
+      color: #999;
+      padding-left: 3px;
+  }
   /* Search Bar Styles */
   .search-container {
       position: relative;
@@ -2844,10 +2910,37 @@
               <div class='fork-options'>
                   <label><input type='checkbox' id='digestAll'> 파일에 남은 <strong>모든</strong> 문답 담기</label>
               </div>
-              <span class='fork-hint'>
-                  기본은 <strong>살아있는 사슬만</strong>입니다 — 모델이 실제로 기억하는 범위죠.
-                  켜면 갈라진 가지와 압축으로 잘린 앞부분까지 전부 담습니다(읽기·보관용).
-              </span>
+              <div class='digest-explain'>
+                  <div class='digest-case'>
+                      <div class='digest-case-head'><span class='digest-tag off'>끄면</span> 기본 — <strong>요약문 + 그 이후</strong></div>
+                      <div class='digest-case-map'>[요약문] [질문300][답변300] … [지금]</div>
+                      <p>
+                          대화가 길어지면 Claude Code 가 앞부분을 <strong>요약 한 덩어리로 갈아치웁니다</strong>.
+                          그 요약문이 맨 앞에 들어가고, 그 뒤의 문답이 이어집니다.
+                      </p>
+                      <p>
+                          <strong>지금 모델이 기억하고 있는 그대로</strong>입니다.
+                          새 세션에 옮겨 붙여 대화를 이어가시려면 이쪽입니다.
+                      </p>
+                  </div>
+                  <div class='digest-case'>
+                      <div class='digest-case-head'><span class='digest-tag on'>켜면</span> <strong>파일에 남은 전부</strong></div>
+                      <div class='digest-case-map'>[질문1][답변1][질문2][답변2] … [질문300][답변300]</div>
+                      <p>
+                          요약으로 잘려나간 앞부분과, 대화가 갈라지며 버려진 가지까지
+                          <strong>파일에 남아 있는 것을 전부</strong> 담습니다.
+                      </p>
+                      <p>
+                          훨씬 큽니다 — 실측으로 <code>473건 → 4,657건</code>(약 10배).
+                          <strong>새 세션에 붙이기엔 너무 큽니다.</strong>
+                          "예전에 무슨 얘기를 했더라" 를 찾아볼 때 쓰세요.
+                      </p>
+                  </div>
+                  <p class='digest-note'>
+                      끄고 뽑으면 빠진 것이 몇 건인지 파일 머리말에 적어 둡니다 —
+                      <code>파일에 문답 4,184건이 더 있음</code>
+                  </p>
+              </div>
               <div class='fork-actions'>
                   <button type='button' class='fork-submit' id='digestSubmit'>추려서 받기</button>
                   <span class='fork-status' id='digestStatus'></span>

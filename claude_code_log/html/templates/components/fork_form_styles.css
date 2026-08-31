@@ -661,3 +661,69 @@
     color: #78716c;
     cursor: progress;
 }
+
+/* 「모든 문답 담기」 선택칸 설명.
+   한 줄로 요약하면 무슨 말인지 알 수 없어 매번 다시 묻게 된다.
+   켰을 때와 껐을 때 무엇이 담기는지 눈으로 견주게 나란히 둔다. */
+.digest-explain {
+    margin: 4px 0 16px 0;
+    font-size: 0.8em;
+    color: #666;
+    line-height: 1.6;
+}
+
+.digest-case {
+    border-left: 3px solid #00000018;
+    padding: 8px 0 8px 12px;
+    margin-bottom: 10px;
+}
+
+.digest-case-head {
+    font-size: 0.95em;
+    color: #444;
+    margin-bottom: 5px;
+}
+
+.digest-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-weight: 700;
+    font-size: 0.9em;
+    margin-right: 5px;
+    color: #fff;
+}
+
+.digest-tag.off {
+    background: #16a34a;
+}
+
+.digest-tag.on {
+    background: #b45309;
+}
+
+/* 무엇이 담기는지 한눈에 보여주는 줄 — 고정폭이라야 칸이 맞는다 */
+.digest-case-map {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    color: #333;
+    background: #00000008;
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.digest-explain p {
+    margin: 0 0 5px 0;
+}
+
+.digest-explain p:last-child {
+    margin-bottom: 0;
+}
+
+.digest-note {
+    color: #999;
+    padding-left: 3px;
+}
