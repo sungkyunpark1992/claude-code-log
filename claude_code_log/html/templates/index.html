@@ -107,6 +107,36 @@
         </div>
     </details>
 
+    <!-- 문답만 추려 내보내기 -->
+    <details class='fork-panel' id='digestPanel'>
+        <summary class='fork-summary'>📝 문답만 추려 내보내기 (.md)</summary>
+        <div class='fork-body'>
+            <p class='fork-intro'>
+                도구 실행 결과·추론·그림을 빼고 <strong>문답 본문만</strong> 뽑습니다.
+                실측으로 문맥이 <strong>62~95% 줄어듭니다</strong> — 새 세션에 옮겨 붙여
+                대화를 이어갈 때 씁니다.
+                되짚을 수 있도록 각 문답에 <code>uuid</code> 와 원본 세션 ID·주소를 함께 적습니다.
+            </p>
+            <label class='fork-field'>
+                <span class='fork-label'>세션 <em>필수</em></span>
+                <input type='text' id='digestSessionId' class='fork-input'
+                       placeholder='세션 ID · 앞 8자리 · JSONL 전체 경로'>
+                <span class='fork-hint' id='digestHint'>세션 ID · 앞 8자리 · JSONL 전체 경로 모두 인식합니다.</span>
+            </label>
+            <div class='fork-options'>
+                <label><input type='checkbox' id='digestAll'> 파일에 남은 <strong>모든</strong> 문답 담기</label>
+            </div>
+            <span class='fork-hint'>
+                기본은 <strong>살아있는 사슬만</strong>입니다 — 모델이 실제로 기억하는 범위죠.
+                켜면 갈라진 가지와 압축으로 잘린 앞부분까지 전부 담습니다(읽기·보관용).
+            </span>
+            <div class='fork-actions'>
+                <button type='button' class='fork-submit' id='digestSubmit'>추려서 받기</button>
+                <span class='fork-status' id='digestStatus'></span>
+            </div>
+        </div>
+    </details>
+
     <!-- 세션 유지용 자동 메시지 -->
     {# 등록된 세션이 있으면 열린 채로 둔다. 카운트다운을 늘 봐야 하기 때문이다.
        비어 있으면 접어 자리를 비운다. open 은 JS 가 목록을 받은 뒤 정한다. #}
@@ -254,6 +284,7 @@
             {% include 'components/session_edit_script.js' %}
             {% include 'components/fork_form_script.js' %}
             {% include 'components/keepalive_script.js' %}
+            {% include 'components/digest_script.js' %}
 
             // JSONL 경로 복사 버튼 (project-card + summary-stats 공용) — 이벤트 위임
             document.body.addEventListener('click', function(e) {

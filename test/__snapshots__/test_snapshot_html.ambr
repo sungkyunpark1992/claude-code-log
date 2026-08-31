@@ -2825,6 +2825,36 @@
           </div>
       </details>
   
+      <!-- 문답만 추려 내보내기 -->
+      <details class='fork-panel' id='digestPanel'>
+          <summary class='fork-summary'>📝 문답만 추려 내보내기 (.md)</summary>
+          <div class='fork-body'>
+              <p class='fork-intro'>
+                  도구 실행 결과·추론·그림을 빼고 <strong>문답 본문만</strong> 뽑습니다.
+                  실측으로 문맥이 <strong>62~95% 줄어듭니다</strong> — 새 세션에 옮겨 붙여
+                  대화를 이어갈 때 씁니다.
+                  되짚을 수 있도록 각 문답에 <code>uuid</code> 와 원본 세션 ID·주소를 함께 적습니다.
+              </p>
+              <label class='fork-field'>
+                  <span class='fork-label'>세션 <em>필수</em></span>
+                  <input type='text' id='digestSessionId' class='fork-input'
+                         placeholder='세션 ID · 앞 8자리 · JSONL 전체 경로'>
+                  <span class='fork-hint' id='digestHint'>세션 ID · 앞 8자리 · JSONL 전체 경로 모두 인식합니다.</span>
+              </label>
+              <div class='fork-options'>
+                  <label><input type='checkbox' id='digestAll'> 파일에 남은 <strong>모든</strong> 문답 담기</label>
+              </div>
+              <span class='fork-hint'>
+                  기본은 <strong>살아있는 사슬만</strong>입니다 — 모델이 실제로 기억하는 범위죠.
+                  켜면 갈라진 가지와 압축으로 잘린 앞부분까지 전부 담습니다(읽기·보관용).
+              </span>
+              <div class='fork-actions'>
+                  <button type='button' class='fork-submit' id='digestSubmit'>추려서 받기</button>
+                  <span class='fork-status' id='digestStatus'></span>
+              </div>
+          </div>
+      </details>
+  
       <!-- 세션 유지용 자동 메시지 -->
       
       <details class='fork-panel keepalive-panel' id='kaPanel'>
@@ -3818,6 +3848,116 @@
       setInterval(tick, 1000);
       // 서버가 전송하거나 사람이 대화를 이어가면 상태가 바뀐다. 주기적으로 받아온다.
       setInterval(fetchSessions, 5000);
+  })();
+              // 문답만 추려 .md 로 받기 — 대시보드 쪽.
+  //
+  // 세션 화면(message_export.html)에도 같은 버튼이 있다. 쓰임이 달라 둘 다 둔다:
+  // 대시보드는 "어느 세션이든 골라서", 세션 화면은 "보던 대화를 바로".
+  (function () {
+      'use strict';
+  
+      var idInput = document.getElementById('digestSessionId');
+      var hintEl = document.getElementById('digestHint');
+      var allBox = document.getElementById('digestAll');
+      var btn = document.getElementById('digestSubmit');
+      var statusEl = document.getElementById('digestStatus');
+      if (!idInput || !btn) return;
+  
+      var UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      // 경로 구분자. RegExp 문자열 안에서는 백슬래시를 두 번 써야 리터럴 한 글자가 된다.
+      var BS = String.fromCharCode(92);
+      var PATH_SEP = new RegExp('[' + BS + BS + '/]');
+  
+      // 세션 유지 패널과 같은 규칙 — UUID · 전체 경로 · 앞 8자리를 모두 받는다.
+      function extractSessionId(raw) {
+          var v = String(raw || '').trim().replace(/^["']|["']$/g, '');
+          if (!v) return null;
+          if (UUID_RE.test(v)) return v;
+          if (PATH_SEP.test(v)) {
+              var parts = v.split(PATH_SEP);
+              var base = parts[parts.length - 1].replace(/\.jsonl$/i, '');
+              if (UUID_RE.test(base)) return base;
+          }
+          if (/^[0-9a-fA-F]{8}$/.test(v)) {
+              var nodes = document.querySelectorAll('.session-link[data-session-id]');
+              for (var i = 0; i < nodes.length; i++) {
+                  var sid = nodes[i].getAttribute('data-session-id') || '';
+                  if (sid.slice(0, 8).toLowerCase() === v.toLowerCase()) return sid;
+              }
+          }
+          return null;
+      }
+  
+      function lookupTitle(sid) {
+          var el = document.querySelector('.session-link[data-session-id="' + sid + '"]');
+          if (!el) return null;
+          var t = el.querySelector('.session-title');
+          return (t && t.dataset.title) || '';
+      }
+  
+      function setStatus(text, kind) {
+          if (!statusEl) return;
+          statusEl.className = 'fork-status' + (kind ? ' ' + kind : '');
+          statusEl.textContent = text;
+      }
+  
+      function refresh() {
+          var raw = idInput.value.trim();
+          var sid = extractSessionId(raw);
+          if (!raw) {
+              hintEl.textContent = '세션 ID · 앞 8자리 · JSONL 전체 경로 모두 인식합니다.';
+              hintEl.className = 'fork-hint';
+              btn.disabled = true;
+              return;
+          }
+          if (!sid) {
+              hintEl.textContent = '세션 ID 를 알아낼 수 없습니다.';
+              hintEl.className = 'fork-hint warn';
+              btn.disabled = true;
+              return;
+          }
+          var title = lookupTitle(sid);
+          hintEl.textContent = sid.slice(0, 8) + ' · '
+              + (title === null ? '(이 대시보드에 없는 세션 — 그래도 시도합니다)'
+                                : (title || '(제목 없음)'));
+          hintEl.className = 'fork-hint ' + (title === null ? 'warn' : 'ok');
+          btn.disabled = false;
+      }
+  
+      idInput.addEventListener('input', refresh);
+      if (allBox) allBox.addEventListener('change', refresh);
+  
+      btn.addEventListener('click', function () {
+          var sid = extractSessionId(idInput.value);
+          if (!sid) return;
+          btn.disabled = true;
+          setStatus('문답만 추리는 중…');
+          // 원본 JSONL 옆에 저장한다 — 다운로드 폴더로 흩어지지 않게.
+          var url = '/api/sessions/' + sid + '/digest?save=1'
+              + (allBox && allBox.checked ? '&all=1' : '');
+          fetch(url)
+              .then(function (r) {
+                  return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+              })
+              .then(function (res) {
+                  if (!res.ok) throw new Error(res.d.error || '추리지 못했습니다');
+                  var d = res.d;
+                  var extra = (d.all_messages > d.chain && !(allBox && allBox.checked))
+                      ? ' · 사슬 밖 ' + (d.all_messages - d.chain) + '건은 제외'
+                      : '';
+                  setStatus(
+                      '문답 ' + d.messages + '건 · ' + d.chars.toLocaleString()
+                      + '자 (원본 ' + d.total_chars.toLocaleString() + '자의 '
+                      + (d.ratio * 100).toFixed(1) + '%)' + extra
+                      + ' → ' + d.saved_to, 'success');
+              })
+              .catch(function (err) {
+                  setStatus(String(err.message || err), 'error');
+              })
+              .then(function () { btn.disabled = false; });
+      });
+  
+      refresh();
   })();
   
               // JSONL 경로 복사 버튼 (project-card + summary-stats 공용) — 이벤트 위임
@@ -8237,6 +8377,7 @@
               <button class="export-action-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">전체 선택</button>
               <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
               <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
+              <button class="export-action-btn" id="exportDigest" title="도구 실행·추론을 빼고 문답 본문만 Markdown 으로 뽑습니다. 새 세션에 옮겨 붙일 때 씁니다.">📝 문답만 추려 내보내기</button>
           </div>
           
           <div class="export-panel-actions export-panel-danger">
@@ -10678,6 +10819,7 @@
   
           wireDeletion();
           wireRestore();
+          wireDigest();
           refreshPanel();
           showHandOver();
       });
@@ -10802,6 +10944,40 @@
                       setDeleteStatus(statusEl, String(err.message || err), 'error');
                       btn.disabled = false;
                   });
+          });
+      }
+  
+      // 도구 실행·추론·그림을 빼고 문답 본문만 Markdown 으로 받는다.
+      // 실측으로 문맥이 62~95% 줄어든다 — 새 세션에 옮겨 붙일 때 쓴다.
+      function wireDigest() {
+          var btn = document.getElementById('exportDigest');
+          var statusEl = document.getElementById('deleteStatus');
+          if (!btn) return;
+          btn.addEventListener('click', function () {
+              var sid = currentSessionId();
+              if (!sid) {
+                  setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                  return;
+              }
+              btn.disabled = true;
+              setDeleteStatus(statusEl, '문답만 추리는 중…');
+              fetch('/api/sessions/' + sid + '/digest?save=1')
+                  .then(function (r) {
+                      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                  })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '추리지 못했습니다');
+                      var d = res.d;
+                      setDeleteStatus(statusEl,
+                          '문답 ' + d.messages + '건 · ' +
+                          d.chars.toLocaleString() + '자 (원본 ' +
+                          d.total_chars.toLocaleString() + '자의 ' +
+                          (d.ratio * 100).toFixed(1) + '%) → ' + d.saved_to, 'ok');
+                  })
+                  .catch(function (err) {
+                      setDeleteStatus(statusEl, String(err.message || err), 'error');
+                  })
+                  .then(function () { btn.disabled = false; });
           });
       }
   
@@ -15827,6 +16003,7 @@
               <button class="export-action-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">전체 선택</button>
               <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
               <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
+              <button class="export-action-btn" id="exportDigest" title="도구 실행·추론을 빼고 문답 본문만 Markdown 으로 뽑습니다. 새 세션에 옮겨 붙일 때 씁니다.">📝 문답만 추려 내보내기</button>
           </div>
           
           <div class="export-panel-actions export-panel-danger">
@@ -18268,6 +18445,7 @@
   
           wireDeletion();
           wireRestore();
+          wireDigest();
           refreshPanel();
           showHandOver();
       });
@@ -18392,6 +18570,40 @@
                       setDeleteStatus(statusEl, String(err.message || err), 'error');
                       btn.disabled = false;
                   });
+          });
+      }
+  
+      // 도구 실행·추론·그림을 빼고 문답 본문만 Markdown 으로 받는다.
+      // 실측으로 문맥이 62~95% 줄어든다 — 새 세션에 옮겨 붙일 때 쓴다.
+      function wireDigest() {
+          var btn = document.getElementById('exportDigest');
+          var statusEl = document.getElementById('deleteStatus');
+          if (!btn) return;
+          btn.addEventListener('click', function () {
+              var sid = currentSessionId();
+              if (!sid) {
+                  setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                  return;
+              }
+              btn.disabled = true;
+              setDeleteStatus(statusEl, '문답만 추리는 중…');
+              fetch('/api/sessions/' + sid + '/digest?save=1')
+                  .then(function (r) {
+                      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                  })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '추리지 못했습니다');
+                      var d = res.d;
+                      setDeleteStatus(statusEl,
+                          '문답 ' + d.messages + '건 · ' +
+                          d.chars.toLocaleString() + '자 (원본 ' +
+                          d.total_chars.toLocaleString() + '자의 ' +
+                          (d.ratio * 100).toFixed(1) + '%) → ' + d.saved_to, 'ok');
+                  })
+                  .catch(function (err) {
+                      setDeleteStatus(statusEl, String(err.message || err), 'error');
+                  })
+                  .then(function () { btn.disabled = false; });
           });
       }
   
@@ -23474,6 +23686,7 @@
               <button class="export-action-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">전체 선택</button>
               <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
               <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
+              <button class="export-action-btn" id="exportDigest" title="도구 실행·추론을 빼고 문답 본문만 Markdown 으로 뽑습니다. 새 세션에 옮겨 붙일 때 씁니다.">📝 문답만 추려 내보내기</button>
           </div>
           
           <div class="export-panel-actions export-panel-danger">
@@ -25915,6 +26128,7 @@
   
           wireDeletion();
           wireRestore();
+          wireDigest();
           refreshPanel();
           showHandOver();
       });
@@ -26039,6 +26253,40 @@
                       setDeleteStatus(statusEl, String(err.message || err), 'error');
                       btn.disabled = false;
                   });
+          });
+      }
+  
+      // 도구 실행·추론·그림을 빼고 문답 본문만 Markdown 으로 받는다.
+      // 실측으로 문맥이 62~95% 줄어든다 — 새 세션에 옮겨 붙일 때 쓴다.
+      function wireDigest() {
+          var btn = document.getElementById('exportDigest');
+          var statusEl = document.getElementById('deleteStatus');
+          if (!btn) return;
+          btn.addEventListener('click', function () {
+              var sid = currentSessionId();
+              if (!sid) {
+                  setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                  return;
+              }
+              btn.disabled = true;
+              setDeleteStatus(statusEl, '문답만 추리는 중…');
+              fetch('/api/sessions/' + sid + '/digest?save=1')
+                  .then(function (r) {
+                      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                  })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '추리지 못했습니다');
+                      var d = res.d;
+                      setDeleteStatus(statusEl,
+                          '문답 ' + d.messages + '건 · ' +
+                          d.chars.toLocaleString() + '자 (원본 ' +
+                          d.total_chars.toLocaleString() + '자의 ' +
+                          (d.ratio * 100).toFixed(1) + '%) → ' + d.saved_to, 'ok');
+                  })
+                  .catch(function (err) {
+                      setDeleteStatus(statusEl, String(err.message || err), 'error');
+                  })
+                  .then(function () { btn.disabled = false; });
           });
       }
   
@@ -30967,6 +31215,7 @@
               <button class="export-action-btn" id="selectAllMsgs" title="보이는 메시지 전체 선택">전체 선택</button>
               <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
               <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
+              <button class="export-action-btn" id="exportDigest" title="도구 실행·추론을 빼고 문답 본문만 Markdown 으로 뽑습니다. 새 세션에 옮겨 붙일 때 씁니다.">📝 문답만 추려 내보내기</button>
           </div>
           
           <div class="export-panel-actions export-panel-danger">
@@ -33408,6 +33657,7 @@
   
           wireDeletion();
           wireRestore();
+          wireDigest();
           refreshPanel();
           showHandOver();
       });
@@ -33532,6 +33782,40 @@
                       setDeleteStatus(statusEl, String(err.message || err), 'error');
                       btn.disabled = false;
                   });
+          });
+      }
+  
+      // 도구 실행·추론·그림을 빼고 문답 본문만 Markdown 으로 받는다.
+      // 실측으로 문맥이 62~95% 줄어든다 — 새 세션에 옮겨 붙일 때 쓴다.
+      function wireDigest() {
+          var btn = document.getElementById('exportDigest');
+          var statusEl = document.getElementById('deleteStatus');
+          if (!btn) return;
+          btn.addEventListener('click', function () {
+              var sid = currentSessionId();
+              if (!sid) {
+                  setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                  return;
+              }
+              btn.disabled = true;
+              setDeleteStatus(statusEl, '문답만 추리는 중…');
+              fetch('/api/sessions/' + sid + '/digest?save=1')
+                  .then(function (r) {
+                      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                  })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '추리지 못했습니다');
+                      var d = res.d;
+                      setDeleteStatus(statusEl,
+                          '문답 ' + d.messages + '건 · ' +
+                          d.chars.toLocaleString() + '자 (원본 ' +
+                          d.total_chars.toLocaleString() + '자의 ' +
+                          (d.ratio * 100).toFixed(1) + '%) → ' + d.saved_to, 'ok');
+                  })
+                  .catch(function (err) {
+                      setDeleteStatus(statusEl, String(err.message || err), 'error');
+                  })
+                  .then(function () { btn.disabled = false; });
           });
       }
   

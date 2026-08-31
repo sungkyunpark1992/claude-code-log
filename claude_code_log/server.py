@@ -939,6 +939,51 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         return jsonify(result)  # type: ignore[return-value]
 
+    @app.route("/api/sessions/<session_id>/digest")
+    def session_digest(session_id: str) -> Response:
+        """대화 본문만 추려 Markdown 으로 준다.
+
+        도구 호출·결과·그림·추론을 빼면 문맥이 62~95% 줄어든다(실측).
+        되짚을 수 있도록 각 문답에 원본 uuid 를 남긴다.
+        """
+        from .digest import build_digest
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        chain_only = request.args.get("all") not in ("1", "true", "yes")
+        title = _get_session_title(jsonl_file, session_id) or None
+        result = build_digest(
+            jsonl_file, session_id, chain_only=chain_only, title=title
+        )
+
+        payload: "dict[str, Any]" = {
+            "session_id": result["session_id"],
+            "project": result["project"],
+            "messages": result["messages"],
+            "chars": result["chars"],
+            "total_chars": result["total_chars"],
+            "ratio": result["ratio"],
+            "chain": result["chain"],
+            "all_messages": result["all_messages"],
+        }
+
+        # 원본 JSONL 옆에 둔다. 다운로드 폴더로 흩어지면 어느 세션에서 뽑은
+        # 것인지 나중에 알 수 없고, 원본과 함께 있어야 uuid 로 되짚기도 쉽다.
+        if request.args.get("save") in ("1", "true", "yes"):
+            out = jsonl_file.with_name(str(result["suggested_name"]))
+            try:
+                out.write_text(str(result["text"]), encoding="utf-8")
+            except OSError as exc:
+                return jsonify({"error": f"파일을 쓰지 못했습니다: {exc}"}), 500  # type: ignore[return-value]
+            payload["saved_to"] = str(out)
+            payload["saved_name"] = out.name
+            return jsonify(payload)  # type: ignore[return-value]
+
+        payload["text"] = result["text"]
+        return jsonify(payload)  # type: ignore[return-value]
+
     @app.route("/api/sessions/<session_id>/backups")
     def list_session_backups(session_id: str) -> Response:
         """이 세션의 백업 목록. 최신이 먼저."""
