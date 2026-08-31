@@ -498,7 +498,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         session_id = str(data.get("session_id") or "").strip()
         message = str(data.get("message") or "").strip()
         try:
-            interval = int(data.get("interval", 3480))
+            interval = int(data.get("interval", 3300))
             max_count = int(data.get("max", 12))
         except (TypeError, ValueError):
             return jsonify({"error": "주기와 최대 횟수는 숫자여야 합니다."}), 400  # type: ignore[return-value]
@@ -559,7 +559,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                 ), 502
             return jsonify({"status": "ok", "sessions": keepalive.snapshot()})  # type: ignore[return-value]
 
-        if action not in ("toggle", "stop", "reset", "delete"):
+        if action not in ("toggle", "stop", "reset", "delete", "clear_reload"):
             return jsonify({"error": f"알 수 없는 동작: {action}"}), 400  # type: ignore[return-value]
         if not keepalive.mutate(session_id, action):
             return jsonify({"error": "등록되지 않은 세션입니다."}), 404  # type: ignore[return-value]

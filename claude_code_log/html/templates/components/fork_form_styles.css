@@ -256,6 +256,19 @@
     white-space: nowrap;
 }
 
+/* 제목을 눌러 그 세션의 대화 화면으로 간다.
+   평소엔 글자처럼 보이고, 올려놓을 때만 링크임을 드러낸다 —
+   목록의 다른 제목들과 어긋나 보이지 않게. */
+.ka-title-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.ka-title-link:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
 .ka-meta-sub {
     color: #888;
     font-size: 0.92em;
@@ -605,6 +618,7 @@
     padding: 10px 18px;
     background: #dc2626;
     color: #fff;
+    border: none;
     border-radius: 5px;
     font-size: 1.05em;
     font-weight: 700;
@@ -612,6 +626,18 @@
     text-align: center;
     letter-spacing: 0.01em;
     box-shadow: 0 1px 3px #dc262655;
+    /* 눌러서 지울 수 있다 — 새로고침했다는 표시 */
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease;
+}
+
+.ka-reload-badge:hover {
+    background: #b91c1c;
+}
+
+.ka-reload-badge:active {
+    transform: translateY(1px);
 }
 
 /* 캐시 만료 상태에서만 나타나는 복구 버튼.

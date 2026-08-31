@@ -67,11 +67,11 @@ def _make(tmp_path: Path, response_at: datetime) -> "tuple[Path, Path, str]":
     return projects, jsonl, str(work)
 
 
-def _worker(projects: Path, jsonl: Path) -> ka.KeepaliveWorker:
+def _worker(projects: Path, jsonl: Path, debug: bool = False) -> ka.KeepaliveWorker:
     def find(_dir: Path, session_id: str) -> Optional[Path]:
         return jsonl if session_id == SESSION_ID else None
 
-    return ka.KeepaliveWorker(projects, find)
+    return ka.KeepaliveWorker(projects, find, debug=debug)
 
 
 def _item(**over: Any) -> "dict[str, Any]":
@@ -208,6 +208,160 @@ def test_limit_message_counts_as_a_failed_send() -> None:
     assert ka._looks_like_limit("ok") is False
 
 
+def test_default_interval_leaves_room_before_the_ttl(tmp_path: Path) -> None:
+    """기본 주기는 TTL 보다 넉넉히 짧아야 한다.
+
+    58분이던 시절 여유가 2분뿐이라, 잠깐만 밀려도 보낼 창을 놓치고
+    그대로 캐시가 죽었다. 실제로 그렇게 놓쳤다.
+    """
+    window = ka.CACHE_TTL_SEC - ka.DEFAULT_INTERVAL_SEC
+    assert ka.DEFAULT_INTERVAL_SEC == 3300  # 55분
+    assert window >= 300, f"보낼 창이 {window}초뿐이다"
+
+    # 주기를 적지 않은 옛 설정도 이 기본값을 따라야 한다
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, _ = _make(tmp_path, fresh)
+    item = _item()
+    del item["interval"]
+    ka.save_config(projects, [item])
+    _worker(projects, jsonl)._tick()
+    # 55분이 안 지났으니 아무 일도 없어야 한다
+    assert ka.load_config(projects)[0]["enabled"] is True
+
+
+def test_cwd_follows_the_folder_the_session_lives_in(tmp_path: Path) -> None:
+    """복제한 세션은 원본의 cwd 를 물려받는다 — 파일이 놓인 폴더를 따라야 한다.
+
+    실제로 겪은 일이다. 62MB 짜리 복제 세션에서 가장 흔한 cwd 가 이미 사라진
+    원본 폴더(`chicken-proj2`)였고, `claude --resume` 을 거기서 돌리려다
+    자동 메시지가 한 번도 나가지 못했다. 기록을 고치지 않고 읽는 쪽에서 바로잡는다.
+    """
+    projects = tmp_path / "projects"
+    real = tmp_path / "kyochon-prac"
+    real.mkdir(parents=True)
+    folder = projects / _slug_of(str(real))
+    folder.mkdir(parents=True)
+    jsonl = folder / f"{SESSION_ID}.jsonl"
+
+    stamp = _iso(datetime.now(timezone.utc) - timedelta(minutes=5))
+    rows: "list[dict[str, Any]]" = []
+    # 원본 프로젝트의 cwd 가 압도적으로 많다 — 그래도 이걸 고르면 안 된다
+    for _ in range(50):
+        rows.append(
+            {
+                "type": "user",
+                "cwd": str(tmp_path / "사라진원본"),
+                "sessionId": SESSION_ID,
+                "timestamp": stamp,
+            }
+        )
+    rows.append(
+        {
+            "type": "assistant",
+            "cwd": str(real),
+            "sessionId": SESSION_ID,
+            "timestamp": stamp,
+            "message": {"model": "claude-opus-5"},
+        }
+    )
+    jsonl.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    facts = ka.read_session_facts(jsonl)
+    assert facts["cwd"] == str(real), "파일이 놓인 폴더와 짝이 맞는 cwd 여야 한다"
+    assert Path(facts["cwd"]).is_dir()
+
+
+def _slug_of(path: str) -> str:
+    return ka._slug_of(path)
+
+
+def test_cwd_falls_back_to_an_existing_path(tmp_path: Path) -> None:
+    """폴더 이름과 짝이 맞는 게 없으면, 적어도 실재하는 경로를 고른다."""
+    projects = tmp_path / "projects"
+    (projects / "C--전혀다른이름").mkdir(parents=True)
+    real = tmp_path / "있는폴더"
+    real.mkdir()
+    jsonl = projects / "C--전혀다른이름" / f"{SESSION_ID}.jsonl"
+
+    stamp = _iso(datetime.now(timezone.utc))
+    rows = [
+        {
+            "type": "user",
+            "cwd": str(tmp_path / "없는폴더"),
+            "sessionId": SESSION_ID,
+            "timestamp": stamp,
+        },
+        {
+            "type": "user",
+            "cwd": str(tmp_path / "없는폴더"),
+            "sessionId": SESSION_ID,
+            "timestamp": stamp,
+        },
+        {"type": "user", "cwd": str(real), "sessionId": SESSION_ID, "timestamp": stamp},
+    ]
+    jsonl.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert ka.read_session_facts(jsonl)["cwd"] == str(real)
+
+
+def test_debug_log_records_a_missing_working_directory(tmp_path: Path) -> None:
+    """복제한 세션의 cwd 가 사라진 경우를 기록에 남기는가.
+
+    실제로 겪은 일이다 — 복제 기능이 sessionId 만 바꾸고 cwd 는 원본 프로젝트를
+    가리킨 채로 두어, 그 폴더가 없어지자 자동 메시지가 한 번도 나가지 못했다.
+    화면에는 오류 한 줄뿐이라 원인을 좁힐 수 없었다.
+    """
+    stale = datetime.now(timezone.utc) - timedelta(minutes=40)
+    projects, jsonl, _ = _make(tmp_path, stale)
+    # cwd 를 없는 폴더로 바꿔 쓴다
+    rows = [
+        json.loads(ln)
+        for ln in jsonl.read_text(encoding="utf-8").splitlines()
+        if ln.strip()
+    ]
+    for row in rows:
+        row["cwd"] = str(tmp_path / "사라진폴더")
+    jsonl.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    past = time.time() - ka.ACTIVE_WINDOW_SEC * 5
+    os.utime(jsonl, (past, past))
+
+    ka.save_config(projects, [_item(interval=60, seen_at=_iso(stale))])
+    _worker(projects, jsonl, debug=True)._tick()
+
+    saved = ka.load_config(projects)[0]
+    assert saved["error"] == "작업 폴더를 찾을 수 없습니다"
+
+    text = ka.debug_log_path(projects).read_text(encoding="utf-8")
+    assert "작업 폴더 없음" in text
+    assert "사라진폴더" in text
+    # 원인을 짚어주는 힌트까지 남아야 쓸모가 있다
+    assert "복제한 세션" in text
+
+
+def test_debug_log_notices_a_frozen_worker(tmp_path: Path) -> None:
+    """검사가 오래 멈췄던 흔적을 남기는가 — 절전 여부를 사후에 가릴 근거다."""
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, _ = _make(tmp_path, fresh)
+    ka.save_config(projects, [_item()])
+    worker = _worker(projects, jsonl, debug=True)
+
+    worker._tick()
+    # 직전 검사가 한참 전이었던 것처럼 꾸민다
+    worker._last_tick_at = time.time() - 3000
+    worker._tick()
+
+    text = ka.debug_log_path(projects).read_text(encoding="utf-8")
+    assert "검사가" in text and "멈춰" in text
+    assert "절전" in text
+
+
+def test_debug_log_can_be_turned_off(tmp_path: Path) -> None:
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, _ = _make(tmp_path, fresh)
+    ka.save_config(projects, [_item()])
+    _worker(projects, jsonl, debug=False)._tick()
+    assert not ka.debug_log_path(projects).exists()
+
+
 def test_expired_cache_disables_with_a_marker(tmp_path: Path) -> None:
     """캐시가 죽은 세션은 꺼지되, 사람이 끈 것과 구분되는 표식을 남긴다."""
     stale = datetime.now(timezone.utc) - timedelta(hours=3)
@@ -328,3 +482,32 @@ def test_stop_clears_the_marker(tmp_path: Path) -> None:
 
     _worker(projects, jsonl)._tick()
     assert ka.load_config(projects)[0]["enabled"] is False
+
+
+def test_clear_reload_only_touches_that_flag(tmp_path: Path) -> None:
+    """뱃지를 지워도 다른 상태는 건드리지 않는다.
+
+    이 표시는 서버에 있으므로 대시보드와 세션 화면 어느 쪽에서 눌러도
+    양쪽에서 함께 사라진다 — 그게 이 동작을 서버에 둔 이유다.
+    """
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, _ = _make(tmp_path, fresh)
+    ka.save_config(projects, [_item(needs_reload=True, count=3, enabled=True)])
+    worker = _worker(projects, jsonl)
+
+    assert worker.snapshot()[0]["needs_reload"] is True
+    assert worker.mutate(SESSION_ID, "clear_reload") is True
+
+    saved = ka.load_config(projects)[0]
+    assert saved["needs_reload"] is False
+    # 나머지는 그대로여야 한다
+    assert saved["count"] == 3
+    assert saved["enabled"] is True
+    assert saved["stopped"] is False
+
+
+def test_clear_reload_on_unknown_session_is_refused(tmp_path: Path) -> None:
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, _ = _make(tmp_path, fresh)
+    ka.save_config(projects, [_item()])
+    assert _worker(projects, jsonl).mutate("없는세션", "clear_reload") is False

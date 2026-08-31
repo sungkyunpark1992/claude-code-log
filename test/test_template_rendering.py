@@ -150,9 +150,13 @@ class TestTemplateRendering:
             assert "<title>Claude Transcript - empty_test</title>" in html_content
 
             # Should have no actual conversation messages (empty-prompt bubble is always present)
-            assert "class='message user empty-prompt'" in html_content  # empty prompt bubble
+            assert (
+                "class='message user empty-prompt'" in html_content
+            )  # empty prompt bubble
             assert "class='message user'" not in html_content  # no real user messages
-            assert "class='message assistant'" not in html_content  # no assistant messages
+            assert (
+                "class='message assistant'" not in html_content
+            )  # no assistant messages
 
     def test_tool_content_rendering(self):
         """Test detailed tool use and tool result rendering."""
@@ -334,10 +338,15 @@ class TestTemplateRendering:
             assert "&lt;script&gt;" in html_content
             assert "&amp;" in html_content
             assert "&quot;" in html_content
-            # Should not contain unescaped HTML
-            assert (
-                "<script>" not in html_content or html_content.count("<script>") <= 5
-            )  # Allow for inline scripts (timezone, SSE, search, etc.)
+            # The message's own markup must never survive unescaped. Counting
+            # <script> tags is a poor proxy — the page legitimately carries
+            # several inline scripts (timezone, SSE, search, selection,
+            # keepalive status), so the count grows whenever a component is
+            # added. Assert on the payload itself instead.
+            assert "<script>alert('xss')</script>" not in html_content
+            assert "alert('xss')" not in html_content.replace(
+                "alert(&#x27;xss&#x27;)", ""
+            )
 
 
 if __name__ == "__main__":

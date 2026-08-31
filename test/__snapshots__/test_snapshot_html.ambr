@@ -1112,6 +1112,19 @@
       white-space: nowrap;
   }
   
+  /* 제목을 눌러 그 세션의 대화 화면으로 간다.
+     평소엔 글자처럼 보이고, 올려놓을 때만 링크임을 드러낸다 —
+     목록의 다른 제목들과 어긋나 보이지 않게. */
+  .ka-title-link {
+      color: inherit;
+      text-decoration: none;
+  }
+  
+  .ka-title-link:hover {
+      color: #2563eb;
+      text-decoration: underline;
+  }
+  
   .ka-meta-sub {
       color: #888;
       font-size: 0.92em;
@@ -1461,6 +1474,7 @@
       padding: 10px 18px;
       background: #dc2626;
       color: #fff;
+      border: none;
       border-radius: 5px;
       font-size: 1.05em;
       font-weight: 700;
@@ -1468,6 +1482,18 @@
       text-align: center;
       letter-spacing: 0.01em;
       box-shadow: 0 1px 3px #dc262655;
+      /* 눌러서 지울 수 있다 — 새로고침했다는 표시 */
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s ease;
+  }
+  
+  .ka-reload-badge:hover {
+      background: #b91c1c;
+  }
+  
+  .ka-reload-badge:active {
+      transform: translateY(1px);
   }
   
   /* 캐시 만료 상태에서만 나타나는 복구 버튼.
@@ -2807,7 +2833,7 @@
               <p class='fork-intro'>
                   마지막 응답으로부터 설정한 시간이 지나면 짧은 메시지를 보내
                   <strong>프롬프트 캐시를 유지</strong>합니다. 캐시가 만료되면 이전 대화를
-                  다시 캐시에 쓰느라 토큰이 크게 드는데, 그 비용을 줄이기 위한 기능입니다.
+                  다시 캐시에 쓰느라 토큰이 크게 드는데, 그 비용을 줄이기 위한 기능입니다. 자동 메시지 직후 질문할 때 VSCode 새로고침 하는 법 : Ctrl+Shift+P → Developer: Reload Window
               </p>
               <details class='ka-caution'>
                   <summary class='ka-caution-head'>
@@ -2839,12 +2865,12 @@
                       <div class='fork-field ka-narrow'>
                           <span class='fork-label'>전송 주기 <em>필수</em></span>
                           <div class='ka-duration'>
-                              <input type='number' id='kaIntervalMin' class='fork-input' min='0' max='180' value='58'>
+                              <input type='number' id='kaIntervalMin' class='fork-input' min='0' max='180' value='55'>
                               <span class='ka-unit'>분</span>
                               <input type='number' id='kaIntervalSec' class='fork-input' min='0' max='59' value='0'>
                               <span class='ka-unit'>초</span>
                           </div>
-                          <span class='fork-hint' id='kaIntervalHint'>캐시는 1시간 유지되므로 58분을 권합니다.</span>
+                          <span class='fork-hint' id='kaIntervalHint'>캐시는 1시간 유지되므로 55분을 권합니다. 58분은 여유가 2분뿐이라 조금만 밀려도 놓칩니다.</span>
                       </div>
                       <label class='fork-field ka-narrow'>
                           <span class='fork-label'>최대 횟수 <em>필수</em></span>
@@ -3402,6 +3428,16 @@
           return (titleEl && titleEl.dataset.title) || '';
       }
   
+      // 같은 목록에서 세션 페이지 주소를 얻는다.
+      // .session-link 자체는 <a> 가 아니라 <div> 라(수정·삭제 버튼을 담으면서 바뀌었다)
+      // 안쪽 링크에서 꺼낸다. 못 찾으면 제목을 링크로 만들지 않는다.
+      function lookupHref(sid) {
+          var el = document.querySelector('.session-link[data-session-id="' + sid + '"]');
+          if (!el) return null;
+          var a = el.querySelector('a[href]');
+          return a ? a.getAttribute('href') : null;
+      }
+  
       function fmtDuration(sec) {
           if (sec < 0) sec = 0;
           var h = Math.floor(sec / 3600);
@@ -3592,9 +3628,13 @@
                   '</div>';
           }
   
+          // 뱃지를 눌러 지운다 = "새로고침했다"는 표시. 상태는 서버에 있으므로
+          // 여기서 지우면 세션 화면의 같은 뱃지도 함께 사라진다.
           var reload = it.needs_reload
-              ? '<div class="ka-reload-badge" title="자동 메시지가 나간 뒤 ' +
-                'VS Code 를 새로고침해야 대화가 갈라지지 않습니다">VS Code<br>재실행 필요</div>'
+              ? '<button type="button" data-act="clear_reload" data-id="' + sid + '" ' +
+                'class="ka-reload-badge" title="자동 메시지가 나간 뒤 VS Code 를 ' +
+                '새로고침해야 대화가 갈라지지 않습니다. 새로고침했다면 눌러서 지우세요.">' +
+                'VS Code<br>재실행 필요</button>'
               : '';
   
           var badge = (usageRow || reload)
@@ -3605,10 +3645,18 @@
           var title = lookupTitle(sid);
           var modelTag = it.model ? ' · ' + escapeHtml(it.model) : '';
   
+          // 제목을 누르면 그 세션의 대화 화면으로 간다. 목록에서 다시 찾을 필요가 없다.
+          var href = lookupHref(sid);
+          var titleText = escapeHtml(title || '(제목 없음)');
+          var titleHtml = href
+              ? '<a class="ka-title-link" href="' + escapeHtml(href) +
+                '" title="이 세션의 대화 화면으로 이동">' + titleText + '</a>'
+              : titleText;
+  
           return '<div class="ka-item' + (st.cls ? ' ' + st.cls : '') + '" data-ka-id="' + sid + '">' +
               '<div class="ka-item-main">' +
                   '<span class="ka-meta">' +
-                      '<span class="ka-meta-main">' + escapeHtml(title || '(제목 없음)') + '</span>' +
+                      '<span class="ka-meta-main">' + titleHtml + '</span>' +
                       '<span class="ka-meta-sub">' +
                           '<span class="ka-sid">' + escapeHtml(sid.slice(0, 8)) + '</span>' +
                           (project ? ' · ' + escapeHtml(project) : '') + modelTag +
@@ -3739,6 +3787,9 @@
               // 실제 전송이라 7~8초 걸린다. 아무 반응이 없으면 눌린 줄 모른다.
               btn.textContent = '보내는 중…';
               setStatus('캐시를 만드는 중입니다 — 잠시 걸립니다.', null);
+          }
+          if (act === 'clear_reload') {
+              setStatus('새로고침 알림을 지웠습니다.', 'success');
           }
           post('/api/keepalive/' + id, { action: act }).then(function (res) {
               if (!res.ok) {
@@ -7105,6 +7156,102 @@
       background: #22c55e33;
       border-color: #22c55e;
       color: #16a34a;
+  }
+  /* 세션 화면 입력창 위의 자동 메시지 상태.
+     대시보드까지 가지 않아도 남은 시간·캐시만료·재실행 알림이 여기서 보인다. */
+  
+  /* 입력창 말풍선 바로 위 한 줄. dock 은 pointer-events:none 이라
+     (아래 본문 클릭을 막지 않으려고) 여기서만 다시 살린다. */
+  .ka-live {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 4px 12px;
+      pointer-events: auto;
+      position: relative;
+      z-index: 2;
+  }
+  
+  .ka-live[hidden] {
+      display: none;
+  }
+  
+  /* 남은 시간 — 대시보드와 같은 빨강·고정폭이라 두 화면이 같은 값으로 읽힌다 */
+  .ka-live-count {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      font-size: 0.95em;
+      color: #dc2626;
+  }
+  
+  .ka-live-note {
+      font-size: 0.78em;
+      color: #999;
+  }
+  
+  .ka-live-note:empty {
+      display: none;
+  }
+  
+  /* 일시정지·완료·중지는 흐리게 — 지금 지켜지고 있지 않다는 뜻 */
+  .ka-live.paused .ka-live-count,
+  .ka-live.done .ka-live-count,
+  .ka-live.stopped .ka-live-count {
+      color: #9ca3af;
+  }
+  
+  /* 캐시가 사라진 상태. 다음 질문이 비싸진다 */
+  .ka-live.expired .ka-live-count,
+  .ka-live.error .ka-live-count {
+      color: #dc2626;
+  }
+  
+  .ka-live.expired .ka-live-note,
+  .ka-live.error .ka-live-note {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  /* 전송 시각이 지나 대기 중 */
+  .ka-live.due .ka-live-count {
+      color: #c2410c;
+  }
+  
+  /* 눌러서 지우는 알림. 놓치면 대화가 갈라지므로 눈에 띄어야 한다 */
+  .ka-live-reload {
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      background: #dc2626;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75em;
+      font-weight: 700;
+      line-height: 1.3;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px #dc262655;
+      transition: background 0.15s ease;
+  }
+  
+  .ka-live-reload[hidden] {
+      display: none;
+  }
+  
+  .ka-live-reload:hover:not(:disabled) {
+      background: #b91c1c;
+  }
+  
+  .ka-live-reload:active {
+      transform: translateY(1px);
+  }
+  
+  .ka-live-reload:disabled {
+      opacity: 0.6;
+      cursor: default;
   }
       </style>
   </head>
@@ -10504,6 +10651,130 @@
       });
   
       window.addCopyButtons();
+  })();
+  </script>
+      <!-- 세션 화면의 자동 메시지 상태 — 대시보드까지 가지 않아도 여기서 보이게 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // 이 세션이 자동 메시지에 등록돼 있을 때만 나타난다.
+      // 상태는 서버(keepalive.json)가 가지므로 대시보드와 항상 같은 값을 본다.
+      var POLL_MS = 5000;
+      var TICK_MS = 1000;
+  
+      // 입력창 말풍선 **바로 위**, 같은 dock 안에 붙인다.
+      // 말풍선 안에 넣으면 `.user.empty-prompt *` 의 pointer-events:none 에 막혀
+      // 누를 수 없고, 말풍선 전체가 opacity 0.4 라 카운트다운도 흐리게 보인다.
+      var dock = document.getElementById('prompt-dock');
+      var prompt = document.getElementById('ccl-live-prompt');
+      if (!dock || !prompt) return;
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+  
+      var sid = sessionId();
+      if (!sid) return;
+  
+      var box = document.createElement('span');
+      box.className = 'ka-live';
+      box.hidden = true;
+      box.innerHTML =
+          '<span class="ka-live-count" title="다음 자동 메시지까지 남은 시간"></span>' +
+          '<span class="ka-live-note"></span>' +
+          '<button type="button" class="ka-live-reload" hidden' +
+          ' title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다.' +
+          ' 새로고침했다면 눌러서 지우세요.">VS Code 재실행 필요</button>';
+      dock.insertBefore(box, prompt);
+  
+      var countEl = box.querySelector('.ka-live-count');
+      var noteEl = box.querySelector('.ka-live-note');
+      var reloadEl = box.querySelector('.ka-live-reload');
+  
+      var item = null;
+  
+      function fmt(sec) {
+          if (sec < 0) sec = 0;
+          var h = Math.floor(sec / 3600);
+          var m = Math.floor((sec % 3600) / 60);
+          var s = Math.floor(sec % 60);
+          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+          return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+      }
+  
+      // 대시보드(keepalive_script.js)의 computeState 와 같은 규칙을 쓴다.
+      // 두 화면이 다른 숫자를 보이면 어느 쪽을 믿어야 할지 알 수 없다.
+      function state(it) {
+          var now = Date.now();
+          var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+          var left = Math.round((base + (it.interval || 0) * 1000 - now) / 1000);
+          var done = (it.count || 0) >= (it.max || 0);
+  
+          if (it.missing || it.error) return { cls: 'error', text: '오류', note: it.error || '' };
+          if (done) return { cls: 'done', text: '완료', note: '' };
+          if (it.stopped) return { cls: 'stopped', text: '중지', note: '' };
+          if (!it.enabled) {
+              // 일시정지해도 캐시 시계는 계속 간다 — 숫자를 얼리면 여유가 있다고 오해한다
+              if (left <= 0) return { cls: 'expired', text: '00:00', note: '캐시만료' };
+              return { cls: 'paused', text: fmt(left), note: '일시정지' };
+          }
+          if (left <= 0) return { cls: 'due', text: '전송 대기', note: '' };
+          return { cls: '', text: fmt(left), note: '' };
+      }
+  
+      function paint() {
+          if (!item) {
+              box.hidden = true;
+              return;
+          }
+          box.hidden = false;
+          var st = state(item);
+          box.className = 'ka-live' + (st.cls ? ' ' + st.cls : '');
+          countEl.textContent = st.text;
+          noteEl.textContent = st.note;
+          reloadEl.hidden = !item.needs_reload;
+      }
+  
+      function load() {
+          return fetch('/api/keepalive')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  var found = null;
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) found = s;
+                  });
+                  item = found;
+                  paint();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 */ });
+      }
+  
+      reloadEl.addEventListener('click', function () {
+          reloadEl.disabled = true;
+          fetch('/api/keepalive/' + sid, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear_reload' })
+          })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) item = s;
+                  });
+                  paint();
+              })
+              .catch(function () {})
+              .then(function () { reloadEl.disabled = false; });
+      });
+  
+      load();
+      setInterval(load, POLL_MS);
+      // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
+      setInterval(paint, TICK_MS);
   })();
   </script>
   
@@ -14005,6 +14276,102 @@
       border-color: #22c55e;
       color: #16a34a;
   }
+  /* 세션 화면 입력창 위의 자동 메시지 상태.
+     대시보드까지 가지 않아도 남은 시간·캐시만료·재실행 알림이 여기서 보인다. */
+  
+  /* 입력창 말풍선 바로 위 한 줄. dock 은 pointer-events:none 이라
+     (아래 본문 클릭을 막지 않으려고) 여기서만 다시 살린다. */
+  .ka-live {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 4px 12px;
+      pointer-events: auto;
+      position: relative;
+      z-index: 2;
+  }
+  
+  .ka-live[hidden] {
+      display: none;
+  }
+  
+  /* 남은 시간 — 대시보드와 같은 빨강·고정폭이라 두 화면이 같은 값으로 읽힌다 */
+  .ka-live-count {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      font-size: 0.95em;
+      color: #dc2626;
+  }
+  
+  .ka-live-note {
+      font-size: 0.78em;
+      color: #999;
+  }
+  
+  .ka-live-note:empty {
+      display: none;
+  }
+  
+  /* 일시정지·완료·중지는 흐리게 — 지금 지켜지고 있지 않다는 뜻 */
+  .ka-live.paused .ka-live-count,
+  .ka-live.done .ka-live-count,
+  .ka-live.stopped .ka-live-count {
+      color: #9ca3af;
+  }
+  
+  /* 캐시가 사라진 상태. 다음 질문이 비싸진다 */
+  .ka-live.expired .ka-live-count,
+  .ka-live.error .ka-live-count {
+      color: #dc2626;
+  }
+  
+  .ka-live.expired .ka-live-note,
+  .ka-live.error .ka-live-note {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  /* 전송 시각이 지나 대기 중 */
+  .ka-live.due .ka-live-count {
+      color: #c2410c;
+  }
+  
+  /* 눌러서 지우는 알림. 놓치면 대화가 갈라지므로 눈에 띄어야 한다 */
+  .ka-live-reload {
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      background: #dc2626;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75em;
+      font-weight: 700;
+      line-height: 1.3;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px #dc262655;
+      transition: background 0.15s ease;
+  }
+  
+  .ka-live-reload[hidden] {
+      display: none;
+  }
+  
+  .ka-live-reload:hover:not(:disabled) {
+      background: #b91c1c;
+  }
+  
+  .ka-live-reload:active {
+      transform: translateY(1px);
+  }
+  
+  .ka-live-reload:disabled {
+      opacity: 0.6;
+      cursor: default;
+  }
       </style>
   </head>
   
@@ -17500,6 +17867,130 @@
       });
   
       window.addCopyButtons();
+  })();
+  </script>
+      <!-- 세션 화면의 자동 메시지 상태 — 대시보드까지 가지 않아도 여기서 보이게 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // 이 세션이 자동 메시지에 등록돼 있을 때만 나타난다.
+      // 상태는 서버(keepalive.json)가 가지므로 대시보드와 항상 같은 값을 본다.
+      var POLL_MS = 5000;
+      var TICK_MS = 1000;
+  
+      // 입력창 말풍선 **바로 위**, 같은 dock 안에 붙인다.
+      // 말풍선 안에 넣으면 `.user.empty-prompt *` 의 pointer-events:none 에 막혀
+      // 누를 수 없고, 말풍선 전체가 opacity 0.4 라 카운트다운도 흐리게 보인다.
+      var dock = document.getElementById('prompt-dock');
+      var prompt = document.getElementById('ccl-live-prompt');
+      if (!dock || !prompt) return;
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+  
+      var sid = sessionId();
+      if (!sid) return;
+  
+      var box = document.createElement('span');
+      box.className = 'ka-live';
+      box.hidden = true;
+      box.innerHTML =
+          '<span class="ka-live-count" title="다음 자동 메시지까지 남은 시간"></span>' +
+          '<span class="ka-live-note"></span>' +
+          '<button type="button" class="ka-live-reload" hidden' +
+          ' title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다.' +
+          ' 새로고침했다면 눌러서 지우세요.">VS Code 재실행 필요</button>';
+      dock.insertBefore(box, prompt);
+  
+      var countEl = box.querySelector('.ka-live-count');
+      var noteEl = box.querySelector('.ka-live-note');
+      var reloadEl = box.querySelector('.ka-live-reload');
+  
+      var item = null;
+  
+      function fmt(sec) {
+          if (sec < 0) sec = 0;
+          var h = Math.floor(sec / 3600);
+          var m = Math.floor((sec % 3600) / 60);
+          var s = Math.floor(sec % 60);
+          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+          return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+      }
+  
+      // 대시보드(keepalive_script.js)의 computeState 와 같은 규칙을 쓴다.
+      // 두 화면이 다른 숫자를 보이면 어느 쪽을 믿어야 할지 알 수 없다.
+      function state(it) {
+          var now = Date.now();
+          var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+          var left = Math.round((base + (it.interval || 0) * 1000 - now) / 1000);
+          var done = (it.count || 0) >= (it.max || 0);
+  
+          if (it.missing || it.error) return { cls: 'error', text: '오류', note: it.error || '' };
+          if (done) return { cls: 'done', text: '완료', note: '' };
+          if (it.stopped) return { cls: 'stopped', text: '중지', note: '' };
+          if (!it.enabled) {
+              // 일시정지해도 캐시 시계는 계속 간다 — 숫자를 얼리면 여유가 있다고 오해한다
+              if (left <= 0) return { cls: 'expired', text: '00:00', note: '캐시만료' };
+              return { cls: 'paused', text: fmt(left), note: '일시정지' };
+          }
+          if (left <= 0) return { cls: 'due', text: '전송 대기', note: '' };
+          return { cls: '', text: fmt(left), note: '' };
+      }
+  
+      function paint() {
+          if (!item) {
+              box.hidden = true;
+              return;
+          }
+          box.hidden = false;
+          var st = state(item);
+          box.className = 'ka-live' + (st.cls ? ' ' + st.cls : '');
+          countEl.textContent = st.text;
+          noteEl.textContent = st.note;
+          reloadEl.hidden = !item.needs_reload;
+      }
+  
+      function load() {
+          return fetch('/api/keepalive')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  var found = null;
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) found = s;
+                  });
+                  item = found;
+                  paint();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 */ });
+      }
+  
+      reloadEl.addEventListener('click', function () {
+          reloadEl.disabled = true;
+          fetch('/api/keepalive/' + sid, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear_reload' })
+          })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) item = s;
+                  });
+                  paint();
+              })
+              .catch(function () {})
+              .then(function () { reloadEl.disabled = false; });
+      });
+  
+      load();
+      setInterval(load, POLL_MS);
+      // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
+      setInterval(paint, TICK_MS);
   })();
   </script>
   
@@ -21000,6 +21491,102 @@
       background: #22c55e33;
       border-color: #22c55e;
       color: #16a34a;
+  }
+  /* 세션 화면 입력창 위의 자동 메시지 상태.
+     대시보드까지 가지 않아도 남은 시간·캐시만료·재실행 알림이 여기서 보인다. */
+  
+  /* 입력창 말풍선 바로 위 한 줄. dock 은 pointer-events:none 이라
+     (아래 본문 클릭을 막지 않으려고) 여기서만 다시 살린다. */
+  .ka-live {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 4px 12px;
+      pointer-events: auto;
+      position: relative;
+      z-index: 2;
+  }
+  
+  .ka-live[hidden] {
+      display: none;
+  }
+  
+  /* 남은 시간 — 대시보드와 같은 빨강·고정폭이라 두 화면이 같은 값으로 읽힌다 */
+  .ka-live-count {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      font-size: 0.95em;
+      color: #dc2626;
+  }
+  
+  .ka-live-note {
+      font-size: 0.78em;
+      color: #999;
+  }
+  
+  .ka-live-note:empty {
+      display: none;
+  }
+  
+  /* 일시정지·완료·중지는 흐리게 — 지금 지켜지고 있지 않다는 뜻 */
+  .ka-live.paused .ka-live-count,
+  .ka-live.done .ka-live-count,
+  .ka-live.stopped .ka-live-count {
+      color: #9ca3af;
+  }
+  
+  /* 캐시가 사라진 상태. 다음 질문이 비싸진다 */
+  .ka-live.expired .ka-live-count,
+  .ka-live.error .ka-live-count {
+      color: #dc2626;
+  }
+  
+  .ka-live.expired .ka-live-note,
+  .ka-live.error .ka-live-note {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  /* 전송 시각이 지나 대기 중 */
+  .ka-live.due .ka-live-count {
+      color: #c2410c;
+  }
+  
+  /* 눌러서 지우는 알림. 놓치면 대화가 갈라지므로 눈에 띄어야 한다 */
+  .ka-live-reload {
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      background: #dc2626;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75em;
+      font-weight: 700;
+      line-height: 1.3;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px #dc262655;
+      transition: background 0.15s ease;
+  }
+  
+  .ka-live-reload[hidden] {
+      display: none;
+  }
+  
+  .ka-live-reload:hover:not(:disabled) {
+      background: #b91c1c;
+  }
+  
+  .ka-live-reload:active {
+      transform: translateY(1px);
+  }
+  
+  .ka-live-reload:disabled {
+      opacity: 0.6;
+      cursor: default;
   }
       </style>
   </head>
@@ -24555,6 +25142,130 @@
       window.addCopyButtons();
   })();
   </script>
+      <!-- 세션 화면의 자동 메시지 상태 — 대시보드까지 가지 않아도 여기서 보이게 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // 이 세션이 자동 메시지에 등록돼 있을 때만 나타난다.
+      // 상태는 서버(keepalive.json)가 가지므로 대시보드와 항상 같은 값을 본다.
+      var POLL_MS = 5000;
+      var TICK_MS = 1000;
+  
+      // 입력창 말풍선 **바로 위**, 같은 dock 안에 붙인다.
+      // 말풍선 안에 넣으면 `.user.empty-prompt *` 의 pointer-events:none 에 막혀
+      // 누를 수 없고, 말풍선 전체가 opacity 0.4 라 카운트다운도 흐리게 보인다.
+      var dock = document.getElementById('prompt-dock');
+      var prompt = document.getElementById('ccl-live-prompt');
+      if (!dock || !prompt) return;
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+  
+      var sid = sessionId();
+      if (!sid) return;
+  
+      var box = document.createElement('span');
+      box.className = 'ka-live';
+      box.hidden = true;
+      box.innerHTML =
+          '<span class="ka-live-count" title="다음 자동 메시지까지 남은 시간"></span>' +
+          '<span class="ka-live-note"></span>' +
+          '<button type="button" class="ka-live-reload" hidden' +
+          ' title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다.' +
+          ' 새로고침했다면 눌러서 지우세요.">VS Code 재실행 필요</button>';
+      dock.insertBefore(box, prompt);
+  
+      var countEl = box.querySelector('.ka-live-count');
+      var noteEl = box.querySelector('.ka-live-note');
+      var reloadEl = box.querySelector('.ka-live-reload');
+  
+      var item = null;
+  
+      function fmt(sec) {
+          if (sec < 0) sec = 0;
+          var h = Math.floor(sec / 3600);
+          var m = Math.floor((sec % 3600) / 60);
+          var s = Math.floor(sec % 60);
+          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+          return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+      }
+  
+      // 대시보드(keepalive_script.js)의 computeState 와 같은 규칙을 쓴다.
+      // 두 화면이 다른 숫자를 보이면 어느 쪽을 믿어야 할지 알 수 없다.
+      function state(it) {
+          var now = Date.now();
+          var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+          var left = Math.round((base + (it.interval || 0) * 1000 - now) / 1000);
+          var done = (it.count || 0) >= (it.max || 0);
+  
+          if (it.missing || it.error) return { cls: 'error', text: '오류', note: it.error || '' };
+          if (done) return { cls: 'done', text: '완료', note: '' };
+          if (it.stopped) return { cls: 'stopped', text: '중지', note: '' };
+          if (!it.enabled) {
+              // 일시정지해도 캐시 시계는 계속 간다 — 숫자를 얼리면 여유가 있다고 오해한다
+              if (left <= 0) return { cls: 'expired', text: '00:00', note: '캐시만료' };
+              return { cls: 'paused', text: fmt(left), note: '일시정지' };
+          }
+          if (left <= 0) return { cls: 'due', text: '전송 대기', note: '' };
+          return { cls: '', text: fmt(left), note: '' };
+      }
+  
+      function paint() {
+          if (!item) {
+              box.hidden = true;
+              return;
+          }
+          box.hidden = false;
+          var st = state(item);
+          box.className = 'ka-live' + (st.cls ? ' ' + st.cls : '');
+          countEl.textContent = st.text;
+          noteEl.textContent = st.note;
+          reloadEl.hidden = !item.needs_reload;
+      }
+  
+      function load() {
+          return fetch('/api/keepalive')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  var found = null;
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) found = s;
+                  });
+                  item = found;
+                  paint();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 */ });
+      }
+  
+      reloadEl.addEventListener('click', function () {
+          reloadEl.disabled = true;
+          fetch('/api/keepalive/' + sid, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear_reload' })
+          })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) item = s;
+                  });
+                  paint();
+              })
+              .catch(function () {})
+              .then(function () { reloadEl.disabled = false; });
+      });
+  
+      load();
+      setInterval(load, POLL_MS);
+      // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
+      setInterval(paint, TICK_MS);
+  })();
+  </script>
   
       <!-- Live update via SSE -->
       <script>
@@ -28054,6 +28765,102 @@
       border-color: #22c55e;
       color: #16a34a;
   }
+  /* 세션 화면 입력창 위의 자동 메시지 상태.
+     대시보드까지 가지 않아도 남은 시간·캐시만료·재실행 알림이 여기서 보인다. */
+  
+  /* 입력창 말풍선 바로 위 한 줄. dock 은 pointer-events:none 이라
+     (아래 본문 클릭을 막지 않으려고) 여기서만 다시 살린다. */
+  .ka-live {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 4px 12px;
+      pointer-events: auto;
+      position: relative;
+      z-index: 2;
+  }
+  
+  .ka-live[hidden] {
+      display: none;
+  }
+  
+  /* 남은 시간 — 대시보드와 같은 빨강·고정폭이라 두 화면이 같은 값으로 읽힌다 */
+  .ka-live-count {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      font-size: 0.95em;
+      color: #dc2626;
+  }
+  
+  .ka-live-note {
+      font-size: 0.78em;
+      color: #999;
+  }
+  
+  .ka-live-note:empty {
+      display: none;
+  }
+  
+  /* 일시정지·완료·중지는 흐리게 — 지금 지켜지고 있지 않다는 뜻 */
+  .ka-live.paused .ka-live-count,
+  .ka-live.done .ka-live-count,
+  .ka-live.stopped .ka-live-count {
+      color: #9ca3af;
+  }
+  
+  /* 캐시가 사라진 상태. 다음 질문이 비싸진다 */
+  .ka-live.expired .ka-live-count,
+  .ka-live.error .ka-live-count {
+      color: #dc2626;
+  }
+  
+  .ka-live.expired .ka-live-note,
+  .ka-live.error .ka-live-note {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  /* 전송 시각이 지나 대기 중 */
+  .ka-live.due .ka-live-count {
+      color: #c2410c;
+  }
+  
+  /* 눌러서 지우는 알림. 놓치면 대화가 갈라지므로 눈에 띄어야 한다 */
+  .ka-live-reload {
+      padding: 3px 9px;
+      border: none;
+      border-radius: 4px;
+      background: #dc2626;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.75em;
+      font-weight: 700;
+      line-height: 1.3;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px #dc262655;
+      transition: background 0.15s ease;
+  }
+  
+  .ka-live-reload[hidden] {
+      display: none;
+  }
+  
+  .ka-live-reload:hover:not(:disabled) {
+      background: #b91c1c;
+  }
+  
+  .ka-live-reload:active {
+      transform: translateY(1px);
+  }
+  
+  .ka-live-reload:disabled {
+      opacity: 0.6;
+      cursor: default;
+  }
       </style>
   </head>
   
@@ -31452,6 +32259,130 @@
       });
   
       window.addCopyButtons();
+  })();
+  </script>
+      <!-- 세션 화면의 자동 메시지 상태 — 대시보드까지 가지 않아도 여기서 보이게 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      // 이 세션이 자동 메시지에 등록돼 있을 때만 나타난다.
+      // 상태는 서버(keepalive.json)가 가지므로 대시보드와 항상 같은 값을 본다.
+      var POLL_MS = 5000;
+      var TICK_MS = 1000;
+  
+      // 입력창 말풍선 **바로 위**, 같은 dock 안에 붙인다.
+      // 말풍선 안에 넣으면 `.user.empty-prompt *` 의 pointer-events:none 에 막혀
+      // 누를 수 없고, 말풍선 전체가 opacity 0.4 라 카운트다운도 흐리게 보인다.
+      var dock = document.getElementById('prompt-dock');
+      var prompt = document.getElementById('ccl-live-prompt');
+      if (!dock || !prompt) return;
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+  
+      var sid = sessionId();
+      if (!sid) return;
+  
+      var box = document.createElement('span');
+      box.className = 'ka-live';
+      box.hidden = true;
+      box.innerHTML =
+          '<span class="ka-live-count" title="다음 자동 메시지까지 남은 시간"></span>' +
+          '<span class="ka-live-note"></span>' +
+          '<button type="button" class="ka-live-reload" hidden' +
+          ' title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다.' +
+          ' 새로고침했다면 눌러서 지우세요.">VS Code 재실행 필요</button>';
+      dock.insertBefore(box, prompt);
+  
+      var countEl = box.querySelector('.ka-live-count');
+      var noteEl = box.querySelector('.ka-live-note');
+      var reloadEl = box.querySelector('.ka-live-reload');
+  
+      var item = null;
+  
+      function fmt(sec) {
+          if (sec < 0) sec = 0;
+          var h = Math.floor(sec / 3600);
+          var m = Math.floor((sec % 3600) / 60);
+          var s = Math.floor(sec % 60);
+          var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+          return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+      }
+  
+      // 대시보드(keepalive_script.js)의 computeState 와 같은 규칙을 쓴다.
+      // 두 화면이 다른 숫자를 보이면 어느 쪽을 믿어야 할지 알 수 없다.
+      function state(it) {
+          var now = Date.now();
+          var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+          var left = Math.round((base + (it.interval || 0) * 1000 - now) / 1000);
+          var done = (it.count || 0) >= (it.max || 0);
+  
+          if (it.missing || it.error) return { cls: 'error', text: '오류', note: it.error || '' };
+          if (done) return { cls: 'done', text: '완료', note: '' };
+          if (it.stopped) return { cls: 'stopped', text: '중지', note: '' };
+          if (!it.enabled) {
+              // 일시정지해도 캐시 시계는 계속 간다 — 숫자를 얼리면 여유가 있다고 오해한다
+              if (left <= 0) return { cls: 'expired', text: '00:00', note: '캐시만료' };
+              return { cls: 'paused', text: fmt(left), note: '일시정지' };
+          }
+          if (left <= 0) return { cls: 'due', text: '전송 대기', note: '' };
+          return { cls: '', text: fmt(left), note: '' };
+      }
+  
+      function paint() {
+          if (!item) {
+              box.hidden = true;
+              return;
+          }
+          box.hidden = false;
+          var st = state(item);
+          box.className = 'ka-live' + (st.cls ? ' ' + st.cls : '');
+          countEl.textContent = st.text;
+          noteEl.textContent = st.note;
+          reloadEl.hidden = !item.needs_reload;
+      }
+  
+      function load() {
+          return fetch('/api/keepalive')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  var found = null;
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) found = s;
+                  });
+                  item = found;
+                  paint();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 */ });
+      }
+  
+      reloadEl.addEventListener('click', function () {
+          reloadEl.disabled = true;
+          fetch('/api/keepalive/' + sid, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'clear_reload' })
+          })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  (d.sessions || []).forEach(function (s) {
+                      if (s.session_id === sid) item = s;
+                  });
+                  paint();
+              })
+              .catch(function () {})
+              .then(function () { reloadEl.disabled = false; });
+      });
+  
+      load();
+      setInterval(load, POLL_MS);
+      // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
+      setInterval(paint, TICK_MS);
   })();
   </script>
   

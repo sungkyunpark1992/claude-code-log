@@ -116,7 +116,7 @@
             <p class='fork-intro'>
                 마지막 응답으로부터 설정한 시간이 지나면 짧은 메시지를 보내
                 <strong>프롬프트 캐시를 유지</strong>합니다. 캐시가 만료되면 이전 대화를
-                다시 캐시에 쓰느라 토큰이 크게 드는데, 그 비용을 줄이기 위한 기능입니다.
+                다시 캐시에 쓰느라 토큰이 크게 드는데, 그 비용을 줄이기 위한 기능입니다. 자동 메시지 직후 질문할 때 VSCode 새로고침 하는 법 : Ctrl+Shift+P → Developer: Reload Window
             </p>
             <details class='ka-caution'>
                 <summary class='ka-caution-head'>
@@ -148,12 +148,12 @@
                     <div class='fork-field ka-narrow'>
                         <span class='fork-label'>전송 주기 <em>필수</em></span>
                         <div class='ka-duration'>
-                            <input type='number' id='kaIntervalMin' class='fork-input' min='0' max='180' value='58'>
+                            <input type='number' id='kaIntervalMin' class='fork-input' min='0' max='180' value='55'>
                             <span class='ka-unit'>분</span>
                             <input type='number' id='kaIntervalSec' class='fork-input' min='0' max='59' value='0'>
                             <span class='ka-unit'>초</span>
                         </div>
-                        <span class='fork-hint' id='kaIntervalHint'>캐시는 1시간 유지되므로 58분을 권합니다.</span>
+                        <span class='fork-hint' id='kaIntervalHint'>캐시는 1시간 유지되므로 55분을 권합니다. 58분은 여유가 2분뿐이라 조금만 밀려도 놓칩니다.</span>
                     </div>
                     <label class='fork-field ka-narrow'>
                         <span class='fork-label'>최대 횟수 <em>필수</em></span>

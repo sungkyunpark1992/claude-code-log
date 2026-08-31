@@ -75,6 +75,16 @@
         return (titleEl && titleEl.dataset.title) || '';
     }
 
+    // 같은 목록에서 세션 페이지 주소를 얻는다.
+    // .session-link 자체는 <a> 가 아니라 <div> 라(수정·삭제 버튼을 담으면서 바뀌었다)
+    // 안쪽 링크에서 꺼낸다. 못 찾으면 제목을 링크로 만들지 않는다.
+    function lookupHref(sid) {
+        var el = document.querySelector('.session-link[data-session-id="' + sid + '"]');
+        if (!el) return null;
+        var a = el.querySelector('a[href]');
+        return a ? a.getAttribute('href') : null;
+    }
+
     function fmtDuration(sec) {
         if (sec < 0) sec = 0;
         var h = Math.floor(sec / 3600);
@@ -265,9 +275,13 @@
                 '</div>';
         }
 
+        // 뱃지를 눌러 지운다 = "새로고침했다"는 표시. 상태는 서버에 있으므로
+        // 여기서 지우면 세션 화면의 같은 뱃지도 함께 사라진다.
         var reload = it.needs_reload
-            ? '<div class="ka-reload-badge" title="자동 메시지가 나간 뒤 ' +
-              'VS Code 를 새로고침해야 대화가 갈라지지 않습니다">VS Code<br>재실행 필요</div>'
+            ? '<button type="button" data-act="clear_reload" data-id="' + sid + '" ' +
+              'class="ka-reload-badge" title="자동 메시지가 나간 뒤 VS Code 를 ' +
+              '새로고침해야 대화가 갈라지지 않습니다. 새로고침했다면 눌러서 지우세요.">' +
+              'VS Code<br>재실행 필요</button>'
             : '';
 
         var badge = (usageRow || reload)
@@ -278,10 +292,18 @@
         var title = lookupTitle(sid);
         var modelTag = it.model ? ' · ' + escapeHtml(it.model) : '';
 
+        // 제목을 누르면 그 세션의 대화 화면으로 간다. 목록에서 다시 찾을 필요가 없다.
+        var href = lookupHref(sid);
+        var titleText = escapeHtml(title || '(제목 없음)');
+        var titleHtml = href
+            ? '<a class="ka-title-link" href="' + escapeHtml(href) +
+              '" title="이 세션의 대화 화면으로 이동">' + titleText + '</a>'
+            : titleText;
+
         return '<div class="ka-item' + (st.cls ? ' ' + st.cls : '') + '" data-ka-id="' + sid + '">' +
             '<div class="ka-item-main">' +
                 '<span class="ka-meta">' +
-                    '<span class="ka-meta-main">' + escapeHtml(title || '(제목 없음)') + '</span>' +
+                    '<span class="ka-meta-main">' + titleHtml + '</span>' +
                     '<span class="ka-meta-sub">' +
                         '<span class="ka-sid">' + escapeHtml(sid.slice(0, 8)) + '</span>' +
                         (project ? ' · ' + escapeHtml(project) : '') + modelTag +
@@ -412,6 +434,9 @@
             // 실제 전송이라 7~8초 걸린다. 아무 반응이 없으면 눌린 줄 모른다.
             btn.textContent = '보내는 중…';
             setStatus('캐시를 만드는 중입니다 — 잠시 걸립니다.', null);
+        }
+        if (act === 'clear_reload') {
+            setStatus('새로고침 알림을 지웠습니다.', 'success');
         }
         post('/api/keepalive/' + id, { action: act }).then(function (res) {
             if (!res.ok) {

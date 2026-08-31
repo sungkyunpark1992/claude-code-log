@@ -13,6 +13,7 @@ VS Code 확장이 만든 캐시를 그대로 이어받는 것을 확인했기 �
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -36,9 +37,84 @@ SEND_TIMEOUT_SEC = 120
 # 캐시 TTL. 이 시간이 지나면 전송해봐야 의미가 없어 재시도를 멈춘다.
 CACHE_TTL_SEC = 3600
 
+# 기본 주기 55분. TTL 까지 5분 여유를 둔다.
+# 58분으로 두면 여유가 2분뿐이라 잠깐만 밀려도 창을 놓친다 — 실제로 놓쳤다.
+DEFAULT_INTERVAL_SEC = 3300
+
+# 진단 기록. 자리를 비운 사이 무슨 판단을 했는지 남긴다.
+# 켜려면 CLAUDE_CODE_LOG_KEEPALIVE_DEBUG=1
+DEBUG_ENV = "CLAUDE_CODE_LOG_KEEPALIVE_DEBUG"
+DEBUG_HEARTBEAT_SEC = 300.0
+DEBUG_MAX_BYTES = 2 * 1024 * 1024
+
 
 def keepalive_path(projects_dir: Path) -> Path:
     return projects_dir / "keepalive.json"
+
+
+def debug_log_path(projects_dir: Path) -> Path:
+    return projects_dir / "keepalive-debug.log"
+
+
+class _DebugLog:
+    """워커가 매 순간 무엇을 보고 무엇을 결정했는지 남긴다.
+
+    자리를 비운 사이 안 나갔을 때, 남는 것이 "오류 문구 한 줄"뿐이면 원인을
+    좁힐 수 없다. 그래서 판단의 근거(경과 시간·만기까지·캐시 남은 시간·건너뛴
+    이유)를 함께 적는다.
+
+    같은 상태가 이어질 때는 5분에 한 번만 적는다. 10초마다 전부 적으면 하룻밤에
+    수만 줄이 쌓여 정작 중요한 변화가 묻힌다.
+    """
+
+    def __init__(self, path: Path, enabled: bool) -> None:
+        self._path = path
+        self._enabled = enabled
+        self._last_line: "dict[str, str]" = {}
+        self._last_at: "dict[str, float]" = {}
+        self._lock = threading.Lock()
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def write(self, key: str, message: str, *, always: bool = False) -> None:
+        if not self._enabled:
+            return
+        now = time.time()
+        with self._lock:
+            same = self._last_line.get(key) == message
+            recent = now - self._last_at.get(key, 0.0) < DEBUG_HEARTBEAT_SEC
+            if same and recent and not always:
+                return
+            self._last_line[key] = message
+            self._last_at[key] = now
+            stamp = datetime.now().strftime("%m-%d %H:%M:%S")
+            try:
+                self._rotate_if_large()
+                with self._path.open("a", encoding="utf-8") as handle:
+                    handle.write(f"{stamp}  {message}\n")
+                    handle.flush()
+                    # 절전이나 강제 종료로 프로세스가 끊겨도 여기까지는 남아야 한다
+                    os.fsync(handle.fileno())
+            except OSError:
+                # 기록을 못 남기는 것 때문에 본 기능이 멈추면 안 된다
+                pass
+
+    def _rotate_if_large(self) -> None:
+        """한 세대만 남기고 갈아끼운다. 몇 달을 켜두어도 무한정 자라지 않게."""
+        try:
+            if self._path.stat().st_size < DEBUG_MAX_BYTES:
+                return
+        except OSError:
+            return
+        previous = self._path.with_suffix(self._path.suffix + ".1")
+        try:
+            if previous.exists():
+                previous.unlink()
+            self._path.rename(previous)
+        except OSError:
+            pass
 
 
 def load_config(projects_dir: Path) -> "list[dict[str, Any]]":
@@ -109,6 +185,42 @@ def _first_line(text: str) -> Optional[str]:
     return lines[0][:120] if lines else None
 
 
+def _slug_of(project_path: str) -> str:
+    """Claude Code 가 폴더 경로를 세션 폴더 이름으로 바꾸는 규칙."""
+    out: "list[str]" = []
+    for ch in project_path.strip().rstrip("\\/"):
+        out.append("-" if ch in ":\\/" else ch)
+    return "".join(out)
+
+
+def _pick_cwd(cwds: "Counter[str]", jsonl_file: Path) -> Optional[str]:
+    """이 세션을 이어가려면 어느 폴더에서 실행해야 하는가.
+
+    단순히 "가장 많이 나온 cwd" 를 쓰면 안 된다. 대화가 길면 여러 폴더를
+    오갔고, **복제한 세션은 원본 프로젝트의 cwd 를 그대로 물려받는다.**
+    실제로 62MB 짜리 복제 세션에서 가장 흔한 cwd 가 이미 사라진 원본
+    폴더였고, 그래서 자동 메시지가 한 번도 나가지 못했다.
+
+    판단의 근거는 **파일이 놓인 폴더**다. Claude Code 는 현재 폴더를 슬러그로
+    바꿔 세션을 찾으므로, 그 폴더 이름과 슬러그가 같은 cwd 라야 `--resume`
+    이 같은 대화를 집는다. 기록을 고치지 않고 읽는 쪽에서 바로잡는다.
+    """
+    if not cwds:
+        return None
+    folder = jsonl_file.parent.name.lower()
+
+    # 1순위: 파일이 놓인 폴더와 슬러그가 같고, 실제로 존재하는 경로
+    for cwd, _ in cwds.most_common():
+        if _slug_of(cwd).lower() == folder and Path(cwd).is_dir():
+            return cwd
+    # 2순위: 존재하는 경로 중 가장 흔한 것 (대소문자만 다른 경우 등)
+    for cwd, _ in cwds.most_common():
+        if Path(cwd).is_dir():
+            return cwd
+    # 3순위: 그래도 없으면 가장 흔한 값. 호출자가 '폴더 없음'으로 걸러낸다.
+    return cwds.most_common(1)[0][0]
+
+
 def read_session_facts(jsonl_file: Path) -> "dict[str, Any]":
     """JSONL 에서 전송에 필요한 값을 뽑는다.
 
@@ -176,7 +288,7 @@ def read_session_facts(jsonl_file: Path) -> "dict[str, Any]":
                 last_response = ts
 
     return {
-        "cwd": cwds.most_common(1)[0][0] if cwds else None,
+        "cwd": _pick_cwd(cwds, jsonl_file),
         "model": model,
         # 카운트다운의 기준은 질문 시각이 아니라 마지막 응답 시각이다.
         # 도구를 많이 쓴 긴 작업은 둘의 차이가 15분까지 벌어진다.
@@ -249,17 +361,36 @@ class KeepaliveWorker:
     claude 프로세스가 한 번에 하나만 뜨도록 하기 위해서다.
     """
 
-    def __init__(self, projects_dir: Path, find_jsonl: Any) -> None:
+    def __init__(
+        self, projects_dir: Path, find_jsonl: Any, debug: Optional[bool] = None
+    ) -> None:
         self._projects_dir = projects_dir
         self._find_jsonl = find_jsonl
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
+        if debug is None:
+            # 기본으로 켠다. 같은 상태는 5분에 한 줄만 남기므로 하루 몇백 줄이고,
+            # 자리를 비운 사이 왜 안 나갔는지는 이 기록이 없으면 알 수 없다.
+            debug = os.environ.get(DEBUG_ENV, "").strip().lower() not in (
+                "0",
+                "false",
+                "off",
+            )
+        self._debug = _DebugLog(debug_log_path(projects_dir), debug)
+        self._last_tick_at = 0.0
 
     # ── 공개 API ────────────────────────────────────────────
     def start(self) -> None:
         if self._thread is not None:
             return
+        if self._debug.enabled:
+            self._debug.write(
+                "worker",
+                f"=== 워커 시작 · 검사 {CHECK_INTERVAL_SEC:.0f}초마다 "
+                f"· 기본 주기 {DEFAULT_INTERVAL_SEC}초 · TTL {CACHE_TTL_SEC}초 ===",
+                always=True,
+            )
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
@@ -332,6 +463,10 @@ class KeepaliveWorker:
             elif action == "reset":
                 item["count"] = 0
                 item["error"] = None
+            elif action == "clear_reload":
+                # 사람이 VS Code 를 새로고침했다는 뜻. 서버에 두므로 대시보드와
+                # 세션 화면 어느 쪽에서 눌러도 양쪽에서 함께 사라진다.
+                item["needs_reload"] = False
             else:
                 return False
 
@@ -412,12 +547,27 @@ class KeepaliveWorker:
                 print(f"[keepalive] tick 실패: {type(exc).__name__}: {exc}")
 
     def _tick(self) -> None:
+        # 검사 간격이 비정상적으로 벌어졌다면 그 사이 워커가 얼어 있었다는 뜻이다
+        # (절전·대기모드가 대표적). 원인을 나중에 짚으려면 이 흔적이 꼭 필요하다.
+        now = time.time()
+        if self._last_tick_at:
+            gap = now - self._last_tick_at
+            if gap > CHECK_INTERVAL_SEC * 3:
+                self._debug.write(
+                    "worker",
+                    f"★ 검사가 {gap:.0f}초 동안 멈춰 있었다"
+                    f" (정상 {CHECK_INTERVAL_SEC:.0f}초)."
+                    " 절전·대기모드로 프로세스가 얼었을 가능성",
+                    always=True,
+                )
+        self._last_tick_at = now
+
         with self._lock:
             sessions = load_config(self._projects_dir)
         if not sessions:
+            self._debug.write("worker", "등록된 세션 없음")
             return
 
-        now = time.time()
         due: "list[tuple[float, dict[str, Any], Path, str]]" = []
         changed = False
 
@@ -447,9 +597,21 @@ class KeepaliveWorker:
                     item.pop("auto_off", None)
                 changed = True
 
+            tag = str(item.get("session_id", "?"))[:8]
             if not item.get("enabled", True) or item.get("stopped"):
+                self._debug.write(
+                    tag,
+                    f"[{tag}] 건너뜀 — "
+                    + ("정지됨" if item.get("stopped") else "꺼짐")
+                    + f" (auto_off={bool(item.get('auto_off'))}, "
+                    f"error={item.get('error')})",
+                )
                 continue
             if item.get("count", 0) >= item.get("max", 12):
+                self._debug.write(
+                    tag,
+                    f"[{tag}] 건너뜀 — 예산 소진 {item.get('count')}/{item.get('max')}",
+                )
                 continue
 
             # 두 기준을 반드시 나눠 쓴다.
@@ -465,14 +627,30 @@ class KeepaliveWorker:
                     continue
             cache_base = _parse_iso(last_at)
 
-            interval = float(item.get("interval", 3480))
+            interval = float(item.get("interval", DEFAULT_INTERVAL_SEC))
+            ttl_left = (cache_base + CACHE_TTL_SEC - now) if cache_base else None
             if now < base + interval:
+                self._debug.write(
+                    tag,
+                    f"[{tag}] 대기 — 만기까지 {(base + interval - now) / 60:.1f}분"
+                    f" · 캐시 남음 "
+                    + (f"{ttl_left / 60:.1f}분" if ttl_left is not None else "?")
+                    + f" · 창 {(CACHE_TTL_SEC - interval) / 60:.1f}분",
+                )
                 continue
 
             # 캐시가 이미 만료됐으면 보내봐야 새로 쓰게 된다 — 목적과 정반대다.
             # 사람이 끈 것과 구분되도록 표식을 남긴다. 캐시가 되살아나면
             # 이 표식을 보고 위쪽에서 자동으로 다시 켠다.
             if cache_base is None or now > cache_base + CACHE_TTL_SEC:
+                over = (now - cache_base - CACHE_TTL_SEC) / 60 if cache_base else None
+                self._debug.write(
+                    tag,
+                    f"[{tag}] ★ 캐시 만료로 중지 — "
+                    + (f"{over:.1f}분 늦음" if over is not None else "기준 시각 없음")
+                    + f" (만기 {interval / 60:.0f}분, TTL {CACHE_TTL_SEC / 60:.0f}분)",
+                    always=True,
+                )
                 item["enabled"] = False
                 item["auto_off"] = True
                 item["error"] = "캐시 만료로 중지됨"
@@ -481,18 +659,43 @@ class KeepaliveWorker:
 
             # 응답이 진행 중일 수 있다. 파일이 방금 바뀌었으면 끼어들지 않는다.
             try:
-                if now - jsonl.stat().st_mtime < ACTIVE_WINDOW_SEC:
+                idle = now - jsonl.stat().st_mtime
+                if idle < ACTIVE_WINDOW_SEC:
+                    self._debug.write(
+                        tag,
+                        f"[{tag}] 보류 — 파일이 {idle:.0f}초 전에 바뀜"
+                        f" (사람이 쓰는 중으로 봄, 기준 {ACTIVE_WINDOW_SEC:.0f}초)"
+                        f" · 캐시 남음 "
+                        + (f"{ttl_left / 60:.1f}분" if ttl_left is not None else "?"),
+                        always=True,
+                    )
                     continue
-            except OSError:
+            except OSError as exc:
+                self._debug.write(tag, f"[{tag}] 보류 — 파일 정보 읽기 실패: {exc}")
                 continue
 
             cwd = facts["cwd"]
             if not cwd or not Path(cwd).is_dir():
+                self._debug.write(
+                    tag,
+                    f"[{tag}] ★ 작업 폴더 없음 — cwd={cwd!r}"
+                    f" (JSONL 은 {jsonl.parent.name} 에 있음)."
+                    " 복제한 세션이면 cwd 가 원본 프로젝트를 가리킨다",
+                    always=True,
+                )
                 if item.get("error") != "작업 폴더를 찾을 수 없습니다":
                     item["error"] = "작업 폴더를 찾을 수 없습니다"
                     changed = True
                 continue
 
+            self._debug.write(
+                tag,
+                f"[{tag}] 전송 대상 — 만기 지남"
+                f" · 캐시 남음 "
+                + (f"{ttl_left / 60:.1f}분" if ttl_left is not None else "?")
+                + f" · cwd={cwd}",
+                always=True,
+            )
             due.append((base, item, jsonl, cwd))
 
         if changed:
@@ -511,7 +714,15 @@ class KeepaliveWorker:
             if not message:
                 continue
 
+            started_at = time.time()
             ok, err = send_keepalive(sid, cwd, message)
+            self._debug.write(
+                sid[:8],
+                f"[{sid[:8]}] 전송 {'성공' if ok else '실패'}"
+                f" — {time.time() - started_at:.1f}초 걸림"
+                + ("" if ok else f" · {err}"),
+                always=True,
+            )
             with self._lock:
                 current = load_config(self._projects_dir)
                 target = next((s for s in current if s.get("session_id") == sid), None)

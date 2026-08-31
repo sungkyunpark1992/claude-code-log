@@ -1,0 +1,124 @@
+<!-- 세션 화면의 자동 메시지 상태 — 대시보드까지 가지 않아도 여기서 보이게 -->
+<script>
+(function () {
+    'use strict';
+
+    // 이 세션이 자동 메시지에 등록돼 있을 때만 나타난다.
+    // 상태는 서버(keepalive.json)가 가지므로 대시보드와 항상 같은 값을 본다.
+    var POLL_MS = 5000;
+    var TICK_MS = 1000;
+
+    // 입력창 말풍선 **바로 위**, 같은 dock 안에 붙인다.
+    // 말풍선 안에 넣으면 `.user.empty-prompt *` 의 pointer-events:none 에 막혀
+    // 누를 수 없고, 말풍선 전체가 opacity 0.4 라 카운트다운도 흐리게 보인다.
+    var dock = document.getElementById('prompt-dock');
+    var prompt = document.getElementById('ccl-live-prompt');
+    if (!dock || !prompt) return;
+
+    function sessionId() {
+        var hdr = document.querySelector('.message.session-header[data-session-id]');
+        if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+        var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+        return m ? m[1] : null;
+    }
+
+    var sid = sessionId();
+    if (!sid) return;
+
+    var box = document.createElement('span');
+    box.className = 'ka-live';
+    box.hidden = true;
+    box.innerHTML =
+        '<span class="ka-live-count" title="다음 자동 메시지까지 남은 시간"></span>' +
+        '<span class="ka-live-note"></span>' +
+        '<button type="button" class="ka-live-reload" hidden' +
+        ' title="자동 메시지가 나간 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다.' +
+        ' 새로고침했다면 눌러서 지우세요.">VS Code 재실행 필요</button>';
+    dock.insertBefore(box, prompt);
+
+    var countEl = box.querySelector('.ka-live-count');
+    var noteEl = box.querySelector('.ka-live-note');
+    var reloadEl = box.querySelector('.ka-live-reload');
+
+    var item = null;
+
+    function fmt(sec) {
+        if (sec < 0) sec = 0;
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = Math.floor(sec % 60);
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+    }
+
+    // 대시보드(keepalive_script.js)의 computeState 와 같은 규칙을 쓴다.
+    // 두 화면이 다른 숫자를 보이면 어느 쪽을 믿어야 할지 알 수 없다.
+    function state(it) {
+        var now = Date.now();
+        var base = Date.parse(it.resume_at || it.last_response_at || '') || now;
+        var left = Math.round((base + (it.interval || 0) * 1000 - now) / 1000);
+        var done = (it.count || 0) >= (it.max || 0);
+
+        if (it.missing || it.error) return { cls: 'error', text: '오류', note: it.error || '' };
+        if (done) return { cls: 'done', text: '완료', note: '' };
+        if (it.stopped) return { cls: 'stopped', text: '중지', note: '' };
+        if (!it.enabled) {
+            // 일시정지해도 캐시 시계는 계속 간다 — 숫자를 얼리면 여유가 있다고 오해한다
+            if (left <= 0) return { cls: 'expired', text: '00:00', note: '캐시만료' };
+            return { cls: 'paused', text: fmt(left), note: '일시정지' };
+        }
+        if (left <= 0) return { cls: 'due', text: '전송 대기', note: '' };
+        return { cls: '', text: fmt(left), note: '' };
+    }
+
+    function paint() {
+        if (!item) {
+            box.hidden = true;
+            return;
+        }
+        box.hidden = false;
+        var st = state(item);
+        box.className = 'ka-live' + (st.cls ? ' ' + st.cls : '');
+        countEl.textContent = st.text;
+        noteEl.textContent = st.note;
+        reloadEl.hidden = !item.needs_reload;
+    }
+
+    function load() {
+        return fetch('/api/keepalive')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var found = null;
+                (d.sessions || []).forEach(function (s) {
+                    if (s.session_id === sid) found = s;
+                });
+                item = found;
+                paint();
+            })
+            .catch(function () { /* 서버가 잠깐 멈춘 경우 — 다음 주기에 다시 */ });
+    }
+
+    reloadEl.addEventListener('click', function () {
+        reloadEl.disabled = true;
+        fetch('/api/keepalive/' + sid, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'clear_reload' })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                (d.sessions || []).forEach(function (s) {
+                    if (s.session_id === sid) item = s;
+                });
+                paint();
+            })
+            .catch(function () {})
+            .then(function () { reloadEl.disabled = false; });
+    });
+
+    load();
+    setInterval(load, POLL_MS);
+    // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
+    setInterval(paint, TICK_MS);
+})();
+</script>
