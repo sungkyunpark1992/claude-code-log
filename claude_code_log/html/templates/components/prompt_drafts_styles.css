@@ -1,0 +1,218 @@
+/* 나중에 물어볼 질문 — 저장 아이콘과 목록 패널.
+   북마크 패널과 같은 자리·같은 모양을 쓴다. 오른쪽에서 밀려 나오는 패널이
+   저마다 다르게 생기면 어느 것을 보고 있는지 헷갈린다. */
+
+.prompt-save-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0.75;
+}
+
+/* 입력창이 비어 있을 때 `.user.empty-prompt *` 가 클릭을 통과시킨다.
+   그 상태에서도 눌리게 해야 "비어 있습니다" 라고 알려줄 수 있다 —
+   눌러도 아무 일이 없으면 고장 난 것으로 보인다.
+   선택자를 더 구체적으로 써야 그 규칙을 이긴다. */
+.user.empty-prompt .prompt-save-btn {
+    pointer-events: auto;
+}
+
+.prompt-save-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.prompt-save-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* 떠 있는 버튼의 개수 배지 — 선택 모드 배지와 같은 모양 */
+.draft-count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--tool-use-color);
+    color: #fff;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    padding: 0 4px;
+    box-sizing: border-box;
+    display: none;
+    pointer-events: none;
+}
+
+.draft-count-badge.visible {
+    display: block;
+}
+
+.draft-toggle.floating-btn.active {
+    background: rgba(76, 175, 80, 0.25);
+}
+
+/* ===== 패널 ===== */
+#draft-panel {
+    position: fixed;
+    top: 0;
+    right: 60px;
+    bottom: 0;
+    width: 340px;
+    min-width: 300px;
+    background: #ffffff;
+    border-left: 1px solid #ddd;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+    transform: translateX(calc(100% + 60px));
+    transition: transform 0.25s ease;
+    z-index: 98;
+    display: flex;
+    flex-direction: column;
+}
+
+#draft-panel.open {
+    transform: translateX(0);
+}
+
+.draft-panel-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: ew-resize;
+    background: transparent;
+}
+
+.draft-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    background: #f8f8f8;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.draft-panel-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: #666;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.draft-panel-close:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+/* 어디에 저장됐는지 — 손으로 열어 고칠 수 있어야 하므로 경로를 보인다 */
+.draft-panel-hint {
+    padding: 6px 14px;
+    font-size: 0.72em;
+    color: #999;
+    border-bottom: 1px solid #f0f0f0;
+    word-break: break-all;
+    flex-shrink: 0;
+}
+
+.draft-panel-hint.ok {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.draft-panel-hint.error {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.draft-panel-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.draft-empty {
+    color: #999;
+    text-align: center;
+    padding: 30px 16px;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
+.draft-item {
+    padding: 9px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: #fff;
+}
+
+.draft-item:hover {
+    border-color: #ccc;
+    background: #fafafa;
+}
+
+.draft-item-when {
+    font-size: 0.72em;
+    color: #999;
+    margin-bottom: 4px;
+}
+
+/* 여러 줄짜리 질문이 많다. 줄바꿈은 살리되 너무 길면 잘라 보인다. */
+.draft-item-body {
+    font-size: 0.85em;
+    color: #333;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 8.5em;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.draft-item-acts {
+    display: flex;
+    gap: 5px;
+}
+
+.draft-act {
+    padding: 3px 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #f8f9fa;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.75em;
+    white-space: nowrap;
+}
+
+.draft-act:hover {
+    background: #eef0f2;
+}
+
+/* 이 기능의 목적이 '다시 꺼내 쓰기' 라 그 버튼을 도드라지게 둔다 */
+.draft-act-put {
+    background: var(--tool-use-color);
+    border-color: var(--tool-use-color);
+    color: #fff;
+    font-weight: 600;
+}
+
+.draft-act-put:hover {
+    filter: brightness(0.95);
+}
+
+.draft-act-del:hover {
+    background: #dc262611;
+    border-color: #dc262655;
+    color: #b91c1c;
+}

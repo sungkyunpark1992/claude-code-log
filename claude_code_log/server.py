@@ -939,6 +939,46 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         return jsonify(result)  # type: ignore[return-value]
 
+    @app.route("/api/sessions/<session_id>/drafts")
+    def list_drafts(session_id: str) -> Response:
+        """나중에 물어보려고 적어둔 질문들."""
+        from .drafts import drafts_path, load_drafts
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+        path = drafts_path(jsonl_file, session_id)
+        return jsonify(  # type: ignore[return-value]
+            {"drafts": load_drafts(path), "path": str(path)}
+        )
+
+    @app.route("/api/sessions/<session_id>/drafts", methods=["POST"])
+    def mutate_drafts(session_id: str) -> Response:
+        """적어두기 / 지우기. 파일은 JSONL 옆에 둔다."""
+        from .drafts import add_draft, delete_draft, drafts_path
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+        action = str(data.get("action") or "add").strip()
+
+        if action == "add":
+            result = add_draft(jsonl_file, session_id, str(data.get("text") or ""))
+        elif action == "delete":
+            result = delete_draft(
+                jsonl_file, session_id, str(data.get("id") or "").strip()
+            )
+        else:
+            return jsonify({"error": f"알 수 없는 동작: {action}"}), 400  # type: ignore[return-value]
+
+        if not result.get("ok"):
+            return jsonify({"error": result.get("error", "실패했습니다")}), 400  # type: ignore[return-value]
+        result["path"] = str(drafts_path(jsonl_file, session_id))
+        return jsonify(result)  # type: ignore[return-value]
+
     @app.route("/api/sessions/<session_id>/digest")
     def session_digest(session_id: str) -> Response:
         """대화 본문만 추려 Markdown 으로 준다.

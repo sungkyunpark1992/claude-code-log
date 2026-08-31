@@ -21,6 +21,7 @@
 {% include 'components/export_styles.css' %}
 {% include 'components/message_copy_styles.css' %}
 {% include 'components/keepalive_status_styles.css' %}
+{% include 'components/prompt_drafts_styles.css' %}
     </style>
 </head>
 
@@ -181,6 +182,7 @@
     <div id='ccl-live-prompt' class='message user empty-prompt'>
         <div class='header'>
             <span>🤷 User</span>
+            <button class='prompt-save-btn' title='나중에 물어보려고 저장 (지금 보내지 않음)'>💾</button>
             <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
             <button class='prompt-minimize-btn' title='최소화'>▼</button>
         </div>
@@ -194,6 +196,7 @@
         <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
         <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
         <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+        <button class="draft-toggle floating-btn" id="toggleDrafts" title="저장한 질문 보기">🗂️<span class="draft-count-badge" id="draftCountBadge">0</span></button>
         <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
         <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
         <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
@@ -211,6 +214,18 @@
         </div>
         <div class="bookmark-panel-list" id="bookmark-list">
             <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+        </div>
+    </div>
+
+    <div id="draft-panel" aria-hidden="true">
+        <div class="draft-panel-resize-handle" title="드래그하여 너비 조절"></div>
+        <div class="draft-panel-header">
+            <span>🗂️ 저장한 질문 <span id="draft-count">0</span></span>
+            <button class="draft-panel-close" title="닫기">✕</button>
+        </div>
+        <div class="draft-panel-hint" id="draft-path"></div>
+        <div class="draft-panel-list" id="draft-list">
+            <div class="draft-empty">저장한 질문이 없습니다.<br>입력창의 💾 를 눌러 저장하세요.</div>
         </div>
     </div>
 
@@ -1330,6 +1345,7 @@
     {% include 'components/message_export.html' %}
     {% include 'components/message_copy.html' %}
     {% include 'components/keepalive_status.html' %}
+    {% include 'components/prompt_drafts.html' %}
 
     <!-- Live update via SSE -->
     <script>

@@ -7457,6 +7457,224 @@
       opacity: 0.6;
       cursor: default;
   }
+  /* 나중에 물어볼 질문 — 저장 아이콘과 목록 패널.
+     북마크 패널과 같은 자리·같은 모양을 쓴다. 오른쪽에서 밀려 나오는 패널이
+     저마다 다르게 생기면 어느 것을 보고 있는지 헷갈린다. */
+  
+  .prompt-save-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      opacity: 0.75;
+  }
+  
+  /* 입력창이 비어 있을 때 `.user.empty-prompt *` 가 클릭을 통과시킨다.
+     그 상태에서도 눌리게 해야 "비어 있습니다" 라고 알려줄 수 있다 —
+     눌러도 아무 일이 없으면 고장 난 것으로 보인다.
+     선택자를 더 구체적으로 써야 그 규칙을 이긴다. */
+  .user.empty-prompt .prompt-save-btn {
+      pointer-events: auto;
+  }
+  
+  .prompt-save-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  .prompt-save-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+  }
+  
+  /* 떠 있는 버튼의 개수 배지 — 선택 모드 배지와 같은 모양 */
+  .draft-count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--tool-use-color);
+      color: #fff;
+      border-radius: 10px;
+      min-width: 18px;
+      height: 18px;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      padding: 0 4px;
+      box-sizing: border-box;
+      display: none;
+      pointer-events: none;
+  }
+  
+  .draft-count-badge.visible {
+      display: block;
+  }
+  
+  .draft-toggle.floating-btn.active {
+      background: rgba(76, 175, 80, 0.25);
+  }
+  
+  /* ===== 패널 ===== */
+  #draft-panel {
+      position: fixed;
+      top: 0;
+      right: 60px;
+      bottom: 0;
+      width: 340px;
+      min-width: 300px;
+      background: #ffffff;
+      border-left: 1px solid #ddd;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+      transform: translateX(calc(100% + 60px));
+      transition: transform 0.25s ease;
+      z-index: 98;
+      display: flex;
+      flex-direction: column;
+  }
+  
+  #draft-panel.open {
+      transform: translateX(0);
+  }
+  
+  .draft-panel-resize-handle {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: ew-resize;
+      background: transparent;
+  }
+  
+  .draft-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+      background: #f8f8f8;
+      font-weight: 600;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+  }
+  
+  .draft-panel-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  /* 어디에 저장됐는지 — 손으로 열어 고칠 수 있어야 하므로 경로를 보인다 */
+  .draft-panel-hint {
+      padding: 6px 14px;
+      font-size: 0.72em;
+      color: #999;
+      border-bottom: 1px solid #f0f0f0;
+      word-break: break-all;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-hint.ok {
+      color: #16a34a;
+      font-weight: 600;
+  }
+  
+  .draft-panel-hint.error {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  .draft-panel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+  }
+  
+  .draft-empty {
+      color: #999;
+      text-align: center;
+      padding: 30px 16px;
+      font-size: 0.85em;
+      line-height: 1.5;
+  }
+  
+  .draft-item {
+      padding: 9px 10px;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #fff;
+  }
+  
+  .draft-item:hover {
+      border-color: #ccc;
+      background: #fafafa;
+  }
+  
+  .draft-item-when {
+      font-size: 0.72em;
+      color: #999;
+      margin-bottom: 4px;
+  }
+  
+  /* 여러 줄짜리 질문이 많다. 줄바꿈은 살리되 너무 길면 잘라 보인다. */
+  .draft-item-body {
+      font-size: 0.85em;
+      color: #333;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8.5em;
+      overflow: hidden;
+      margin-bottom: 6px;
+  }
+  
+  .draft-item-acts {
+      display: flex;
+      gap: 5px;
+  }
+  
+  .draft-act {
+      padding: 3px 8px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.75em;
+      white-space: nowrap;
+  }
+  
+  .draft-act:hover {
+      background: #eef0f2;
+  }
+  
+  /* 이 기능의 목적이 '다시 꺼내 쓰기' 라 그 버튼을 도드라지게 둔다 */
+  .draft-act-put {
+      background: var(--tool-use-color);
+      border-color: var(--tool-use-color);
+      color: #fff;
+      font-weight: 600;
+  }
+  
+  .draft-act-put:hover {
+      filter: brightness(0.95);
+  }
+  
+  .draft-act-del:hover {
+      background: #dc262611;
+      border-color: #dc262655;
+      color: #b91c1c;
+  }
       </style>
   </head>
   
@@ -8334,6 +8552,7 @@
       <div id='ccl-live-prompt' class='message user empty-prompt'>
           <div class='header'>
               <span>🤷 User</span>
+              <button class='prompt-save-btn' title='나중에 물어보려고 저장 (지금 보내지 않음)'>💾</button>
               <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
               <button class='prompt-minimize-btn' title='최소화'>▼</button>
           </div>
@@ -8347,6 +8566,7 @@
           <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
           <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
           <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+          <button class="draft-toggle floating-btn" id="toggleDrafts" title="저장한 질문 보기">🗂️<span class="draft-count-badge" id="draftCountBadge">0</span></button>
           <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
           <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
           <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
@@ -8364,6 +8584,18 @@
           </div>
           <div class="bookmark-panel-list" id="bookmark-list">
               <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+          </div>
+      </div>
+  
+      <div id="draft-panel" aria-hidden="true">
+          <div class="draft-panel-resize-handle" title="드래그하여 너비 조절"></div>
+          <div class="draft-panel-header">
+              <span>🗂️ 저장한 질문 <span id="draft-count">0</span></span>
+              <button class="draft-panel-close" title="닫기">✕</button>
+          </div>
+          <div class="draft-panel-hint" id="draft-path"></div>
+          <div class="draft-panel-list" id="draft-list">
+              <div class="draft-empty">저장한 질문이 없습니다.<br>입력창의 💾 를 눌러 저장하세요.</div>
           </div>
       </div>
   
@@ -11325,6 +11557,261 @@
       setInterval(load, POLL_MS);
       // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
       setInterval(paint, TICK_MS);
+  })();
+  </script>
+      <!-- 나중에 물어볼 질문 적어두기 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      var prompt = document.getElementById('ccl-live-prompt');
+      var panel = document.getElementById('draft-panel');
+      var listEl = document.getElementById('draft-list');
+      var countEl = document.getElementById('draft-count');
+      var badge = document.getElementById('draftCountBadge');
+      var pathEl = document.getElementById('draft-path');
+      var toggleBtn = document.getElementById('toggleDrafts');
+      if (!prompt || !panel) return;
+  
+      var saveBtn = prompt.querySelector('.prompt-save-btn');
+      var input = prompt.querySelector('.user-input');
+      var drafts = [];
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+      var sid = sessionId();
+  
+      function api(method, body) {
+          return fetch('/api/sessions/' + sid + '/drafts', {
+              method: method,
+              headers: { 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined
+          }).then(function (r) {
+              return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          });
+      }
+  
+      function updateBadge() {
+          if (!badge) return;
+          badge.textContent = String(drafts.length);
+          badge.classList.toggle('visible', drafts.length > 0);
+      }
+  
+      function render() {
+          if (countEl) countEl.textContent = String(drafts.length);
+          updateBadge();
+          if (!listEl) return;
+          if (!drafts.length) {
+              listEl.innerHTML = '<div class="draft-empty">저장한 질문이 없습니다.'
+                  + '<br>입력창의 💾 를 눌러 저장하세요.</div>';
+              return;
+          }
+          listEl.innerHTML = '';
+          drafts.forEach(function (d) {
+              var row = document.createElement('div');
+              row.className = 'draft-item';
+              row.dataset.draftId = d.id;
+  
+              var when = document.createElement('div');
+              when.className = 'draft-item-when';
+              when.textContent = d.saved_at;
+  
+              var body = document.createElement('div');
+              body.className = 'draft-item-body';
+              body.textContent = d.text;
+  
+              var acts = document.createElement('div');
+              acts.className = 'draft-item-acts';
+              // 입력창에 되돌려 놓는 것이 이 기능의 목적이다. 눈에 띄게 둔다.
+              var put = document.createElement('button');
+              put.type = 'button';
+              put.className = 'draft-act draft-act-put';
+              put.textContent = '입력창에 넣기';
+              put.title = '이 질문을 입력창에 넣습니다 (저장본은 그대로 남습니다)';
+              var copy = document.createElement('button');
+              copy.type = 'button';
+              copy.className = 'draft-act';
+              copy.textContent = '복사';
+              var del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'draft-act draft-act-del';
+              del.textContent = '삭제';
+  
+              acts.appendChild(put);
+              acts.appendChild(copy);
+              acts.appendChild(del);
+              row.appendChild(when);
+              row.appendChild(body);
+              row.appendChild(acts);
+              listEl.appendChild(row);
+          });
+      }
+  
+      // 안내 문구가 떠 있는 동안에는 경로로 덮어쓰지 않는다.
+      // 목록 조회가 비동기라, 그냥 두면 방금 띄운 문구를 바로 지워 버린다.
+      var savedPath = '';
+      var flashUntil = 0;
+  
+      function showPath() {
+          if (pathEl && Date.now() > flashUntil) {
+              pathEl.textContent = savedPath;
+              pathEl.className = 'draft-panel-hint';
+          }
+      }
+  
+      function load() {
+          if (!sid) return Promise.resolve();
+          return fetch('/api/sessions/' + sid + '/drafts')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  drafts = d.drafts || [];
+                  if (d.path) savedPath = d.path;
+                  showPath();
+                  render();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 */ });
+      }
+  
+      function flash(text, kind) {
+          if (!pathEl) return;
+          flashUntil = Date.now() + 2600;
+          pathEl.textContent = text;
+          pathEl.className = 'draft-panel-hint ' + (kind || '');
+          setTimeout(showPath, 2600);
+      }
+  
+      // ── 저장 ───────────────────────────────────────────
+      if (saveBtn) {
+          saveBtn.addEventListener('click', function (e) {
+              e.stopPropagation();   // 말풍선 클릭이 다른 동작을 부르지 않게
+              if (!sid) return;
+              var text = input ? input.value : '';
+              if (!text.trim()) {
+                  openPanel();
+                  flash('입력창이 비어 있습니다.', 'error');
+                  return;
+              }
+              saveBtn.disabled = true;
+              api('POST', { action: 'add', text: text })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '저장하지 못했습니다');
+                      drafts = res.d.drafts || [];
+                      if (res.d.path) savedPath = res.d.path;
+                      render();
+                      openPanel();
+                      // 저장했으니 입력창은 비운다 — 남겨두면 실수로 또 보내게 된다.
+                      // 되돌리기(Ctrl+Z)가 되도록 지우기 버튼과 같은 방식을 쓴다.
+                      if (input) {
+                          input.focus();
+                          input.select();
+                          var undoable = false;
+                          try {
+                              undoable = document.execCommand('delete');
+                          } catch (err) { undoable = false; }
+                          if (!undoable) input.value = '';
+                          input.style.height = '';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                      flash('저장했습니다 — 모두 ' + drafts.length + '건', 'ok');
+                  })
+                  .catch(function (err) {
+                      openPanel();
+                      flash(String(err.message || err), 'error');
+                  })
+                  .then(function () { saveBtn.disabled = false; });
+          });
+      }
+  
+      // ── 목록에서의 조작 ────────────────────────────────
+      if (listEl) {
+          listEl.addEventListener('click', function (e) {
+              var row = e.target.closest('.draft-item');
+              if (!row) return;
+              var id = row.dataset.draftId;
+              var draft = null;
+              drafts.forEach(function (d) { if (d.id === id) draft = d; });
+              if (!draft) return;
+  
+              if (e.target.classList.contains('draft-act-put')) {
+                  if (input) {
+                      input.value = draft.text;
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.focus();
+                  }
+                  flash('입력창에 넣었습니다.', 'ok');
+                  return;
+              }
+              if (e.target.classList.contains('draft-act-del')) {
+                  if (!window.confirm('이 질문을 지웁니다. 되돌릴 수 없습니다.')) return;
+                  api('POST', { action: 'delete', id: id }).then(function (res) {
+                      if (!res.ok) {
+                          flash(res.d.error || '지우지 못했습니다', 'error');
+                          return;
+                      }
+                      drafts = res.d.drafts || [];
+                      render();
+                      flash('지웠습니다 — 남은 ' + drafts.length + '건', 'ok');
+                  });
+                  return;
+              }
+              if (e.target.textContent === '복사') {
+                  var done = function () { flash('복사했습니다.', 'ok'); };
+                  if (navigator.clipboard) {
+                      navigator.clipboard.writeText(draft.text).then(done, function () {});
+                  }
+              }
+          });
+      }
+  
+      // ── 패널 열고 닫기 ─────────────────────────────────
+      function openPanel() {
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          if (toggleBtn) toggleBtn.classList.add('active');
+          // 오른쪽 같은 자리에 붙는 다른 패널들과 겹치지 않게 한다
+          ['bookmark-panel', 'export-panel'].forEach(function (id) {
+              var other = document.getElementById(id);
+              if (!other) return;
+              other.classList.remove('open');
+              other.setAttribute('aria-hidden', 'true');
+          });
+          ['toggleBookmarks', 'toggleSelection'].forEach(function (id) {
+              var b = document.getElementById(id);
+              if (b) b.classList.remove('active');
+          });
+          document.body.classList.remove('selection-mode');
+          load();
+      }
+  
+      function closePanel() {
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+          if (toggleBtn) toggleBtn.classList.remove('active');
+      }
+  
+      if (toggleBtn) {
+          toggleBtn.addEventListener('click', function () {
+              if (panel.classList.contains('open')) closePanel();
+              else openPanel();
+          });
+      }
+      var closeBtn = panel.querySelector('.draft-panel-close');
+      if (closeBtn) closeBtn.addEventListener('click', closePanel);
+  
+      document.addEventListener('click', function (e) {
+          if (!panel.classList.contains('open')) return;
+          if (panel.contains(e.target)) return;
+          if (toggleBtn && toggleBtn.contains(e.target)) return;
+          if (e.target.closest && e.target.closest('.prompt-save-btn')) return;
+          closePanel();
+      });
+  
+      // 배지 숫자는 패널을 열지 않아도 보여야 한다
+      load();
   })();
   </script>
   
@@ -14986,6 +15473,224 @@
       opacity: 0.6;
       cursor: default;
   }
+  /* 나중에 물어볼 질문 — 저장 아이콘과 목록 패널.
+     북마크 패널과 같은 자리·같은 모양을 쓴다. 오른쪽에서 밀려 나오는 패널이
+     저마다 다르게 생기면 어느 것을 보고 있는지 헷갈린다. */
+  
+  .prompt-save-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      opacity: 0.75;
+  }
+  
+  /* 입력창이 비어 있을 때 `.user.empty-prompt *` 가 클릭을 통과시킨다.
+     그 상태에서도 눌리게 해야 "비어 있습니다" 라고 알려줄 수 있다 —
+     눌러도 아무 일이 없으면 고장 난 것으로 보인다.
+     선택자를 더 구체적으로 써야 그 규칙을 이긴다. */
+  .user.empty-prompt .prompt-save-btn {
+      pointer-events: auto;
+  }
+  
+  .prompt-save-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  .prompt-save-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+  }
+  
+  /* 떠 있는 버튼의 개수 배지 — 선택 모드 배지와 같은 모양 */
+  .draft-count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--tool-use-color);
+      color: #fff;
+      border-radius: 10px;
+      min-width: 18px;
+      height: 18px;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      padding: 0 4px;
+      box-sizing: border-box;
+      display: none;
+      pointer-events: none;
+  }
+  
+  .draft-count-badge.visible {
+      display: block;
+  }
+  
+  .draft-toggle.floating-btn.active {
+      background: rgba(76, 175, 80, 0.25);
+  }
+  
+  /* ===== 패널 ===== */
+  #draft-panel {
+      position: fixed;
+      top: 0;
+      right: 60px;
+      bottom: 0;
+      width: 340px;
+      min-width: 300px;
+      background: #ffffff;
+      border-left: 1px solid #ddd;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+      transform: translateX(calc(100% + 60px));
+      transition: transform 0.25s ease;
+      z-index: 98;
+      display: flex;
+      flex-direction: column;
+  }
+  
+  #draft-panel.open {
+      transform: translateX(0);
+  }
+  
+  .draft-panel-resize-handle {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: ew-resize;
+      background: transparent;
+  }
+  
+  .draft-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+      background: #f8f8f8;
+      font-weight: 600;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+  }
+  
+  .draft-panel-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  /* 어디에 저장됐는지 — 손으로 열어 고칠 수 있어야 하므로 경로를 보인다 */
+  .draft-panel-hint {
+      padding: 6px 14px;
+      font-size: 0.72em;
+      color: #999;
+      border-bottom: 1px solid #f0f0f0;
+      word-break: break-all;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-hint.ok {
+      color: #16a34a;
+      font-weight: 600;
+  }
+  
+  .draft-panel-hint.error {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  .draft-panel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+  }
+  
+  .draft-empty {
+      color: #999;
+      text-align: center;
+      padding: 30px 16px;
+      font-size: 0.85em;
+      line-height: 1.5;
+  }
+  
+  .draft-item {
+      padding: 9px 10px;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #fff;
+  }
+  
+  .draft-item:hover {
+      border-color: #ccc;
+      background: #fafafa;
+  }
+  
+  .draft-item-when {
+      font-size: 0.72em;
+      color: #999;
+      margin-bottom: 4px;
+  }
+  
+  /* 여러 줄짜리 질문이 많다. 줄바꿈은 살리되 너무 길면 잘라 보인다. */
+  .draft-item-body {
+      font-size: 0.85em;
+      color: #333;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8.5em;
+      overflow: hidden;
+      margin-bottom: 6px;
+  }
+  
+  .draft-item-acts {
+      display: flex;
+      gap: 5px;
+  }
+  
+  .draft-act {
+      padding: 3px 8px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.75em;
+      white-space: nowrap;
+  }
+  
+  .draft-act:hover {
+      background: #eef0f2;
+  }
+  
+  /* 이 기능의 목적이 '다시 꺼내 쓰기' 라 그 버튼을 도드라지게 둔다 */
+  .draft-act-put {
+      background: var(--tool-use-color);
+      border-color: var(--tool-use-color);
+      color: #fff;
+      font-weight: 600;
+  }
+  
+  .draft-act-put:hover {
+      filter: brightness(0.95);
+  }
+  
+  .draft-act-del:hover {
+      background: #dc262611;
+      border-color: #dc262655;
+      color: #b91c1c;
+  }
       </style>
   </head>
   
@@ -15960,6 +16665,7 @@
       <div id='ccl-live-prompt' class='message user empty-prompt'>
           <div class='header'>
               <span>🤷 User</span>
+              <button class='prompt-save-btn' title='나중에 물어보려고 저장 (지금 보내지 않음)'>💾</button>
               <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
               <button class='prompt-minimize-btn' title='최소화'>▼</button>
           </div>
@@ -15973,6 +16679,7 @@
           <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
           <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
           <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+          <button class="draft-toggle floating-btn" id="toggleDrafts" title="저장한 질문 보기">🗂️<span class="draft-count-badge" id="draftCountBadge">0</span></button>
           <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
           <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
           <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
@@ -15990,6 +16697,18 @@
           </div>
           <div class="bookmark-panel-list" id="bookmark-list">
               <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+          </div>
+      </div>
+  
+      <div id="draft-panel" aria-hidden="true">
+          <div class="draft-panel-resize-handle" title="드래그하여 너비 조절"></div>
+          <div class="draft-panel-header">
+              <span>🗂️ 저장한 질문 <span id="draft-count">0</span></span>
+              <button class="draft-panel-close" title="닫기">✕</button>
+          </div>
+          <div class="draft-panel-hint" id="draft-path"></div>
+          <div class="draft-panel-list" id="draft-list">
+              <div class="draft-empty">저장한 질문이 없습니다.<br>입력창의 💾 를 눌러 저장하세요.</div>
           </div>
       </div>
   
@@ -18951,6 +19670,261 @@
       setInterval(load, POLL_MS);
       // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
       setInterval(paint, TICK_MS);
+  })();
+  </script>
+      <!-- 나중에 물어볼 질문 적어두기 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      var prompt = document.getElementById('ccl-live-prompt');
+      var panel = document.getElementById('draft-panel');
+      var listEl = document.getElementById('draft-list');
+      var countEl = document.getElementById('draft-count');
+      var badge = document.getElementById('draftCountBadge');
+      var pathEl = document.getElementById('draft-path');
+      var toggleBtn = document.getElementById('toggleDrafts');
+      if (!prompt || !panel) return;
+  
+      var saveBtn = prompt.querySelector('.prompt-save-btn');
+      var input = prompt.querySelector('.user-input');
+      var drafts = [];
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+      var sid = sessionId();
+  
+      function api(method, body) {
+          return fetch('/api/sessions/' + sid + '/drafts', {
+              method: method,
+              headers: { 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined
+          }).then(function (r) {
+              return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          });
+      }
+  
+      function updateBadge() {
+          if (!badge) return;
+          badge.textContent = String(drafts.length);
+          badge.classList.toggle('visible', drafts.length > 0);
+      }
+  
+      function render() {
+          if (countEl) countEl.textContent = String(drafts.length);
+          updateBadge();
+          if (!listEl) return;
+          if (!drafts.length) {
+              listEl.innerHTML = '<div class="draft-empty">저장한 질문이 없습니다.'
+                  + '<br>입력창의 💾 를 눌러 저장하세요.</div>';
+              return;
+          }
+          listEl.innerHTML = '';
+          drafts.forEach(function (d) {
+              var row = document.createElement('div');
+              row.className = 'draft-item';
+              row.dataset.draftId = d.id;
+  
+              var when = document.createElement('div');
+              when.className = 'draft-item-when';
+              when.textContent = d.saved_at;
+  
+              var body = document.createElement('div');
+              body.className = 'draft-item-body';
+              body.textContent = d.text;
+  
+              var acts = document.createElement('div');
+              acts.className = 'draft-item-acts';
+              // 입력창에 되돌려 놓는 것이 이 기능의 목적이다. 눈에 띄게 둔다.
+              var put = document.createElement('button');
+              put.type = 'button';
+              put.className = 'draft-act draft-act-put';
+              put.textContent = '입력창에 넣기';
+              put.title = '이 질문을 입력창에 넣습니다 (저장본은 그대로 남습니다)';
+              var copy = document.createElement('button');
+              copy.type = 'button';
+              copy.className = 'draft-act';
+              copy.textContent = '복사';
+              var del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'draft-act draft-act-del';
+              del.textContent = '삭제';
+  
+              acts.appendChild(put);
+              acts.appendChild(copy);
+              acts.appendChild(del);
+              row.appendChild(when);
+              row.appendChild(body);
+              row.appendChild(acts);
+              listEl.appendChild(row);
+          });
+      }
+  
+      // 안내 문구가 떠 있는 동안에는 경로로 덮어쓰지 않는다.
+      // 목록 조회가 비동기라, 그냥 두면 방금 띄운 문구를 바로 지워 버린다.
+      var savedPath = '';
+      var flashUntil = 0;
+  
+      function showPath() {
+          if (pathEl && Date.now() > flashUntil) {
+              pathEl.textContent = savedPath;
+              pathEl.className = 'draft-panel-hint';
+          }
+      }
+  
+      function load() {
+          if (!sid) return Promise.resolve();
+          return fetch('/api/sessions/' + sid + '/drafts')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  drafts = d.drafts || [];
+                  if (d.path) savedPath = d.path;
+                  showPath();
+                  render();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 */ });
+      }
+  
+      function flash(text, kind) {
+          if (!pathEl) return;
+          flashUntil = Date.now() + 2600;
+          pathEl.textContent = text;
+          pathEl.className = 'draft-panel-hint ' + (kind || '');
+          setTimeout(showPath, 2600);
+      }
+  
+      // ── 저장 ───────────────────────────────────────────
+      if (saveBtn) {
+          saveBtn.addEventListener('click', function (e) {
+              e.stopPropagation();   // 말풍선 클릭이 다른 동작을 부르지 않게
+              if (!sid) return;
+              var text = input ? input.value : '';
+              if (!text.trim()) {
+                  openPanel();
+                  flash('입력창이 비어 있습니다.', 'error');
+                  return;
+              }
+              saveBtn.disabled = true;
+              api('POST', { action: 'add', text: text })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '저장하지 못했습니다');
+                      drafts = res.d.drafts || [];
+                      if (res.d.path) savedPath = res.d.path;
+                      render();
+                      openPanel();
+                      // 저장했으니 입력창은 비운다 — 남겨두면 실수로 또 보내게 된다.
+                      // 되돌리기(Ctrl+Z)가 되도록 지우기 버튼과 같은 방식을 쓴다.
+                      if (input) {
+                          input.focus();
+                          input.select();
+                          var undoable = false;
+                          try {
+                              undoable = document.execCommand('delete');
+                          } catch (err) { undoable = false; }
+                          if (!undoable) input.value = '';
+                          input.style.height = '';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                      flash('저장했습니다 — 모두 ' + drafts.length + '건', 'ok');
+                  })
+                  .catch(function (err) {
+                      openPanel();
+                      flash(String(err.message || err), 'error');
+                  })
+                  .then(function () { saveBtn.disabled = false; });
+          });
+      }
+  
+      // ── 목록에서의 조작 ────────────────────────────────
+      if (listEl) {
+          listEl.addEventListener('click', function (e) {
+              var row = e.target.closest('.draft-item');
+              if (!row) return;
+              var id = row.dataset.draftId;
+              var draft = null;
+              drafts.forEach(function (d) { if (d.id === id) draft = d; });
+              if (!draft) return;
+  
+              if (e.target.classList.contains('draft-act-put')) {
+                  if (input) {
+                      input.value = draft.text;
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.focus();
+                  }
+                  flash('입력창에 넣었습니다.', 'ok');
+                  return;
+              }
+              if (e.target.classList.contains('draft-act-del')) {
+                  if (!window.confirm('이 질문을 지웁니다. 되돌릴 수 없습니다.')) return;
+                  api('POST', { action: 'delete', id: id }).then(function (res) {
+                      if (!res.ok) {
+                          flash(res.d.error || '지우지 못했습니다', 'error');
+                          return;
+                      }
+                      drafts = res.d.drafts || [];
+                      render();
+                      flash('지웠습니다 — 남은 ' + drafts.length + '건', 'ok');
+                  });
+                  return;
+              }
+              if (e.target.textContent === '복사') {
+                  var done = function () { flash('복사했습니다.', 'ok'); };
+                  if (navigator.clipboard) {
+                      navigator.clipboard.writeText(draft.text).then(done, function () {});
+                  }
+              }
+          });
+      }
+  
+      // ── 패널 열고 닫기 ─────────────────────────────────
+      function openPanel() {
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          if (toggleBtn) toggleBtn.classList.add('active');
+          // 오른쪽 같은 자리에 붙는 다른 패널들과 겹치지 않게 한다
+          ['bookmark-panel', 'export-panel'].forEach(function (id) {
+              var other = document.getElementById(id);
+              if (!other) return;
+              other.classList.remove('open');
+              other.setAttribute('aria-hidden', 'true');
+          });
+          ['toggleBookmarks', 'toggleSelection'].forEach(function (id) {
+              var b = document.getElementById(id);
+              if (b) b.classList.remove('active');
+          });
+          document.body.classList.remove('selection-mode');
+          load();
+      }
+  
+      function closePanel() {
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+          if (toggleBtn) toggleBtn.classList.remove('active');
+      }
+  
+      if (toggleBtn) {
+          toggleBtn.addEventListener('click', function () {
+              if (panel.classList.contains('open')) closePanel();
+              else openPanel();
+          });
+      }
+      var closeBtn = panel.querySelector('.draft-panel-close');
+      if (closeBtn) closeBtn.addEventListener('click', closePanel);
+  
+      document.addEventListener('click', function (e) {
+          if (!panel.classList.contains('open')) return;
+          if (panel.contains(e.target)) return;
+          if (toggleBtn && toggleBtn.contains(e.target)) return;
+          if (e.target.closest && e.target.closest('.prompt-save-btn')) return;
+          closePanel();
+      });
+  
+      // 배지 숫자는 패널을 열지 않아도 보여야 한다
+      load();
   })();
   </script>
   
@@ -22612,6 +23586,224 @@
       opacity: 0.6;
       cursor: default;
   }
+  /* 나중에 물어볼 질문 — 저장 아이콘과 목록 패널.
+     북마크 패널과 같은 자리·같은 모양을 쓴다. 오른쪽에서 밀려 나오는 패널이
+     저마다 다르게 생기면 어느 것을 보고 있는지 헷갈린다. */
+  
+  .prompt-save-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      opacity: 0.75;
+  }
+  
+  /* 입력창이 비어 있을 때 `.user.empty-prompt *` 가 클릭을 통과시킨다.
+     그 상태에서도 눌리게 해야 "비어 있습니다" 라고 알려줄 수 있다 —
+     눌러도 아무 일이 없으면 고장 난 것으로 보인다.
+     선택자를 더 구체적으로 써야 그 규칙을 이긴다. */
+  .user.empty-prompt .prompt-save-btn {
+      pointer-events: auto;
+  }
+  
+  .prompt-save-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  .prompt-save-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+  }
+  
+  /* 떠 있는 버튼의 개수 배지 — 선택 모드 배지와 같은 모양 */
+  .draft-count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--tool-use-color);
+      color: #fff;
+      border-radius: 10px;
+      min-width: 18px;
+      height: 18px;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      padding: 0 4px;
+      box-sizing: border-box;
+      display: none;
+      pointer-events: none;
+  }
+  
+  .draft-count-badge.visible {
+      display: block;
+  }
+  
+  .draft-toggle.floating-btn.active {
+      background: rgba(76, 175, 80, 0.25);
+  }
+  
+  /* ===== 패널 ===== */
+  #draft-panel {
+      position: fixed;
+      top: 0;
+      right: 60px;
+      bottom: 0;
+      width: 340px;
+      min-width: 300px;
+      background: #ffffff;
+      border-left: 1px solid #ddd;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+      transform: translateX(calc(100% + 60px));
+      transition: transform 0.25s ease;
+      z-index: 98;
+      display: flex;
+      flex-direction: column;
+  }
+  
+  #draft-panel.open {
+      transform: translateX(0);
+  }
+  
+  .draft-panel-resize-handle {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: ew-resize;
+      background: transparent;
+  }
+  
+  .draft-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+      background: #f8f8f8;
+      font-weight: 600;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+  }
+  
+  .draft-panel-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  /* 어디에 저장됐는지 — 손으로 열어 고칠 수 있어야 하므로 경로를 보인다 */
+  .draft-panel-hint {
+      padding: 6px 14px;
+      font-size: 0.72em;
+      color: #999;
+      border-bottom: 1px solid #f0f0f0;
+      word-break: break-all;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-hint.ok {
+      color: #16a34a;
+      font-weight: 600;
+  }
+  
+  .draft-panel-hint.error {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  .draft-panel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+  }
+  
+  .draft-empty {
+      color: #999;
+      text-align: center;
+      padding: 30px 16px;
+      font-size: 0.85em;
+      line-height: 1.5;
+  }
+  
+  .draft-item {
+      padding: 9px 10px;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #fff;
+  }
+  
+  .draft-item:hover {
+      border-color: #ccc;
+      background: #fafafa;
+  }
+  
+  .draft-item-when {
+      font-size: 0.72em;
+      color: #999;
+      margin-bottom: 4px;
+  }
+  
+  /* 여러 줄짜리 질문이 많다. 줄바꿈은 살리되 너무 길면 잘라 보인다. */
+  .draft-item-body {
+      font-size: 0.85em;
+      color: #333;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8.5em;
+      overflow: hidden;
+      margin-bottom: 6px;
+  }
+  
+  .draft-item-acts {
+      display: flex;
+      gap: 5px;
+  }
+  
+  .draft-act {
+      padding: 3px 8px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.75em;
+      white-space: nowrap;
+  }
+  
+  .draft-act:hover {
+      background: #eef0f2;
+  }
+  
+  /* 이 기능의 목적이 '다시 꺼내 쓰기' 라 그 버튼을 도드라지게 둔다 */
+  .draft-act-put {
+      background: var(--tool-use-color);
+      border-color: var(--tool-use-color);
+      color: #fff;
+      font-weight: 600;
+  }
+  
+  .draft-act-put:hover {
+      filter: brightness(0.95);
+  }
+  
+  .draft-act-del:hover {
+      background: #dc262611;
+      border-color: #dc262655;
+      color: #b91c1c;
+  }
       </style>
   </head>
   
@@ -23643,6 +24835,7 @@
       <div id='ccl-live-prompt' class='message user empty-prompt'>
           <div class='header'>
               <span>🤷 User</span>
+              <button class='prompt-save-btn' title='나중에 물어보려고 저장 (지금 보내지 않음)'>💾</button>
               <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
               <button class='prompt-minimize-btn' title='최소화'>▼</button>
           </div>
@@ -23656,6 +24849,7 @@
           <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
           <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
           <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+          <button class="draft-toggle floating-btn" id="toggleDrafts" title="저장한 질문 보기">🗂️<span class="draft-count-badge" id="draftCountBadge">0</span></button>
           <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
           <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
           <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
@@ -23673,6 +24867,18 @@
           </div>
           <div class="bookmark-panel-list" id="bookmark-list">
               <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+          </div>
+      </div>
+  
+      <div id="draft-panel" aria-hidden="true">
+          <div class="draft-panel-resize-handle" title="드래그하여 너비 조절"></div>
+          <div class="draft-panel-header">
+              <span>🗂️ 저장한 질문 <span id="draft-count">0</span></span>
+              <button class="draft-panel-close" title="닫기">✕</button>
+          </div>
+          <div class="draft-panel-hint" id="draft-path"></div>
+          <div class="draft-panel-list" id="draft-list">
+              <div class="draft-empty">저장한 질문이 없습니다.<br>입력창의 💾 를 눌러 저장하세요.</div>
           </div>
       </div>
   
@@ -26634,6 +27840,261 @@
       setInterval(load, POLL_MS);
       // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
       setInterval(paint, TICK_MS);
+  })();
+  </script>
+      <!-- 나중에 물어볼 질문 적어두기 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      var prompt = document.getElementById('ccl-live-prompt');
+      var panel = document.getElementById('draft-panel');
+      var listEl = document.getElementById('draft-list');
+      var countEl = document.getElementById('draft-count');
+      var badge = document.getElementById('draftCountBadge');
+      var pathEl = document.getElementById('draft-path');
+      var toggleBtn = document.getElementById('toggleDrafts');
+      if (!prompt || !panel) return;
+  
+      var saveBtn = prompt.querySelector('.prompt-save-btn');
+      var input = prompt.querySelector('.user-input');
+      var drafts = [];
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+      var sid = sessionId();
+  
+      function api(method, body) {
+          return fetch('/api/sessions/' + sid + '/drafts', {
+              method: method,
+              headers: { 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined
+          }).then(function (r) {
+              return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          });
+      }
+  
+      function updateBadge() {
+          if (!badge) return;
+          badge.textContent = String(drafts.length);
+          badge.classList.toggle('visible', drafts.length > 0);
+      }
+  
+      function render() {
+          if (countEl) countEl.textContent = String(drafts.length);
+          updateBadge();
+          if (!listEl) return;
+          if (!drafts.length) {
+              listEl.innerHTML = '<div class="draft-empty">저장한 질문이 없습니다.'
+                  + '<br>입력창의 💾 를 눌러 저장하세요.</div>';
+              return;
+          }
+          listEl.innerHTML = '';
+          drafts.forEach(function (d) {
+              var row = document.createElement('div');
+              row.className = 'draft-item';
+              row.dataset.draftId = d.id;
+  
+              var when = document.createElement('div');
+              when.className = 'draft-item-when';
+              when.textContent = d.saved_at;
+  
+              var body = document.createElement('div');
+              body.className = 'draft-item-body';
+              body.textContent = d.text;
+  
+              var acts = document.createElement('div');
+              acts.className = 'draft-item-acts';
+              // 입력창에 되돌려 놓는 것이 이 기능의 목적이다. 눈에 띄게 둔다.
+              var put = document.createElement('button');
+              put.type = 'button';
+              put.className = 'draft-act draft-act-put';
+              put.textContent = '입력창에 넣기';
+              put.title = '이 질문을 입력창에 넣습니다 (저장본은 그대로 남습니다)';
+              var copy = document.createElement('button');
+              copy.type = 'button';
+              copy.className = 'draft-act';
+              copy.textContent = '복사';
+              var del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'draft-act draft-act-del';
+              del.textContent = '삭제';
+  
+              acts.appendChild(put);
+              acts.appendChild(copy);
+              acts.appendChild(del);
+              row.appendChild(when);
+              row.appendChild(body);
+              row.appendChild(acts);
+              listEl.appendChild(row);
+          });
+      }
+  
+      // 안내 문구가 떠 있는 동안에는 경로로 덮어쓰지 않는다.
+      // 목록 조회가 비동기라, 그냥 두면 방금 띄운 문구를 바로 지워 버린다.
+      var savedPath = '';
+      var flashUntil = 0;
+  
+      function showPath() {
+          if (pathEl && Date.now() > flashUntil) {
+              pathEl.textContent = savedPath;
+              pathEl.className = 'draft-panel-hint';
+          }
+      }
+  
+      function load() {
+          if (!sid) return Promise.resolve();
+          return fetch('/api/sessions/' + sid + '/drafts')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  drafts = d.drafts || [];
+                  if (d.path) savedPath = d.path;
+                  showPath();
+                  render();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 */ });
+      }
+  
+      function flash(text, kind) {
+          if (!pathEl) return;
+          flashUntil = Date.now() + 2600;
+          pathEl.textContent = text;
+          pathEl.className = 'draft-panel-hint ' + (kind || '');
+          setTimeout(showPath, 2600);
+      }
+  
+      // ── 저장 ───────────────────────────────────────────
+      if (saveBtn) {
+          saveBtn.addEventListener('click', function (e) {
+              e.stopPropagation();   // 말풍선 클릭이 다른 동작을 부르지 않게
+              if (!sid) return;
+              var text = input ? input.value : '';
+              if (!text.trim()) {
+                  openPanel();
+                  flash('입력창이 비어 있습니다.', 'error');
+                  return;
+              }
+              saveBtn.disabled = true;
+              api('POST', { action: 'add', text: text })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '저장하지 못했습니다');
+                      drafts = res.d.drafts || [];
+                      if (res.d.path) savedPath = res.d.path;
+                      render();
+                      openPanel();
+                      // 저장했으니 입력창은 비운다 — 남겨두면 실수로 또 보내게 된다.
+                      // 되돌리기(Ctrl+Z)가 되도록 지우기 버튼과 같은 방식을 쓴다.
+                      if (input) {
+                          input.focus();
+                          input.select();
+                          var undoable = false;
+                          try {
+                              undoable = document.execCommand('delete');
+                          } catch (err) { undoable = false; }
+                          if (!undoable) input.value = '';
+                          input.style.height = '';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                      flash('저장했습니다 — 모두 ' + drafts.length + '건', 'ok');
+                  })
+                  .catch(function (err) {
+                      openPanel();
+                      flash(String(err.message || err), 'error');
+                  })
+                  .then(function () { saveBtn.disabled = false; });
+          });
+      }
+  
+      // ── 목록에서의 조작 ────────────────────────────────
+      if (listEl) {
+          listEl.addEventListener('click', function (e) {
+              var row = e.target.closest('.draft-item');
+              if (!row) return;
+              var id = row.dataset.draftId;
+              var draft = null;
+              drafts.forEach(function (d) { if (d.id === id) draft = d; });
+              if (!draft) return;
+  
+              if (e.target.classList.contains('draft-act-put')) {
+                  if (input) {
+                      input.value = draft.text;
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.focus();
+                  }
+                  flash('입력창에 넣었습니다.', 'ok');
+                  return;
+              }
+              if (e.target.classList.contains('draft-act-del')) {
+                  if (!window.confirm('이 질문을 지웁니다. 되돌릴 수 없습니다.')) return;
+                  api('POST', { action: 'delete', id: id }).then(function (res) {
+                      if (!res.ok) {
+                          flash(res.d.error || '지우지 못했습니다', 'error');
+                          return;
+                      }
+                      drafts = res.d.drafts || [];
+                      render();
+                      flash('지웠습니다 — 남은 ' + drafts.length + '건', 'ok');
+                  });
+                  return;
+              }
+              if (e.target.textContent === '복사') {
+                  var done = function () { flash('복사했습니다.', 'ok'); };
+                  if (navigator.clipboard) {
+                      navigator.clipboard.writeText(draft.text).then(done, function () {});
+                  }
+              }
+          });
+      }
+  
+      // ── 패널 열고 닫기 ─────────────────────────────────
+      function openPanel() {
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          if (toggleBtn) toggleBtn.classList.add('active');
+          // 오른쪽 같은 자리에 붙는 다른 패널들과 겹치지 않게 한다
+          ['bookmark-panel', 'export-panel'].forEach(function (id) {
+              var other = document.getElementById(id);
+              if (!other) return;
+              other.classList.remove('open');
+              other.setAttribute('aria-hidden', 'true');
+          });
+          ['toggleBookmarks', 'toggleSelection'].forEach(function (id) {
+              var b = document.getElementById(id);
+              if (b) b.classList.remove('active');
+          });
+          document.body.classList.remove('selection-mode');
+          load();
+      }
+  
+      function closePanel() {
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+          if (toggleBtn) toggleBtn.classList.remove('active');
+      }
+  
+      if (toggleBtn) {
+          toggleBtn.addEventListener('click', function () {
+              if (panel.classList.contains('open')) closePanel();
+              else openPanel();
+          });
+      }
+      var closeBtn = panel.querySelector('.draft-panel-close');
+      if (closeBtn) closeBtn.addEventListener('click', closePanel);
+  
+      document.addEventListener('click', function (e) {
+          if (!panel.classList.contains('open')) return;
+          if (panel.contains(e.target)) return;
+          if (toggleBtn && toggleBtn.contains(e.target)) return;
+          if (e.target.closest && e.target.closest('.prompt-save-btn')) return;
+          closePanel();
+      });
+  
+      // 배지 숫자는 패널을 열지 않아도 보여야 한다
+      load();
   })();
   </script>
   
@@ -30295,6 +31756,224 @@
       opacity: 0.6;
       cursor: default;
   }
+  /* 나중에 물어볼 질문 — 저장 아이콘과 목록 패널.
+     북마크 패널과 같은 자리·같은 모양을 쓴다. 오른쪽에서 밀려 나오는 패널이
+     저마다 다르게 생기면 어느 것을 보고 있는지 헷갈린다. */
+  
+  .prompt-save-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      opacity: 0.75;
+  }
+  
+  /* 입력창이 비어 있을 때 `.user.empty-prompt *` 가 클릭을 통과시킨다.
+     그 상태에서도 눌리게 해야 "비어 있습니다" 라고 알려줄 수 있다 —
+     눌러도 아무 일이 없으면 고장 난 것으로 보인다.
+     선택자를 더 구체적으로 써야 그 규칙을 이긴다. */
+  .user.empty-prompt .prompt-save-btn {
+      pointer-events: auto;
+  }
+  
+  .prompt-save-btn:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  .prompt-save-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+  }
+  
+  /* 떠 있는 버튼의 개수 배지 — 선택 모드 배지와 같은 모양 */
+  .draft-count-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--tool-use-color);
+      color: #fff;
+      border-radius: 10px;
+      min-width: 18px;
+      height: 18px;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      padding: 0 4px;
+      box-sizing: border-box;
+      display: none;
+      pointer-events: none;
+  }
+  
+  .draft-count-badge.visible {
+      display: block;
+  }
+  
+  .draft-toggle.floating-btn.active {
+      background: rgba(76, 175, 80, 0.25);
+  }
+  
+  /* ===== 패널 ===== */
+  #draft-panel {
+      position: fixed;
+      top: 0;
+      right: 60px;
+      bottom: 0;
+      width: 340px;
+      min-width: 300px;
+      background: #ffffff;
+      border-left: 1px solid #ddd;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+      transform: translateX(calc(100% + 60px));
+      transition: transform 0.25s ease;
+      z-index: 98;
+      display: flex;
+      flex-direction: column;
+  }
+  
+  #draft-panel.open {
+      transform: translateX(0);
+  }
+  
+  .draft-panel-resize-handle {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: ew-resize;
+      background: transparent;
+  }
+  
+  .draft-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eee;
+      background: #f8f8f8;
+      font-weight: 600;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+      color: #666;
+      padding: 2px 8px;
+      border-radius: 4px;
+  }
+  
+  .draft-panel-close:hover {
+      background: rgba(0, 0, 0, 0.06);
+  }
+  
+  /* 어디에 저장됐는지 — 손으로 열어 고칠 수 있어야 하므로 경로를 보인다 */
+  .draft-panel-hint {
+      padding: 6px 14px;
+      font-size: 0.72em;
+      color: #999;
+      border-bottom: 1px solid #f0f0f0;
+      word-break: break-all;
+      flex-shrink: 0;
+  }
+  
+  .draft-panel-hint.ok {
+      color: #16a34a;
+      font-weight: 600;
+  }
+  
+  .draft-panel-hint.error {
+      color: #dc2626;
+      font-weight: 600;
+  }
+  
+  .draft-panel-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+  }
+  
+  .draft-empty {
+      color: #999;
+      text-align: center;
+      padding: 30px 16px;
+      font-size: 0.85em;
+      line-height: 1.5;
+  }
+  
+  .draft-item {
+      padding: 9px 10px;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #fff;
+  }
+  
+  .draft-item:hover {
+      border-color: #ccc;
+      background: #fafafa;
+  }
+  
+  .draft-item-when {
+      font-size: 0.72em;
+      color: #999;
+      margin-bottom: 4px;
+  }
+  
+  /* 여러 줄짜리 질문이 많다. 줄바꿈은 살리되 너무 길면 잘라 보인다. */
+  .draft-item-body {
+      font-size: 0.85em;
+      color: #333;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8.5em;
+      overflow: hidden;
+      margin-bottom: 6px;
+  }
+  
+  .draft-item-acts {
+      display: flex;
+      gap: 5px;
+  }
+  
+  .draft-act {
+      padding: 3px 8px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 0.75em;
+      white-space: nowrap;
+  }
+  
+  .draft-act:hover {
+      background: #eef0f2;
+  }
+  
+  /* 이 기능의 목적이 '다시 꺼내 쓰기' 라 그 버튼을 도드라지게 둔다 */
+  .draft-act-put {
+      background: var(--tool-use-color);
+      border-color: var(--tool-use-color);
+      color: #fff;
+      font-weight: 600;
+  }
+  
+  .draft-act-put:hover {
+      filter: brightness(0.95);
+  }
+  
+  .draft-act-del:hover {
+      background: #dc262611;
+      border-color: #dc262655;
+      color: #b91c1c;
+  }
       </style>
   </head>
   
@@ -31172,6 +32851,7 @@
       <div id='ccl-live-prompt' class='message user empty-prompt'>
           <div class='header'>
               <span>🤷 User</span>
+              <button class='prompt-save-btn' title='나중에 물어보려고 저장 (지금 보내지 않음)'>💾</button>
               <button class='prompt-clear-btn' title='입력 내용 지우기'>🗑️</button>
               <button class='prompt-minimize-btn' title='최소화'>▼</button>
           </div>
@@ -31185,6 +32865,7 @@
           <button class="timeline-toggle floating-btn" id="toggleTimeline" title="Show timeline">📆</button>
           <button class="filter-messages floating-btn" id="filterMessages" title="Search & Filter">🔍</button>
           <button class="bookmark-toggle floating-btn" id="toggleBookmarks" title="북마크 보기">🔖</button>
+          <button class="draft-toggle floating-btn" id="toggleDrafts" title="저장한 질문 보기">🗂️<span class="draft-count-badge" id="draftCountBadge">0</span></button>
           <button class="toggle-details floating-btn" id="toggleDetails" title="Toggle all details">📋</button>
           <button class="expand-collapse-all floating-btn" id="toggleExpandAll" title="도구 메시지 (Read/Edit/Bash 등) 보이기/숨기기">📂</button>
           <button class="toggle-selection floating-btn" id="toggleSelection" title="메시지 선택 / 내보내기">☑️<span class="sel-count-badge" id="selCountBadge">0</span></button>
@@ -31202,6 +32883,18 @@
           </div>
           <div class="bookmark-panel-list" id="bookmark-list">
               <div class="bookmark-empty">아직 북마크가 없습니다.<br>질문 옆 📌 아이콘을 클릭해 북마크하세요.</div>
+          </div>
+      </div>
+  
+      <div id="draft-panel" aria-hidden="true">
+          <div class="draft-panel-resize-handle" title="드래그하여 너비 조절"></div>
+          <div class="draft-panel-header">
+              <span>🗂️ 저장한 질문 <span id="draft-count">0</span></span>
+              <button class="draft-panel-close" title="닫기">✕</button>
+          </div>
+          <div class="draft-panel-hint" id="draft-path"></div>
+          <div class="draft-panel-list" id="draft-list">
+              <div class="draft-empty">저장한 질문이 없습니다.<br>입력창의 💾 를 눌러 저장하세요.</div>
           </div>
       </div>
   
@@ -34163,6 +35856,261 @@
       setInterval(load, POLL_MS);
       // 초 단위 숫자만 매초 다시 그린다. 목록 자체는 5초마다 서버에서 받는다.
       setInterval(paint, TICK_MS);
+  })();
+  </script>
+      <!-- 나중에 물어볼 질문 적어두기 -->
+  <script>
+  (function () {
+      'use strict';
+  
+      var prompt = document.getElementById('ccl-live-prompt');
+      var panel = document.getElementById('draft-panel');
+      var listEl = document.getElementById('draft-list');
+      var countEl = document.getElementById('draft-count');
+      var badge = document.getElementById('draftCountBadge');
+      var pathEl = document.getElementById('draft-path');
+      var toggleBtn = document.getElementById('toggleDrafts');
+      if (!prompt || !panel) return;
+  
+      var saveBtn = prompt.querySelector('.prompt-save-btn');
+      var input = prompt.querySelector('.user-input');
+      var drafts = [];
+  
+      function sessionId() {
+          var hdr = document.querySelector('.message.session-header[data-session-id]');
+          if (hdr && hdr.dataset.sessionId) return hdr.dataset.sessionId;
+          var m = location.pathname.match(/session-([0-9a-fA-F-]{36})\.html/);
+          return m ? m[1] : null;
+      }
+      var sid = sessionId();
+  
+      function api(method, body) {
+          return fetch('/api/sessions/' + sid + '/drafts', {
+              method: method,
+              headers: { 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined
+          }).then(function (r) {
+              return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          });
+      }
+  
+      function updateBadge() {
+          if (!badge) return;
+          badge.textContent = String(drafts.length);
+          badge.classList.toggle('visible', drafts.length > 0);
+      }
+  
+      function render() {
+          if (countEl) countEl.textContent = String(drafts.length);
+          updateBadge();
+          if (!listEl) return;
+          if (!drafts.length) {
+              listEl.innerHTML = '<div class="draft-empty">저장한 질문이 없습니다.'
+                  + '<br>입력창의 💾 를 눌러 저장하세요.</div>';
+              return;
+          }
+          listEl.innerHTML = '';
+          drafts.forEach(function (d) {
+              var row = document.createElement('div');
+              row.className = 'draft-item';
+              row.dataset.draftId = d.id;
+  
+              var when = document.createElement('div');
+              when.className = 'draft-item-when';
+              when.textContent = d.saved_at;
+  
+              var body = document.createElement('div');
+              body.className = 'draft-item-body';
+              body.textContent = d.text;
+  
+              var acts = document.createElement('div');
+              acts.className = 'draft-item-acts';
+              // 입력창에 되돌려 놓는 것이 이 기능의 목적이다. 눈에 띄게 둔다.
+              var put = document.createElement('button');
+              put.type = 'button';
+              put.className = 'draft-act draft-act-put';
+              put.textContent = '입력창에 넣기';
+              put.title = '이 질문을 입력창에 넣습니다 (저장본은 그대로 남습니다)';
+              var copy = document.createElement('button');
+              copy.type = 'button';
+              copy.className = 'draft-act';
+              copy.textContent = '복사';
+              var del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'draft-act draft-act-del';
+              del.textContent = '삭제';
+  
+              acts.appendChild(put);
+              acts.appendChild(copy);
+              acts.appendChild(del);
+              row.appendChild(when);
+              row.appendChild(body);
+              row.appendChild(acts);
+              listEl.appendChild(row);
+          });
+      }
+  
+      // 안내 문구가 떠 있는 동안에는 경로로 덮어쓰지 않는다.
+      // 목록 조회가 비동기라, 그냥 두면 방금 띄운 문구를 바로 지워 버린다.
+      var savedPath = '';
+      var flashUntil = 0;
+  
+      function showPath() {
+          if (pathEl && Date.now() > flashUntil) {
+              pathEl.textContent = savedPath;
+              pathEl.className = 'draft-panel-hint';
+          }
+      }
+  
+      function load() {
+          if (!sid) return Promise.resolve();
+          return fetch('/api/sessions/' + sid + '/drafts')
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                  drafts = d.drafts || [];
+                  if (d.path) savedPath = d.path;
+                  showPath();
+                  render();
+              })
+              .catch(function () { /* 서버가 잠깐 멈춘 경우 */ });
+      }
+  
+      function flash(text, kind) {
+          if (!pathEl) return;
+          flashUntil = Date.now() + 2600;
+          pathEl.textContent = text;
+          pathEl.className = 'draft-panel-hint ' + (kind || '');
+          setTimeout(showPath, 2600);
+      }
+  
+      // ── 저장 ───────────────────────────────────────────
+      if (saveBtn) {
+          saveBtn.addEventListener('click', function (e) {
+              e.stopPropagation();   // 말풍선 클릭이 다른 동작을 부르지 않게
+              if (!sid) return;
+              var text = input ? input.value : '';
+              if (!text.trim()) {
+                  openPanel();
+                  flash('입력창이 비어 있습니다.', 'error');
+                  return;
+              }
+              saveBtn.disabled = true;
+              api('POST', { action: 'add', text: text })
+                  .then(function (res) {
+                      if (!res.ok) throw new Error(res.d.error || '저장하지 못했습니다');
+                      drafts = res.d.drafts || [];
+                      if (res.d.path) savedPath = res.d.path;
+                      render();
+                      openPanel();
+                      // 저장했으니 입력창은 비운다 — 남겨두면 실수로 또 보내게 된다.
+                      // 되돌리기(Ctrl+Z)가 되도록 지우기 버튼과 같은 방식을 쓴다.
+                      if (input) {
+                          input.focus();
+                          input.select();
+                          var undoable = false;
+                          try {
+                              undoable = document.execCommand('delete');
+                          } catch (err) { undoable = false; }
+                          if (!undoable) input.value = '';
+                          input.style.height = '';
+                          input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                      flash('저장했습니다 — 모두 ' + drafts.length + '건', 'ok');
+                  })
+                  .catch(function (err) {
+                      openPanel();
+                      flash(String(err.message || err), 'error');
+                  })
+                  .then(function () { saveBtn.disabled = false; });
+          });
+      }
+  
+      // ── 목록에서의 조작 ────────────────────────────────
+      if (listEl) {
+          listEl.addEventListener('click', function (e) {
+              var row = e.target.closest('.draft-item');
+              if (!row) return;
+              var id = row.dataset.draftId;
+              var draft = null;
+              drafts.forEach(function (d) { if (d.id === id) draft = d; });
+              if (!draft) return;
+  
+              if (e.target.classList.contains('draft-act-put')) {
+                  if (input) {
+                      input.value = draft.text;
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      input.focus();
+                  }
+                  flash('입력창에 넣었습니다.', 'ok');
+                  return;
+              }
+              if (e.target.classList.contains('draft-act-del')) {
+                  if (!window.confirm('이 질문을 지웁니다. 되돌릴 수 없습니다.')) return;
+                  api('POST', { action: 'delete', id: id }).then(function (res) {
+                      if (!res.ok) {
+                          flash(res.d.error || '지우지 못했습니다', 'error');
+                          return;
+                      }
+                      drafts = res.d.drafts || [];
+                      render();
+                      flash('지웠습니다 — 남은 ' + drafts.length + '건', 'ok');
+                  });
+                  return;
+              }
+              if (e.target.textContent === '복사') {
+                  var done = function () { flash('복사했습니다.', 'ok'); };
+                  if (navigator.clipboard) {
+                      navigator.clipboard.writeText(draft.text).then(done, function () {});
+                  }
+              }
+          });
+      }
+  
+      // ── 패널 열고 닫기 ─────────────────────────────────
+      function openPanel() {
+          panel.classList.add('open');
+          panel.setAttribute('aria-hidden', 'false');
+          if (toggleBtn) toggleBtn.classList.add('active');
+          // 오른쪽 같은 자리에 붙는 다른 패널들과 겹치지 않게 한다
+          ['bookmark-panel', 'export-panel'].forEach(function (id) {
+              var other = document.getElementById(id);
+              if (!other) return;
+              other.classList.remove('open');
+              other.setAttribute('aria-hidden', 'true');
+          });
+          ['toggleBookmarks', 'toggleSelection'].forEach(function (id) {
+              var b = document.getElementById(id);
+              if (b) b.classList.remove('active');
+          });
+          document.body.classList.remove('selection-mode');
+          load();
+      }
+  
+      function closePanel() {
+          panel.classList.remove('open');
+          panel.setAttribute('aria-hidden', 'true');
+          if (toggleBtn) toggleBtn.classList.remove('active');
+      }
+  
+      if (toggleBtn) {
+          toggleBtn.addEventListener('click', function () {
+              if (panel.classList.contains('open')) closePanel();
+              else openPanel();
+          });
+      }
+      var closeBtn = panel.querySelector('.draft-panel-close');
+      if (closeBtn) closeBtn.addEventListener('click', closePanel);
+  
+      document.addEventListener('click', function (e) {
+          if (!panel.classList.contains('open')) return;
+          if (panel.contains(e.target)) return;
+          if (toggleBtn && toggleBtn.contains(e.target)) return;
+          if (e.target.closest && e.target.closest('.prompt-save-btn')) return;
+          closePanel();
+      });
+  
+      // 배지 숫자는 패널을 열지 않아도 보여야 한다
+      load();
   })();
   </script>
   
