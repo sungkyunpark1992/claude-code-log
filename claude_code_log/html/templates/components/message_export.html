@@ -123,6 +123,37 @@
         refreshPanel();
     });
 
+    // 선택 모드에서는 말풍선 아무 데나 눌러도 체크된다.
+    // 체크박스는 18px 짜리 과녁이라 하나씩 맞추기가 번거롭다.
+    //
+    // 다만 평소 하던 일을 뺏으면 안 된다 — 글자를 끌어 복사하거나, 링크·버튼·
+    // 접기를 누르는 것은 그대로 동작해야 한다. 그래서 아래는 건너뛴다.
+    document.addEventListener('click', function (e) {
+        if (!document.body.classList.contains('selection-mode')) return;
+
+        var t = e.target;
+        // 체크박스 자체는 브라우저에 맡긴다 (여기서 또 뒤집으면 서로 상쇄된다)
+        if (t.classList && t.classList.contains('msg-select-checkbox')) return;
+        // 누르라고 있는 것들은 원래 하던 일을 한다
+        if (t.closest('a, button, input, textarea, select, summary, .fold-bar')) return;
+
+        var msg = t.closest(MSG_SELECTOR);
+        if (!msg) return;
+
+        // 글자를 끌어 고르는 중이면 그건 복사하려는 것이다.
+        // **이 말풍선 안의** 선택일 때만 비켜선다 — 다른 곳에 남아 있던 선택 때문에
+        // 여기 클릭이 먹통이 되면 안 된다.
+        var sel = window.getSelection();
+        if (sel && String(sel).trim() && sel.anchorNode && msg.contains(sel.anchorNode)) {
+            return;
+        }
+        var cb = msg.querySelector('.msg-select-checkbox');
+        if (!cb) return;
+        cb.checked = !cb.checked;
+        msg.classList.toggle('msg-selected', cb.checked);
+        refreshPanel();
+    });
+
     // Panel list interactions: click row → scroll, click ✕ → deselect
     if (listEl) {
         listEl.addEventListener('click', function (e) {
@@ -257,13 +288,18 @@
         if (closeBtn) closeBtn.addEventListener('click', closePanel);
 
         // Close on outside click (like the bookmark panel) — but keep it open when
-        // the click is on the toggle button or on a message checkbox (so selecting
-        // messages doesn't dismiss the panel).
+        // the click is on the toggle button or anywhere on a message.
+        //
+        // 말풍선 클릭이 곧 선택이 된 뒤로, 메시지를 고르는 것도 '바깥 클릭' 으로
+        // 잡혀 패널이 닫혔다. 그러면 선택 모드가 풀려 두 번째 클릭부터 아무 일도
+        // 일어나지 않는다 — 실제로 그렇게 동작했다.
         document.addEventListener('click', function (e) {
             if (!panel || !panel.classList.contains('open')) return;
             if (panel.contains(e.target)) return;
             if (toggleBtn && toggleBtn.contains(e.target)) return;
-            if (e.target.classList && e.target.classList.contains('msg-select-checkbox')) return;
+            // 세션 머리글·접기 막대까지 '.message' 안이다. 대화 영역을 만지는 동안에는
+            // 닫지 않는다 — 접었다 폈다 하다가 선택 모드가 풀리면 다시 켜야 한다.
+            if (e.target.closest && e.target.closest('.message')) return;
             closePanel();
         });
 
@@ -314,7 +350,274 @@
             });
         }
 
+        wireDeletion();
+        wireRestore();
         refreshPanel();
+        showHandOver();
     });
+
+    // ===== 기록에서 삭제 =====
+    // 내보내기와 달리 원본 JSONL 을 고친다. 되돌릴 수 없으므로
+    //   ① 무엇이 지워질지 서버에 먼저 물어보고
+    //   ② 그 숫자를 보여준 뒤 확인을 받고
+    //   ③ 서버가 백업을 남긴 뒤 지운다
+    function currentSessionId() {
+        var hdr = document.querySelector('.message.session-header[data-session-id]');
+        if (hdr) return hdr.dataset.sessionId;
+        var m = location.pathname.match(/session-([0-9a-fA-F-]{36})[.]html/);
+        return m ? m[1] : null;
+    }
+
+    function selectedUuids() {
+        return Array.prototype.slice
+            .call(document.querySelectorAll('.msg-select-checkbox:checked'))
+            .map(function (cb) {
+                var msg = cb.closest('.message');
+                return msg ? msg.dataset.uuid : null;
+            })
+            .filter(Boolean);
+    }
+
+    // 체크 + 테두리를 함께 맞춘다. 이미 골라둔 것은 건드리지 않는다.
+    function select(msg) {
+        var cb = msg.querySelector('.msg-select-checkbox');
+        if (!cb || cb.checked) return false;
+        cb.checked = true;
+        msg.classList.add('msg-selected');
+        return true;
+    }
+
+    // 새로고침하면 화면의 글자가 다 사라진다. 무엇을 했는지는 남아야 하므로
+    // 잠깐 맡겨 두었다가 새 화면에서 되살린다. sessionStorage 는 탭을 닫으면
+    // 사라지고 다른 탭과 섞이지 않아 이런 한 번짜리 전달에 맞다.
+    var HANDOFF_KEY = 'ccl:delete:done';
+
+    function handOver(text) {
+        try {
+            sessionStorage.setItem(HANDOFF_KEY, text);
+        } catch (e) { /* 사생활 보호 모드 등 — 못 남겨도 기능엔 지장 없다 */ }
+    }
+
+    function showHandOver() {
+        var text = null;
+        try {
+            text = sessionStorage.getItem(HANDOFF_KEY);
+            if (text) sessionStorage.removeItem(HANDOFF_KEY);
+        } catch (e) { return; }
+        if (!text) return;
+        // 결과는 패널 안에 있으므로 패널을 열어야 보인다. 이어서 더 고를
+        // 수도 있으니 열어 두는 편이 낫다.
+        openPanel();
+        setDeleteStatus(document.getElementById('deleteStatus'), text, 'ok');
+    }
+
+    function setDeleteStatus(el, text, kind) {
+        if (!el) return;
+        el.className = 'export-delete-status' + (kind ? ' ' + kind : '');
+        el.textContent = text;
+    }
+
+    // 되돌리기. 삭제할 때마다 백업이 하나씩 쌓이므로 가장 최근 것으로 되돌린다.
+    // 되돌리기 직전 상태도 서버가 새 백업으로 남기니, 잘못 눌러도 다시 앞으로 갈 수 있다.
+    function wireRestore() {
+        var btn = document.getElementById('restoreBackup');
+        var statusEl = document.getElementById('deleteStatus');
+        if (!btn) return;
+
+        var NL = String.fromCharCode(10);
+        btn.addEventListener('click', function () {
+            var sid = currentSessionId();
+            if (!sid) {
+                setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                return;
+            }
+            btn.disabled = true;
+            setDeleteStatus(statusEl, '백업을 찾는 중…');
+
+            fetch('/api/sessions/' + sid + '/backups')
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (!res.ok) throw new Error(res.d.error || '백업 목록을 읽지 못했습니다');
+                    var list = res.d.backups || [];
+                    if (!list.length) {
+                        setDeleteStatus(statusEl, '되돌릴 백업이 없습니다.', 'error');
+                        btn.disabled = false;
+                        return null;
+                    }
+                    var newest = list[0];
+                    var msg =
+                        newest.label + ' 시점으로 되돌립니다.' + NL + NL +
+                        '· 지금 상태도 백업으로 남으므로 다시 앞으로 갈 수 있습니다' + NL +
+                        '· 되돌린 뒤 VS Code 를 새로고침하세요' + NL +
+                        (list.length > 1 ? NL + '보관된 백업 ' + list.length + '개 중 가장 최근 것입니다.' + NL : '') +
+                        NL + '진행할까요?';
+                    if (!window.confirm(msg)) {
+                        setDeleteStatus(statusEl, '취소했습니다.');
+                        btn.disabled = false;
+                        return null;
+                    }
+                    setDeleteStatus(statusEl, '되돌리는 중…');
+                    return fetch('/api/sessions/' + sid + '/restore', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ backup: newest.name })
+                    }).then(function (r) {
+                        return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                    });
+                })
+                .then(function (res) {
+                    if (res === null) return;
+                    if (!res.ok) throw new Error(res.d.error || '되돌리지 못했습니다');
+                    handOver(res.d.restored_label + ' 시점으로 되돌렸습니다 ('
+                        + res.d.lines + '줄).');
+                    location.reload();
+                })
+                .catch(function (err) {
+                    setDeleteStatus(statusEl, String(err.message || err), 'error');
+                    btn.disabled = false;
+                });
+        });
+    }
+
+    function wireDeletion() {
+        var delBtn = document.getElementById('deleteSelected');
+        var autoBtn = document.getElementById('selectAutoMsgs');
+        var statusEl = document.getElementById('deleteStatus');
+
+        if (autoBtn) {
+            autoBtn.addEventListener('click', function () {
+                // 자동 메시지의 문구는 세션마다 다를 수 있어 서버 설정에서 가져온다.
+                fetch('/api/keepalive')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        var sid = currentSessionId();
+                        var all = (d.sessions || [])
+                            .map(function (s) {
+                                return {
+                                    id: s.session_id,
+                                    text: String(s.message || '').trim()
+                                };
+                            })
+                            .filter(function (s) { return s.text; });
+                        // 이 세션에 등록된 문구가 먼저다. 등록을 지운 뒤에도 기록에는
+                        // 자동 메시지가 남아 있으므로, 없으면 다른 세션의 문구로도 찾는다.
+                        var mine = all.filter(function (s) { return s.id === sid; });
+                        var texts = (mine.length ? mine : all).map(function (s) { return s.text; });
+                        if (!texts.length) {
+                            setDeleteStatus(statusEl,
+                                '자동 메시지 설정이 등록되어 있지 않아 문구를 알 수 없습니다.',
+                                'error');
+                            return;
+                        }
+                        // 질문만 고르면 답이 남은 것처럼 보인다. 실제 삭제는 서버가
+                        // 문답 한 덩어리로 처리하므로, 화면에도 그 범위를 그대로 보인다.
+                        var all = document.querySelectorAll(MSG_SELECTOR);
+                        var hit = 0;
+                        var inExchange = 0;   // 그 문답들에 속한 메시지 (이미 골라둔 것 포함)
+                        for (var i = 0; i < all.length; i++) {
+                            var msg = all[i];
+                            if (!msg.classList.contains('user')) continue;
+                            var body = (msg.querySelector('.content') || {}).textContent || '';
+                            if (texts.indexOf(body.trim()) === -1) continue;
+                            hit += 1;
+                            // 질문부터 **다음 질문 직전까지** — 그 사이가 이 문답의 답이다
+                            for (var k = i; k < all.length; k++) {
+                                if (k > i && all[k].classList.contains('user')) break;
+                                select(all[k]);
+                                inExchange += 1;
+                            }
+                        }
+                        refreshPanel();
+                        // 새로 고른 수가 아니라 **그 문답에 속한 전체**를 알린다.
+                        // 두 번 누르면 새로 고를 게 없어 0 이 되는데, 그건 "아무것도
+                        // 선택되지 않았다"는 오해를 부른다.
+                        var total = selectedCheckboxes().length;
+                        setDeleteStatus(statusEl,
+                            hit ? '자동 메시지 ' + hit + '건과 그 답변까지 ' + inExchange +
+                                  '개를 골랐습니다. (현재 선택 ' + total + '개)'
+                                : '이 화면에서 자동 메시지를 찾지 못했습니다.',
+                            hit ? 'ok' : 'error');
+                    })
+                    .catch(function () {
+                        setDeleteStatus(statusEl, '설정을 읽지 못했습니다.', 'error');
+                    });
+            });
+        }
+
+        if (!delBtn) return;
+        delBtn.addEventListener('click', function () {
+            var uuids = selectedUuids();
+            var sid = currentSessionId();
+            if (!uuids.length) {
+                setDeleteStatus(statusEl, '먼저 지울 메시지를 선택하세요.', 'error');
+                return;
+            }
+            if (!sid) {
+                setDeleteStatus(statusEl, '세션을 알 수 없습니다.', 'error');
+                return;
+            }
+            var base = '/api/sessions/' + sid + '/messages/delete';
+            delBtn.disabled = true;
+            setDeleteStatus(statusEl, '무엇이 지워질지 확인하는 중…');
+
+            fetch(base, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uuids: uuids, preview: true })
+            })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (!res.ok) throw new Error(res.d.error || '확인 실패');
+                    var p = res.d;
+                    var NL = String.fromCharCode(10);
+                    var parts = [];
+                    if (p.questions) parts.push('질문 ' + p.questions + '건');
+                    if (p.answers) parts.push('답변 ' + p.answers + '건');
+                    var msg =
+                        '메시지 ' + p.messages + '건' +
+                        (parts.length ? ' (' + parts.join(' + ') + ')' : '') +
+                        ', ' + p.lines + '줄을 기록에서 지웁니다.' + NL + NL +
+                        '· 고른 것만 지웁니다 — 질문을 골라도 답변은 남습니다' + NL +
+                        '· 되돌릴 수 없습니다 (백업 파일은 남습니다)' + NL +
+                        '· 지운 뒤 VS Code 를 새로고침해야 대화가 갈라지지 않습니다' +
+                        (p.unanswered
+                            ? NL + NL + '⚠ 답변이 하나도 남지 않는 질문이 ' +
+                              p.unanswered + '건 생깁니다.'
+                            : '') +
+                        NL + NL + '진행할까요?';
+                    if (!window.confirm(msg)) {
+                        setDeleteStatus(statusEl, '취소했습니다.');
+                        delBtn.disabled = false;
+                        return null;
+                    }
+                    setDeleteStatus(statusEl, '지우는 중…');
+                    return fetch(base, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uuids: uuids })
+                    }).then(function (r) {
+                        return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                    });
+                })
+                .then(function (res) {
+                    if (res === null) return;
+                    if (!res.ok) throw new Error(res.d.error || '삭제 실패');
+                    var done = [];
+                    if (res.d.removed_questions) done.push('질문 ' + res.d.removed_questions);
+                    if (res.d.removed_answers) done.push('답변 ' + res.d.removed_answers);
+                    // 곧바로 새로고침한다. 기다리게 하면 "아무 일도 안 났다"고 여겨
+                    // 직접 새로고침하게 된다. 결과는 넘겨서 새 화면에서 보여준다.
+                    handOver(
+                        '삭제했습니다 — 메시지 ' + res.d.removed_messages + '건' +
+                        (done.length ? ' (' + done.join(' + ') + ')' : '') + ', ' +
+                        res.d.removed_lines + '줄. 백업: ' + res.d.backup);
+                    location.reload();
+                })
+                .catch(function (err) {
+                    setDeleteStatus(statusEl, String(err.message || err), 'error');
+                    delBtn.disabled = false;
+                });
+        });
+    }
 })();
 </script>

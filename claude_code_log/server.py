@@ -1,4 +1,5 @@
 """Local web server for serving generated HTML files with API support."""
+
 from __future__ import annotations
 
 import json
@@ -144,7 +145,9 @@ def _find_session_jsonl(
     return None
 
 
-_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 def _project_path_to_slug(project_path: str) -> str:
@@ -206,10 +209,13 @@ def _fork_session_file(
     if new_title:
         if not text.endswith("\n"):
             text += "\n"
-        text += json.dumps(
-            {"type": "custom-title", "customTitle": new_title, "sessionId": new_id},
-            ensure_ascii=False,
-        ) + "\n"
+        text += (
+            json.dumps(
+                {"type": "custom-title", "customTitle": new_title, "sessionId": new_id},
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
 
     dst.write_text(text, encoding="utf-8", newline="")
     return replaced
@@ -293,7 +299,9 @@ def _get_latest_model(jsonl_file: Path) -> Optional[str]:
     it as the primary source makes unrelated session pages display the
     wrong model after a /model switch in another project's instance.
     """
-    return _get_latest_model_from_jsonl(jsonl_file) or _get_current_model_from_settings()
+    return (
+        _get_latest_model_from_jsonl(jsonl_file) or _get_current_model_from_settings()
+    )
 
 
 def _get_title_entry(
@@ -400,7 +408,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
     def index() -> Response:
         from .converter import process_projects_hierarchy
 
-        process_projects_hierarchy(projects_dir, use_cache=True, silent=True, cache_only=True)
+        process_projects_hierarchy(
+            projects_dir, use_cache=True, silent=True, cache_only=True
+        )
         index_file = projects_dir / "index.html"
         if index_file.exists():
             response = send_file(index_file)
@@ -435,7 +445,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                 renderer = HtmlRenderer()
                 title = _get_session_title(jsonl_file, session_id)
                 html = renderer.generate_session(messages, session_id, title=title)
-                print(f"[serve_file] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
+                print(
+                    f"[serve_file] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}"
+                )
                 return Response(
                     html,
                     mimetype="text/html",
@@ -449,7 +461,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         if target.exists() and target.is_file():
             response = send_file(target)
             if filepath.endswith(".html"):
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"  # type: ignore[union-attr]
+                response.headers["Cache-Control"] = (
+                    "no-cache, no-store, must-revalidate"  # type: ignore[union-attr]
+                )
             return response  # type: ignore[return-value]
         abort(404)
 
@@ -474,6 +488,7 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         _update_custom_title(jsonl_file, session_id, new_title)
 
         from .converter import process_projects_hierarchy
+
         process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
 
         return jsonify({"status": "ok", "title": new_title})  # type: ignore[return-value]
@@ -555,7 +570,10 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
             ok, err = keepalive.prime(session_id)
             if not ok:
                 return jsonify(  # type: ignore[return-value]
-                    {"error": err or "전송에 실패했습니다.", "sessions": keepalive.snapshot()}
+                    {
+                        "error": err or "전송에 실패했습니다.",
+                        "sessions": keepalive.snapshot(),
+                    }
                 ), 502
             return jsonify({"status": "ok", "sessions": keepalive.snapshot()})  # type: ignore[return-value]
 
@@ -614,7 +632,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         if inner_id is None:
             return fail("원본에서 sessionId 를 확인할 수 없습니다.")
         if inner_id != old_id:
-            return fail(f"파일명과 내용의 sessionId 가 다릅니다 (내용: {inner_id[:8]}).")
+            return fail(
+                f"파일명과 내용의 sessionId 가 다릅니다 (내용: {inner_id[:8]})."
+            )
 
         # --- 대상 결정 -------------------------------------------------
         slug = _project_path_to_slug(raw_target)
@@ -797,7 +817,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                             yield f"data: {json.dumps({'type': 'deleted'})}\n\n"
                             break
                         if stat.st_size != last_size or stat.st_mtime != last_mtime:
-                            print(f"[SSE] jsonl changed: size {last_size}->{stat.st_size}")
+                            print(
+                                f"[SSE] jsonl changed: size {last_size}->{stat.st_size}"
+                            )
                             last_size = stat.st_size
                             last_mtime = stat.st_mtime
                             model = _get_latest_model(jsonl_file)
@@ -838,8 +860,135 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
         renderer = HtmlRenderer()
         title = _get_session_title(jsonl_file, session_id)
         html = renderer.generate_session(messages, session_id, title=title)
-        print(f"[render_session] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}")
-        return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+        print(
+            f"[render_session] session={session_id[:8]}, messages={len(messages)}, html_len={len(html)}, jsonl_size={jsonl_file.stat().st_size}"
+        )
+        return Response(
+            html,
+            mimetype="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+
+    @app.route("/api/sessions/<session_id>/messages/delete", methods=["POST"])
+    def delete_messages(session_id: str) -> Response:
+        """고른 문답을 기록에서 지운다.
+
+        되돌릴 수 없으므로 파일명이 세션 ID 와 정확히 같을 때만 손댄다.
+        세션 삭제(`DELETE /api/sessions/<id>`)와 같은 안전장치다.
+        """
+        from .cache import CacheManager
+        from .converter import get_library_version, process_projects_hierarchy
+        from .message_delete import delete_exchanges, plan_deletion
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+        if jsonl_file.stem != session_id:
+            return jsonify({"error": "filename does not match session id"}), 409  # type: ignore[return-value]
+
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+        raw_uuids = data.get("uuids")
+        if not isinstance(raw_uuids, list) or not raw_uuids:
+            return jsonify({"error": "지울 항목이 없습니다"}), 400  # type: ignore[return-value]
+        picked = [u for u in cast("list[Any]", raw_uuids) if isinstance(u, str) and u]
+
+        # 고른 것만 지운다 — 질문만, 답변만, 또는 둘 다.
+        # 답변만 남기거나 질문만 남기는 것도 사람의 선택이므로 막지 않는다.
+        # 다만 답변을 잃는 질문이 생기면 확인창에서 알려준다.
+        uuids = picked
+
+        # 미리보기만 요청한 경우 — 파일은 건드리지 않는다
+        if data.get("preview"):
+            plan = plan_deletion(jsonl_file, uuids)
+            if plan["unknown"]:
+                return jsonify(  # type: ignore[return-value]
+                    {
+                        "error": f"기록에서 찾지 못한 항목이 "
+                        f"{len(plan['unknown'])}건 있습니다"
+                    }
+                ), 400
+            return jsonify(  # type: ignore[return-value]
+                {
+                    "lines": plan["lines"],
+                    "messages": plan["messages"],
+                    "questions": plan["questions"],
+                    "answers": plan["answers"],
+                    "unanswered": plan["unanswered"],
+                    "unknown": plan["unknown"],
+                    "total_lines": plan["total_lines"],
+                }
+            )
+
+        result = delete_exchanges(jsonl_file, uuids)
+        if not result.get("ok"):
+            return jsonify({"error": result.get("error", "삭제하지 못했습니다")}), 400  # type: ignore[return-value]
+
+        # 기록이 바뀌었으니 캐시와 생성된 HTML 을 다시 만든다
+        project_dir = jsonl_file.parent
+        try:
+            CacheManager(project_dir, get_library_version()).clear_cache()
+        except Exception:
+            pass
+        for f in project_dir.glob("combined_transcripts*.html"):
+            f.unlink()
+        index_html = projects_dir / "index.html"
+        if index_html.exists():
+            index_html.unlink()
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+
+        return jsonify(result)  # type: ignore[return-value]
+
+    @app.route("/api/sessions/<session_id>/backups")
+    def list_session_backups(session_id: str) -> Response:
+        """이 세션의 백업 목록. 최신이 먼저."""
+        from .message_delete import list_backups
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+        return jsonify({"backups": list_backups(jsonl_file)})  # type: ignore[return-value]
+
+    @app.route("/api/sessions/<session_id>/restore", methods=["POST"])
+    def restore_session(session_id: str) -> Response:
+        """백업으로 되돌린다. 되돌리기 전 상태도 새 백업으로 남는다."""
+        from .cache import CacheManager
+        from .converter import get_library_version, process_projects_hierarchy
+        from .message_delete import list_backups, restore_backup
+
+        jsonl_file = _find_session_jsonl(projects_dir, session_id)
+        if jsonl_file is None:
+            return jsonify({"error": "session not found"}), 404  # type: ignore[return-value]
+        if jsonl_file.stem != session_id:
+            return jsonify({"error": "filename does not match session id"}), 409  # type: ignore[return-value]
+
+        payload = request.get_json(silent=True)
+        data = cast("dict[str, Any]", payload if isinstance(payload, dict) else {})
+        name = str(data.get("backup") or "").strip()
+        if not name:
+            # 이름을 주지 않으면 가장 최근 백업으로 되돌린다
+            available = list_backups(jsonl_file)
+            if not available:
+                return jsonify({"error": "되돌릴 백업이 없습니다"}), 400  # type: ignore[return-value]
+            name = str(available[0]["name"])
+
+        result = restore_backup(jsonl_file, name)
+        if not result.get("ok"):
+            return jsonify({"error": result.get("error", "되돌리지 못했습니다")}), 400  # type: ignore[return-value]
+
+        project_dir = jsonl_file.parent
+        try:
+            CacheManager(project_dir, get_library_version()).clear_cache()
+        except Exception:
+            pass
+        for f in project_dir.glob("combined_transcripts*.html"):
+            f.unlink()
+        index_html = projects_dir / "index.html"
+        if index_html.exists():
+            index_html.unlink()
+        process_projects_hierarchy(projects_dir, use_cache=True, silent=True)
+
+        return jsonify(result)  # type: ignore[return-value]
 
     @app.route("/api/sessions/<session_id>/messages")
     def render_messages(session_id: str) -> Response:
@@ -857,15 +1006,19 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         messages = load_transcript(jsonl_file, silent=True)
         renderer = HtmlRenderer()
-        template_messages = renderer.get_template_messages(messages, session_id=session_id)
+        template_messages = renderer.get_template_messages(
+            messages, session_id=session_id
+        )
         total_msgs = len(template_messages)
 
         model = _get_latest_model(jsonl_file)
 
-        after = request.args.get('after', type=int)
+        after = request.args.get("after", type=int)
         if after is not None:
             if after >= total_msgs:
-                print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, up-to-date")
+                print(
+                    f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, up-to-date"
+                )
                 return Response(
                     json.dumps({"total": total_msgs, "html": "", "model": model}),
                     mimetype="application/json",
@@ -873,7 +1026,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
                 )
             new_tmpl = template_messages[after:]
             new_html = renderer.render_fragment(new_tmpl)
-            print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, new={len(new_tmpl)}")
+            print(
+                f"[render_messages] session={session_id[:8]}, total={total_msgs}, after={after}, new={len(new_tmpl)}"
+            )
             return Response(  # type: ignore[return-value]
                 json.dumps({"total": total_msgs, "html": new_html, "model": model}),
                 mimetype="application/json",
@@ -882,7 +1037,9 @@ border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 
         # Full fragment (no after param)
         full_html = renderer.render_fragment(template_messages)
-        print(f"[render_messages] session={session_id[:8]}, total={total_msgs}, fragment_len={len(full_html)}")
+        print(
+            f"[render_messages] session={session_id[:8]}, total={total_msgs}, fragment_len={len(full_html)}"
+        )
         return Response(  # type: ignore[return-value]
             json.dumps({"total": total_msgs, "html": full_html, "model": model}),
             mimetype="application/json",

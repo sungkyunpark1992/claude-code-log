@@ -28,7 +28,8 @@
 {%- set msg_css_class = css_class_from_message(message) %}
 {% set ns.last_css = msg_css_class %}
 {% set markdown = message.content.has_markdown if message.content else false %}
-<div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{% if is_user_authored(message) %} data-authored{% endif %}>
+<div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{# 삭제 기능은 화면 순번이 아니라 JSONL 의 실제 uuid 로 대상을 고른다.
+   순번은 다시 그릴 때마다 밀리므로 지울 대상을 특정할 수 없다. #}{% if message.meta.uuid %} data-uuid='{{ message.meta.uuid }}'{% endif %}{% if is_user_authored(message) %} data-authored{% endif %}>
     <div class='header'>
         {% set msg_emoji = get_message_emoji(message) -%}
         <span{% if message.title_hint %} title="{{ message.title_hint }}"{% endif %}>{% if message_title %}{%

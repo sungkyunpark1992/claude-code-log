@@ -32,6 +32,34 @@ body.selection-mode .msg-select-checkbox {
     outline-offset: 2px;
 }
 
+/* 선택 모드에서는 말풍선 아무 데나 눌러도 골라진다 — 그렇게 보이게 한다.
+   글자를 끌어 복사하는 것은 그대로 되므로 텍스트 커서는 남겨둔다. */
+body.selection-mode .message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt) {
+    cursor: pointer;
+}
+
+body.selection-mode .message:not(.session-header):not(#ccl-live-prompt):not(.empty-prompt):hover {
+    outline: 2px dashed #00000033;
+    outline-offset: 2px;
+}
+
+body.selection-mode .message.msg-selected:hover {
+    outline: 2px solid var(--tool-use-color);
+}
+
+/* 안쪽에서 원래 하던 일을 하는 것들은 손 모양을 유지한다 */
+body.selection-mode .message a,
+body.selection-mode .message button,
+body.selection-mode .message summary,
+body.selection-mode .message .fold-bar {
+    cursor: pointer;
+}
+
+body.selection-mode .message textarea,
+body.selection-mode .message input[type='text'] {
+    cursor: text;
+}
+
 /* Active state for the selection-mode toggle button */
 .toggle-selection.floating-btn.active {
     background: rgba(76, 175, 80, 0.25);
@@ -164,6 +192,42 @@ body.export-resizing #export-panel {
 .export-action-btn:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+/* 기록에서 삭제 — 내보내기와 성격이 다르다.
+   내보내기는 사본을 만들 뿐이지만 이쪽은 원본을 고친다. 줄을 나누고
+   경고선을 두어 실수로 누르지 않게 한다. */
+.export-panel-danger {
+    border-top: 1px dashed #00000022;
+    padding-top: 8px;
+}
+
+.export-action-btn.danger {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+    font-weight: 600;
+}
+
+.export-action-btn.danger:hover:not(:disabled) {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.export-delete-status {
+    padding: 0 10px 8px 10px;
+    font-size: 0.78em;
+    line-height: 1.45;
+    color: #777;
+    word-break: break-word;
+}
+
+.export-delete-status.ok {
+    color: #16a34a;
+}
+
+.export-delete-status.error {
+    color: #dc2626;
 }
 
 .export-panel-list {

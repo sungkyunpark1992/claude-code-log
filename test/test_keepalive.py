@@ -511,3 +511,37 @@ def test_clear_reload_on_unknown_session_is_refused(tmp_path: Path) -> None:
     projects, jsonl, _ = _make(tmp_path, fresh)
     ka.save_config(projects, [_item()])
     assert _worker(projects, jsonl).mutate("없는세션", "clear_reload") is False
+
+
+def test_facts_are_reused_until_the_file_changes(tmp_path: Path) -> None:
+    """같은 파일을 거듭 읽지 않는다.
+
+    /api/keepalive 는 대시보드와 세션 화면이 각각 5초마다 부른다. 매번 JSONL 을
+    통째로 파싱하면 큰 세션에서 화면을 열어두는 것만으로 수십 MB 를 계속 읽는다
+    (실측 62MB → 0.48초). JSONL 은 덧붙이기만 하므로 (수정시각, 크기) 로 판별한다.
+    """
+    fresh = datetime.now(timezone.utc) - timedelta(minutes=5)
+    projects, jsonl, cwd = _make(tmp_path, fresh)
+
+    first = ka.read_session_facts(jsonl)
+    second = ka.read_session_facts(jsonl)
+    assert first == second
+
+    # 돌려준 값을 고쳐도 보관본이 오염되면 안 된다
+    second["cwd"] = "망가뜨림"
+    assert ka.read_session_facts(jsonl)["cwd"] == first["cwd"]
+
+    # 파일이 바뀌면 다시 읽는다
+    later = datetime.now(timezone.utc) - timedelta(minutes=1)
+    _write_jsonl(jsonl, cwd, later)
+    assert ka.read_session_facts(jsonl)["last_response_at"] == _iso(later)
+
+
+def test_missing_file_does_not_poison_the_cache(tmp_path: Path) -> None:
+    """읽을 수 없는 파일은 보관하지 않는다 — 나중에 생기면 읽혀야 한다."""
+    missing = tmp_path / "아직없음.jsonl"
+    assert ka.read_session_facts(missing)["cwd"] is None
+
+    (tmp_path / "work").mkdir()
+    _write_jsonl(missing, str(tmp_path / "work"), datetime.now(timezone.utc))
+    assert ka.read_session_facts(missing)["cwd"] == str(tmp_path / "work")

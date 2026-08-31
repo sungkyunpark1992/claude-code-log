@@ -132,7 +132,8 @@
     {%- set msg_css_class = css_class_from_message(message) %}
     {% set ns.last_css = msg_css_class %}
     {% set markdown = message.content.has_markdown if message.content else false %}
-    <div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{% if is_user_authored(message) %} data-authored{% endif %}>
+    <div class='message {{ msg_css_class }}{% if message.is_paired %} {{ message.pair_role }}{% endif %}{% for ancestor_index in message.ancestry %} d-{{ ancestor_index }}{% endfor %}' data-message-id='{{ message.message_id }}' id='msg-{{ message.message_id }}'{# 삭제 기능은 화면 순번이 아니라 JSONL 의 실제 uuid 로 대상을 고른다.
+   순번은 다시 그릴 때마다 밀리므로 지울 대상을 특정할 수 없다. #}{% if message.meta.uuid %} data-uuid='{{ message.meta.uuid }}'{% endif %}{% if is_user_authored(message) %} data-authored{% endif %}>
         <div class='header'>
             {% set msg_emoji = get_message_emoji(message) -%}
             <span{% if message.title_hint %} title="{{ message.title_hint }}"{% endif %}>{% if message_title %}{%
@@ -224,6 +225,14 @@
             <button class="export-action-btn" id="clearSelection" title="선택 해제">선택 해제</button>
             <button class="export-action-btn primary" id="exportSelected" title="선택한 메시지를 HTML로 내보내기">📤 HTML로 내보내기</button>
         </div>
+        {# 기록에서 아예 지우는 동작. 되돌릴 수 없으므로 내보내기와 줄을 나누고
+           경고색을 준다. 삭제 전 .jsonl.bak-{시각} 백업이 남는다. #}
+        <div class="export-panel-actions export-panel-danger">
+            <button class="export-action-btn" id="selectAutoMsgs" title="세션 유지용 자동 메시지를 모두 선택합니다">🤖 자동 메시지 선택</button>
+            <button class="export-action-btn danger" id="deleteSelected" title="선택한 문답을 기록에서 지웁니다">🗑️ 기록에서 삭제</button>
+            <button class="export-action-btn" id="restoreBackup" title="가장 최근 백업으로 되돌립니다">↩️ 되돌리기</button>
+        </div>
+        <div class="export-delete-status" id="deleteStatus"></div>
         <div class="export-panel-list" id="export-list">
             <div class="export-empty">선택된 메시지가 없습니다.<br>메시지의 체크박스를 클릭해 선택하세요.</div>
         </div>

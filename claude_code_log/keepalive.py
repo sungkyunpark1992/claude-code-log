@@ -221,7 +221,44 @@ def _pick_cwd(cwds: "Counter[str]", jsonl_file: Path) -> Optional[str]:
     return cwds.most_common(1)[0][0]
 
 
+# 읽어둔 결과. 열쇠는 (수정시각, 크기) 라 파일이 바뀌면 저절로 빗나간다.
+_FACTS_CACHE: "dict[str, tuple[tuple[float, int], dict[str, Any]]]" = {}
+_FACTS_LOCK = threading.Lock()
+_FACTS_MAX = 64
+
+
 def read_session_facts(jsonl_file: Path) -> "dict[str, Any]":
+    """JSONL 에서 뽑은 값. 파일이 그대로면 앞서 읽은 것을 준다.
+
+    파일을 통째로 읽어 줄마다 JSON 파싱을 하는 일이라 큰 세션에서는 비싸다 —
+    실측으로 62MB 에 0.48초, 등록 세션을 모두 훑는 snapshot() 이 0.59초였다.
+    그런데 `/api/keepalive` 는 대시보드와 세션 화면이 **각각 5초마다** 부른다.
+    그대로 두면 화면을 열어두는 것만으로 계속 수십 MB 를 읽는다.
+
+    JSONL 은 덧붙이기만 하므로 (수정시각, 크기) 가 같으면 내용도 같다.
+    """
+    try:
+        stat = jsonl_file.stat()
+        key = str(jsonl_file)
+        stamp = (stat.st_mtime, stat.st_size)
+    except OSError:
+        return _read_session_facts_uncached(jsonl_file)
+
+    with _FACTS_LOCK:
+        cached = _FACTS_CACHE.get(key)
+        if cached is not None and cached[0] == stamp:
+            # 호출자가 고쳐도 보관본이 오염되지 않도록 사본을 준다
+            return dict(cached[1])
+
+    facts = _read_session_facts_uncached(jsonl_file)
+    with _FACTS_LOCK:
+        if len(_FACTS_CACHE) >= _FACTS_MAX:
+            _FACTS_CACHE.clear()
+        _FACTS_CACHE[key] = (stamp, dict(facts))
+    return facts
+
+
+def _read_session_facts_uncached(jsonl_file: Path) -> "dict[str, Any]":
     """JSONL 에서 전송에 필요한 값을 뽑는다.
 
     cwd 가 특히 중요하다 — Claude Code 는 현재 폴더를 슬러그로 바꿔 세션을 찾으므로,
